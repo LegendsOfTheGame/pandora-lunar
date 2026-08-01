@@ -14,6 +14,343 @@ const COMBAT_JOBS = [
 const CRAFT_JOBS = ["Carpenter","Blacksmith","Armorer","Goldsmith","Leatherworker","Weaver","Alchemist","Culinarian"];
 const GATHER_JOBS = ["Miner","Botanist","Fisher"];
 
+// Physical Data Center -> Logical Data Center -> World. Structure only — deliberately no
+// Standard/Preferred/Preferred+ creation-congestion tags, since those are live status that
+// shifts as worlds fill up, not a fixed fact about a world. Baking them in would go stale
+// within weeks; the PDC/LDC/world hierarchy itself is what's actually stable.
+const SERVER_DATA = {
+  "North America": {
+    Aether: ["Adamantoise","Cactuar","Faerie","Gilgamesh","Jenova","Midgardsormr","Sargatanas","Siren"],
+    Crystal: ["Balmung","Brynhildr","Coeurl","Diabolos","Goblin","Malboro","Mateus","Zalera"],
+    Dynamis: ["Cuchulainn","Golem","Halicarnassus","Kraken","Maduin","Marilith","Rafflesia","Seraph"],
+    Primal: ["Behemoth","Excalibur","Exodus","Famfrit","Hyperion","Lamia","Leviathan","Ultros"]
+  },
+  Europe: {
+    Chaos: ["Cerberus","Louisoix","Moogle","Omega","Phantom","Ragnarok","Sagittarius","Spriggan"],
+    Light: ["Alpha","Lich","Odin","Phoenix","Raiden","Shiva","Twintania","Zodiark"]
+  },
+  Oceania: {
+    Materia: ["Bismarck","Ravana","Sephirot","Sophia","Zurvan"]
+  },
+  Japan: {
+    Elemental: ["Aegis","Atomos","Carbuncle","Garuda","Gungnir","Kujata","Tonberry","Typhon"],
+    Gaia: ["Alexander","Bahamut","Durandal","Fenrir","Ifrit","Ridill","Tiamat","Ultima"],
+    Mana: ["Anima","Asura","Chocobo","Hades","Ixion","Masamune","Pandaemonium","Titan"],
+    Meteor: ["Belias","Mandragora","Ramuh","Shinryu","Unicorn","Valefor","Yojimbo","Zeromus"]
+  }
+};
+
+// Sourced from ffxiv.consolegameswiki.com's per-job "X_Quests" pages (fetched directly,
+// not from memory). All 11 DoH/DoL jobs share the same level pattern through level 70:
+// 1, 1, 5, 10, 15, ..., 50, 50, 53, ..., 70. Two entries share level 1 (class unlock, then
+// first job quest) and level 50/60 (class capstone, then the next expansion's opener) —
+// that's real, not a data error.
+//
+// This is NOT the full picture through 100. Past 70, the traditional per-job quest chain
+// hands off to shared hub questlines instead: The Crystalline Mean (Shadowbringers),
+// The Studium (Endwalker), Wachumeqimeqi (Dawntrail) — not yet sourced/added here.
+const JOB_QUESTS = {
+  Carpenter: [
+    {level:1,name:"Way of the Carpenter"},{level:1,name:"My First Saw"},{level:5,name:"To Be the Wood"},
+    {level:10,name:"Supplies for the Sick"},{level:15,name:"A Carpenter in Need"},{level:20,name:"The Lance's Lesson"},
+    {level:25,name:"A Crisis of Confidence"},{level:30,name:"Between Captain and Conjurer"},{level:35,name:"Growing Apart"},
+    {level:40,name:"Memento Mori"},{level:45,name:"Gone till the Sixth Astral Moon"},{level:50,name:"Saving Captain Gairhard"},
+    {level:50,name:"Lance of a Lifetime"},{level:53,name:"A-hunting He Will Go"},{level:55,name:"Ministers of Grace Defend Him"},
+    {level:58,name:"The Son Also Rises"},{level:60,name:"More Fierce than Fire"},{level:60,name:"Uncharted Territory"},
+    {level:63,name:"The Game of Confidence"},{level:65,name:"A Lesson in Listening"},{level:68,name:"Live and Let Dine"},
+    {level:70,name:"Tea Party Rules"}
+  ],
+  Blacksmith: [
+    {level:1,name:"Way of the Blacksmith"},{level:1,name:"My First Cross-pein Hammer"},{level:5,name:"Hammer Time"},
+    {level:10,name:"Riveting Ramblings"},{level:15,name:"The Business of Blacksmithing"},{level:20,name:"By the Sweat of Your Brow"},
+    {level:25,name:"True as Steel"},{level:30,name:"As Iron Sharpens Iron"},{level:35,name:"Set Faezahr to Stun"},
+    {level:40,name:"Forging Ahead"},{level:45,name:"Beauty and the Bardiche"},{level:50,name:"Waiting in the Winglet"},
+    {level:50,name:"Forging Northwards"},{level:53,name:"Leave It to Fremondain"},{level:55,name:"The Good Fight"},
+    {level:58,name:"Blade That Was Broken"},{level:60,name:"Integrity"},{level:60,name:"A Missive from the Far East"},
+    {level:63,name:"The Client is King"},{level:65,name:"Blood Ties"},{level:68,name:"The Missing Piece"},
+    {level:70,name:"The Final Face-off"}
+  ],
+  Armorer: [
+    {level:1,name:"Way of the Armorer"},{level:1,name:"My First Doming Hammer"},{level:5,name:"From Thigh to Neck"},
+    {level:10,name:"The Base Fundamentals"},{level:15,name:"One's Own Worst Critic"},{level:20,name:"An Armorer's Pride"},
+    {level:25,name:"Showing Your Steel"},{level:30,name:"May the Best Armorer Win"},{level:35,name:"Pans of Steel"},
+    {level:40,name:"Best of Three"},{level:45,name:"For the Good of the Guild"},{level:50,name:"Rivalry and Respect"},
+    {level:50,name:"The Breaking of Blanstyr"},{level:53,name:"Light-headed"},{level:55,name:"Fancy Lancer"},
+    {level:58,name:"The Reforging of Blanstyr"},{level:60,name:"The Pride of Vymelli"},{level:60,name:"Original Blanstyr"},
+    {level:63,name:"Eastern Apprentice"},{level:65,name:"Forging with Scales"},{level:68,name:"Head-to-head Contest"},
+    {level:70,name:"A Confluence of Style"}
+  ],
+  Goldsmith: [
+    {level:1,name:"Way of the Goldsmith"},{level:1,name:"My First Chaser Hammer"},{level:5,name:"Gorgets Rising"},
+    {level:10,name:"Throw Some Rings on It"},{level:15,name:"Objectively Speaking"},{level:20,name:"A Melding of the Minds"},
+    {level:25,name:"Or Ever the Silver Cord Be Loosed"},{level:30,name:"Serendipity Now"},{level:35,name:"Mammets on Fire"},
+    {level:40,name:"The Horns of the Green"},{level:45,name:"The Fox in the Hen House"},{level:50,name:"Jaded"},
+    {level:50,name:"Form to the Formless"},{level:53,name:"Elegance and Artistry"},{level:55,name:"Double Trouble"},
+    {level:58,name:"A Masterclass"},{level:60,name:"Two Hearts Beat as One"},{level:60,name:"A Royal Request"},
+    {level:63,name:"Gemworks in Progress"},{level:65,name:"Blindsided"},{level:68,name:"The Perfect Tribute"},
+    {level:70,name:"Sultana Dreaming"}
+  ],
+  Leatherworker: [
+    {level:1,name:"Way of the Leatherworker"},{level:1,name:"My First Head Knife"},{level:5,name:"A Test of Technique"},
+    {level:10,name:"Geva's Gambit"},{level:15,name:"Working Hells for Leather"},{level:20,name:"Aldgoat Everything"},
+    {level:25,name:"Skin in the Game"},{level:30,name:"Toadskins of the Father"},{level:35,name:"Lead by Example"},
+    {level:40,name:"Brand Loyalty"},{level:45,name:"Dissension in the Ranks"},{level:50,name:"Accept No Imitations"},
+    {level:50,name:"Turndown Service"},{level:53,name:"By Your Bootstraps"},{level:55,name:"Perfect Pitch"},
+    {level:58,name:"From the Hoplon to the Brume"},{level:60,name:"A Winter's Sale"},{level:60,name:"A Taxing Request"},
+    {level:63,name:"Mounting Expectations"},{level:65,name:"The Value of Life"},{level:68,name:"The Trouble with Taxidermy"},
+    {level:70,name:"True to Life"}
+  ],
+  Weaver: [
+    {level:1,name:"Way of the Weaver"},{level:1,name:"My First Needle"},{level:5,name:"Once More unto the Breeches"},
+    {level:10,name:"Alternative Applications"},{level:15,name:"Practical Needs"},{level:20,name:"Materia Concerns"},
+    {level:25,name:"That Velveteen Dress"},{level:30,name:"Miner on a Mission"},{level:35,name:"Designed by Committee"},
+    {level:40,name:"A Subtle Inquiry"},{level:45,name:"The Intervention"},{level:50,name:"A Miner Reborn"},
+    {level:50,name:"The Social Knitwork"},{level:53,name:"Tomboy Foolery"},{level:55,name:"For Lover and Country"},
+    {level:58,name:"Spinning the Truth"},{level:60,name:"Never Leave without a Good-bye"},{level:60,name:"When East Meets West"},
+    {level:63,name:"The Butterfly Effect"},{level:65,name:"The Crane's Caveat"},{level:68,name:"A Geiko for All Seasons"},
+    {level:70,name:"Send Me an Angel"}
+  ],
+  Alchemist: [
+    {level:1,name:"Way of the Alchemist"},{level:1,name:"My First Alembic"},{level:5,name:"The Second Principle"},
+    {level:10,name:"All of Your Beeswax"},{level:15,name:"For Fair Love"},{level:20,name:"The Arcanist's Tome"},
+    {level:25,name:"Practical Alchemy"},{level:30,name:"Baleful Brews"},{level:35,name:"Cease and Assist"},
+    {level:40,name:"Might Made Right"},{level:45,name:"Ultimate Alchemy"},{level:50,name:"Momentary Miracle"},
+    {level:50,name:"Without a Trace"},{level:53,name:"Magic Marks the Spot"},{level:55,name:"From Hells"},
+    {level:58,name:"Burden of Proof"},{level:60,name:"What Death Can Join Together"},{level:60,name:"Not Quite Dead Yet"},
+    {level:63,name:"The Forbidden Blade"},{level:65,name:"Do Goldsmiths Dream of Gilded Sheep"},{level:68,name:"No Sin Unpunished"},
+    {level:70,name:"A Love Beyond Lifetimes"}
+  ],
+  Culinarian: [
+    {level:1,name:"Way of the Culinarian"},{level:1,name:"My First Skillet"},{level:5,name:"A Treat of Trout"},
+    {level:10,name:"Dodo It Yourself"},{level:15,name:"On a Skewer Tip"},{level:20,name:"Releasing a Burden"},
+    {level:25,name:"Winning Friends with Aldgoat"},{level:30,name:"The Chefsbane Cometh"},{level:35,name:"Of Cooks and Books"},
+    {level:40,name:"Diplomacy of the Skillet"},{level:45,name:"A Taste of Home"},{level:50,name:"Revenge of the Chefsbane"},
+    {level:50,name:"Wait on Me"},{level:53,name:"A Spoonful Less Sugar"},{level:55,name:"Looking for Some Hot Stuff"},
+    {level:58,name:"Love Meat Tender"},{level:60,name:"The Spirit of Hospitality"},{level:60,name:"Flavors of the Far East"},
+    {level:63,name:"Rice to the Occasion"},{level:65,name:"A Broth from the Brine"},{level:68,name:"Teach a Man to Make Fish"},
+    {level:70,name:"The Way to a Father's Heart"}
+  ],
+  Miner: [
+    {level:1,name:"Way of the Miner"},{level:1,name:"My First Pickaxe"},{level:5,name:"Know Thy Land"},
+    {level:10,name:"The Cutting Edge"},{level:15,name:"Getting in Deep"},{level:20,name:"Old Wisdom, New Ways"},
+    {level:25,name:"Water from Stone"},{level:30,name:"Obsidian Race"},{level:35,name:"Amethysts Are Forever"},
+    {level:40,name:"To Die For"},{level:45,name:"Gulley of Woes"},{level:50,name:"Canyon of Regret"},
+    {level:50,name:"Breaking New Ground"},{level:53,name:"Sellspade"},{level:55,name:"The Same Vein"},
+    {level:58,name:"Digging Deeper"},{level:60,name:"The Hole Truth"},{level:60,name:"Gift of the Gob"},
+    {level:63,name:"Thick Skin"},{level:65,name:"Pedal to the Metal"},{level:68,name:"Where the Money Takes You"},
+    {level:70,name:"A Miner Success"}
+  ],
+  Botanist: [
+    {level:1,name:"Way of the Botanist"},{level:1,name:"My First Hatchet"},{level:5,name:"Sap for Smiles"},
+    {level:10,name:"Weapons of a Feather"},{level:15,name:"Haste Makes Waste"},{level:20,name:"Dressed to Harvest"},
+    {level:25,name:"Aromatic Aspirations"},{level:30,name:"What Nature Giveth"},{level:35,name:"A Feast to Say the Least"},
+    {level:40,name:"Crisis of Faith"},{level:45,name:"Botanist in a Bind"},{level:50,name:"Seeds of Hope"},
+    {level:50,name:"Call from the Clouds"},{level:53,name:"Onions of Life Bestowing"},{level:55,name:"Two Nations, One Seed"},
+    {level:58,name:"Love for Harmony"},{level:60,name:"Seeds Know No Borders"},{level:60,name:"Never Meet Your Heroes"},
+    {level:63,name:"You Say Popoto, I Say..."},{level:65,name:"Walking for Walker's"},{level:68,name:"The White Death"},
+    {level:70,name:"Edgyth's Winning Streak"}
+  ],
+  Fisher: [
+    {level:1,name:"Way of the Fisher"},{level:1,name:"My First Fishing Rod"},{level:5,name:"Bigger Fish to Fry"},
+    {level:10,name:"The Princess and the Fish"},{level:15,name:"Every Fish Has a Silver Lining"},{level:20,name:"A Fish in Hot Water"},
+    {level:25,name:"A Game of Cat and Fish"},{level:30,name:"Like Fish Passing in the Night"},{level:35,name:"A Fish out of Water"},
+    {level:40,name:"Fishing in the Rain"},{level:45,name:"I Believe Fish Can Fly"},{level:50,name:"So Long, and Thanks for All the Fish"},
+    {level:50,name:"Plenty More Fish in the Sea"},{level:53,name:"The Icepick Challenge"},{level:55,name:"Invasion of the Supper Snatchers"},
+    {level:58,name:"One Man's Fish Is Another Man's Poison"},{level:60,name:"Carpe Diem"},{level:60,name:"Whither Wawalago Wanders"},
+    {level:63,name:"A Rousing Reunion"},{level:65,name:"Search for the Spawning Grounds"},{level:68,name:"Always a Bigger Fish"},
+    {level:70,name:"Farewell, and Thanks for the Fish"}
+  ],
+
+  // Combat jobs, sourced from ffxiv.consolegameswiki.com's Class_Quests / Job_Quests index
+  // pages plus per-job pages for the ones the aggregate fetch truncated before reaching
+  // (Machinist, Dancer, White Mage, Scholar, Astrologian, Sage, Black Mage, Summoner, Red
+  // Mage, Blue Mage, and the back half of Arcanist/Bard). Ten jobs carry their ARR base
+  // class's 1-30 chain first (Gladiator→Paladin, Marauder→Warrior, Conjurer→White Mage,
+  // Thaumaturge→Black Mage, Arcanist→Scholar/Summoner, Pugilist→Monk, Lancer→Dragoon,
+  // Archer→Bard, Rogue→Ninja) — Haven's call, since the game gates them that way regardless.
+  // Scoped to level ≤70 only, same as crafting/gathering; Sage and Reaper unlock AT 70 so
+  // only their level-70 entries are in scope yet. Viper, Pictomancer, Beastmaster have no
+  // data here (Viper/Pictomancer are 80+ jobs, Beastmaster wasn't sourced) — the checklist
+  // panel already shows "No quest data loaded for this job yet" for anything missing.
+  Paladin: [
+    {level:1,name:"Way of the Gladiator"},{level:1,name:"My First Gladius"},{level:5,name:"Kicking the Hornet's Nest"},
+    {level:10,name:"Ul'dah's Most Wanted"},{level:15,name:"That Old Familiar Feeling"},{level:20,name:"The Face of Thal"},
+    {level:25,name:"On Holy Ground"},{level:30,name:"The Rematch"},
+    {level:30,name:"Paladin's Pledge"},{level:35,name:"Honor Lost"},{level:40,name:"Power Struggles"},
+    {level:45,name:"Poisoned Hearts"},{level:45,name:"Parley in the Sagolii"},{level:50,name:"Keeping the Oath"},
+    {level:50,name:"An Exemplary Example"},{level:52,name:"The Paladin Who Cried Wolf"},{level:54,name:"Big Sollerets to Fill"},
+    {level:56,name:"Hey Soul Crystal"},{level:58,name:"All According to Plan"},{level:60,name:"This Little Sword of Mine"},
+    {level:60,name:"Tournament of the Century"},{level:63,name:"In Thal's Name"},{level:65,name:"In Nald's Name"},
+    {level:68,name:"Fade to Black Lotus"},{level:70,name:"Raising the Sword"}
+  ],
+  Warrior: [
+    {level:1,name:"Way of the Marauder"},{level:1,name:"My First Axe"},{level:5,name:"Axe in the Stone"},
+    {level:10,name:"Wake of Destruction"},{level:15,name:"Brutal Strength"},{level:20,name:"The Mountain That Strides"},
+    {level:25,name:"Bleeder of the Pack"},{level:30,name:"Bringing Down the Mountain"},
+    {level:30,name:"Pride and Duty (Will Take You from the Mountain)"},{level:35,name:"Embracing the Beast"},
+    {level:40,name:"Curious Gorge Goes to Wineport"},{level:45,name:"Looking the Part"},{level:45,name:"Proof Is the Pudding"},
+    {level:50,name:"How to Quit You"},{level:50,name:"Better Axe Around"},{level:52,name:"Duty and the Beast"},
+    {level:54,name:"The Bear Necessity"},{level:56,name:"Pirates of Shallow Water"},{level:56,name:"How to Train Your Warrior"},
+    {level:58,name:"Slap an' Chop"},{level:60,name:"And My Axe"},{level:60,name:"Curious Gorge Meets His Match"},
+    {level:63,name:"Field Training"},{level:65,name:"When Push Comes to Shove"},{level:68,name:"Going the Distance"},
+    {level:70,name:"The Heart of the Problem"}
+  ],
+  "Dark Knight": [
+    {level:30,name:"Ishgardian Justice"},{level:35,name:"The Voice in the Abyss"},{level:40,name:"Heroic Reprise"},
+    {level:45,name:"Declaration of Blood"},{level:50,name:"Our Answer"},{level:50,name:"A Dark Spectacle"},
+    {level:50,name:"Our End"},{level:50,name:"The Wages of Mercy"},{level:52,name:"The Knight and the Maiden Fair"},
+    {level:54,name:"Kindred Spirits"},{level:56,name:"Original Sins"},{level:58,name:"The Flame in the Abyss"},
+    {level:60,name:"Absolution"},{level:60,name:"In Memories We Walked"},{level:63,name:"The Widow and Her Love"},
+    {level:65,name:"The Orphans and the Broken Blade"},{level:68,name:"We Can Never Go Home"},{level:70,name:"Our Compromise"}
+  ],
+  Gunbreaker: [
+    {level:60,name:"The Makings of a Gunbreaker"},{level:60,name:"Hired Gunblades"},{level:63,name:"For Better or Worse"},
+    {level:65,name:"Confessions of a Flaming Mongrel"},{level:68,name:"Of Defectors and Defenders"},{level:70,name:"Steel against Steel"}
+  ],
+  "White Mage": [
+    {level:1,name:"Way of the Conjurer"},{level:1,name:"My First Cane"},{level:5,name:"Trial by Earth"},
+    {level:10,name:"Trial by Wind"},{level:15,name:"Trial by Water"},{level:20,name:"Sylphie's Trials"},
+    {level:25,name:"Like Mother, Like Daughter"},{level:30,name:"In Nature's Embrace"},
+    {level:30,name:"Seer Folly"},{level:35,name:"Only You Can Prevent Forest Ire"},{level:40,name:"O Brother, Where Art Thou"},
+    {level:45,name:"Following in His Footsteps"},{level:45,name:"Yearn for the Urn"},{level:50,name:"Heart of the Forest"},
+    {level:50,name:"Taint Misbehaving"},{level:52,name:"A Journey of Purification"},{level:54,name:"The Girl with the Dragon Tissue"},
+    {level:56,name:"The Dark Blight Writhes"},{level:58,name:"In the Wake of Death"},{level:58,name:"Trials of the Padjals"},
+    {level:60,name:"Hands of Healing"},{level:60,name:"Unease in East End"},{level:63,name:"An Aura for Trouble"},
+    {level:65,name:"A Beacon for Bad Things"},{level:68,name:"The Problem with Padjals"},{level:70,name:"What She Always Wanted"}
+  ],
+  Scholar: [
+    {level:1,name:"Way of the Arcanist"},{level:1,name:"My First Grimoire"},{level:5,name:"What's in the Box"},
+    {level:10,name:"Tactical Planning"},{level:15,name:"Topaz Teachings"},{level:15,name:"Over the Rails"},
+    {level:20,name:"Pincer Maneuver"},{level:25,name:"Grimoire Fandango"},{level:30,name:"Sinking Doesmaga"},
+    {level:30,name:"Forgotten but Not Gone"},{level:35,name:"The Last Remnants"},{level:40,name:"The Consequences of Anger"},
+    {level:45,name:"In the Image of the Ancients"},{level:45,name:"For Your Fellow Man"},{level:50,name:"The Beast Within"},
+    {level:50,name:"The Green Death"},{level:52,name:"Quarantine"},{level:54,name:"False Friends"},
+    {level:56,name:"Ooh Rah"},{level:58,name:"Unseen"},{level:60,name:"Forward, Royal Marines"},
+    {level:60,name:"The Vanishing Act"},{level:63,name:"A Safe Place to Hide"},{level:65,name:"In Loving Memory"},
+    {level:68,name:"The Chase"},{level:70,name:"Our Unsung Heroes"}
+  ],
+  Astrologian: [
+    {level:30,name:"Fortune Favors the Bole"},{level:35,name:"Hanging in the Balance"},{level:40,name:"A Lesson in Patience"},
+    {level:40,name:"Slings and Arrows"},{level:45,name:"Ewer Right"},{level:50,name:"Loved by the Sun"},
+    {level:50,name:"Spearheading Initiatives"},{level:50,name:"Sharlayan Ascending"},{level:52,name:"Empty Nest"},
+    {level:54,name:"Conviction"},{level:56,name:"Feather in the Cap"},{level:58,name:"Trumped"},
+    {level:60,name:"The Hands of Fate"},{level:60,name:"East Meets West"},{level:63,name:"Ride Like the Wind"},
+    {level:65,name:"Come Rain or Shrine"},{level:68,name:"Behind Door Number Two"},{level:70,name:"Foxfire"}
+  ],
+  Sage: [
+    {level:70,name:"Sage's Path"},{level:70,name:"Sage's Focus"}
+  ],
+  Monk: [
+    {level:1,name:"Way of the Pugilist"},{level:1,name:"My First Hora"},{level:5,name:"Harder than Rock"},
+    {level:10,name:"Burning Up the Quarter Malm"},{level:15,name:"The Spirit Is Willing"},{level:20,name:"Keeping the Spirit Alive"},
+    {level:25,name:"Star-crossed Rivals"},{level:30,name:"Return of the Holyfist"},
+    {level:30,name:"Brother from Another Mother"},{level:35,name:"Insulted Intelligence"},{level:40,name:"A Slave to the Aether"},
+    {level:45,name:"The Pursuit of Power"},{level:45,name:"Good Vibrations"},{level:50,name:"Five Easy Pieces"},
+    {level:50,name:"The Legend Continues"},{level:52,name:"Let's Talk about Sects"},{level:54,name:"Against the Shadow"},
+    {level:56,name:"Fight the Battle to Win"},{level:58,name:"Stop the Senseless Killing"},{level:60,name:"Appetite for Destruction"},
+    {level:60,name:"A Fistful of Resolve"},{level:63,name:"Return of the Monk"},{level:65,name:"Cross-fist Training"},
+    {level:68,name:"Choices and Paths"},{level:70,name:"The Power to Protect"}
+  ],
+  Dragoon: [
+    {level:1,name:"Way of the Lancer"},{level:1,name:"My First Spear"},{level:5,name:"Spear of the Fearless"},
+    {level:10,name:"Courage of Stone"},{level:15,name:"A Dangerous Proposition"},{level:20,name:"Lance of Destiny"},
+    {level:25,name:"Questions and Lancers"},{level:30,name:"Proof of Might"},
+    {level:30,name:"Eye of the Dragon"},{level:35,name:"Lance of Fury"},{level:40,name:"Unfading Skies"},
+    {level:45,name:"Double Dragoon"},{level:45,name:"Fatal Seduction"},{level:50,name:"Into the Dragon's Maw"},
+    {level:50,name:"Sky's the Limit"},{level:52,name:"Days of Azure"},{level:52,name:"Heart of Justice"},
+    {level:54,name:"Sworn Upon a Lance"},{level:56,name:"Dragoon's Errand"},{level:58,name:"Sanguine Dragoon"},
+    {level:60,name:"Dragoon's Fate"},{level:60,name:"Friends Through Eternity"},{level:63,name:"Drowsy Dragons"},
+    {level:65,name:"Serpent and the Sea of Rubies"},{level:68,name:"Dark as the Night Sky"},{level:70,name:"Dragon Sound"}
+  ],
+  Ninja: [
+    {level:1,name:"My First Daggers"},{level:1,name:"Stabbers in Yer Fambles"},{level:5,name:"A Dainty Dilemma"},
+    {level:10,name:"Stray into the Shadows"},{level:15,name:"Stifled Screams"},{level:15,name:"Slave to the Code"},
+    {level:20,name:"Grinners in the Mist"},{level:25,name:"Sweet Sorrows"},{level:30,name:"Market for Death"},
+    {level:30,name:"Cloying Victory"},
+    {level:30,name:"Peasants by Day, Ninjas by Night"},{level:30,name:"My First Mudra"},{level:35,name:"Killer Combinations"},
+    {level:35,name:"Once Upon a Time in Doma"},{level:40,name:"Pirates versus Ninjas"},{level:40,name:"Ninja Bathin'"},
+    {level:45,name:"Tough Guys"},{level:45,name:"The Crow Knows"},{level:50,name:"Master and Student"},
+    {level:50,name:"Strangers in a Strange Land"},{level:52,name:"The Impossible Girl"},{level:54,name:"Ninja Assassin"},
+    {level:56,name:"Medieval Espionage"},{level:58,name:"Staying Alive"},{level:60,name:"In Her Defense"},
+    {level:60,name:"Search for the Stolen Scroll"},{level:63,name:"Ninja Bathin' Redux"},{level:65,name:"A Game of Life and Death"},
+    {level:68,name:"True Enlightenment"},{level:70,name:"When Clans Collide"}
+  ],
+  Samurai: [
+    {level:50,name:"The Way of the Samurai"},{level:50,name:"Master Musosai"},{level:52,name:"The Sands of Debt"},
+    {level:54,name:"Blood on the Deck"},{level:56,name:"A Fraudster in the Forest"},{level:58,name:"Tears in the Snow"},
+    {level:60,name:"The Face of True Evil"},{level:60,name:"A Dignified Visitor"},{level:63,name:"Trials of the Sekiseigumi"},
+    {level:65,name:"Matsuba Mayhem"},{level:68,name:"The Hunt for Ugetsu"},{level:70,name:"The Battle on Bekko"}
+  ],
+  Reaper: [
+    {level:70,name:"The Killer Instinct"},{level:70,name:"The Harvest Begins"}
+  ],
+  Bard: [
+    {level:1,name:"Way of the Archer"},{level:1,name:"My First Bow"},{level:5,name:"A Matter of Perspective"},
+    {level:10,name:"Training with Leih"},{level:15,name:"Violators Will Be Shot"},{level:20,name:"To Catch a Poacher"},
+    {level:25,name:"Homecoming"},{level:30,name:"The One That Got Away"},
+    {level:30,name:"A Song of Bards and Bowmen"},{level:35,name:"The Archer's Anthem"},{level:40,name:"Bard's-eye View"},
+    {level:45,name:"Doing It the Bard Way"},{level:45,name:"Pieces of the Past"},{level:50,name:"Requiem for the Fallen"},
+    {level:50,name:"On the Road Again"},{level:52,name:"The Stiff and the Spent"},{level:54,name:"Requiem on Ice"},
+    {level:56,name:"When Gnaths Cry"},{level:58,name:"A Saint of Song"},{level:60,name:"The Ballad of Oblivion"},
+    {level:60,name:"Three's a Company"},{level:63,name:"Masked Motives"},{level:65,name:"One Autumn's Secret"},
+    {level:68,name:"Sleeping Truths Lie"},{level:70,name:"Sweet Dreams Are Made of Peace"}
+  ],
+  Machinist: [
+    {level:30,name:"Master of Marksmanship"},{level:35,name:"Always the Last Place You Look"},{level:40,name:"Rook Before You Reap"},
+    {level:40,name:"Securing the Locks"},{level:45,name:"A Suppressive Strategy"},{level:45,name:"Blood on the Sands"},
+    {level:50,name:"Rage against the Machinists"},{level:50,name:"The Power of a Tourney"},{level:50,name:"A Joye-less Celebration"},
+    {level:52,name:"Pushing the Brume"},{level:54,name:"A Joye-ful Reunion"},{level:56,name:"Wheels of Justice"},
+    {level:58,name:"Taking the Fall"},{level:58,name:"Rusted Steel"},{level:60,name:"Rise of the Machinists"},
+    {level:60,name:"The Machinists' Choice"},{level:63,name:"The Hrunting Heist"},{level:65,name:"Release the Hounds"},
+    {level:68,name:"Snouts Down, Tails Up"},{level:70,name:"The Mongrel and the Knight"}
+  ],
+  Dancer: [
+    {level:60,name:"Shall We Dance"},{level:60,name:"Gamboling for Gil"},{level:63,name:"A Soirée in the Sultanate"},
+    {level:65,name:"Dances with Duskwights"},{level:68,name:"High-steppin' in the Holy See"},{level:70,name:"Save the Last Dance for Me"}
+  ],
+  "Black Mage": [
+    {level:1,name:"Way of the Thaumaturge"},{level:1,name:"My First Scepter"},{level:5,name:"The Threat of Intimacy"},
+    {level:10,name:"The Threat of Paucity"},{level:15,name:"The Threat of Superiority"},{level:20,name:"The Threat of Perplexity"},
+    {level:25,name:"The Hidden Chapter"},{level:30,name:"Facing Your Demons"},
+    {level:30,name:"Taking the Black"},{level:35,name:"You'll Never Go Back"},{level:40,name:"International Relations"},
+    {level:45,name:"The Voidgate Breathes Gloomy"},{level:45,name:"The Blood Must Flow"},{level:50,name:"Always Bet on Black"},
+    {level:50,name:"Black Books"},{level:52,name:"An Unexpected Journey"},{level:54,name:"A Cunning Plan"},
+    {level:56,name:"Black Squawk Down"},{level:58,name:"Destruction in the Name of Justice"},{level:60,name:"The Defiant Ones"},
+    {level:60,name:"Shades of Shatotto"},{level:63,name:"Golems Gone Wild"},{level:65,name:"When the Golems Get Tough"},
+    {level:68,name:"Unnatural Selection"},{level:70,name:"One Golem to Rule Them All"}
+  ],
+  Summoner: [
+    {level:1,name:"Way of the Arcanist"},{level:1,name:"My First Grimoire"},{level:5,name:"What's in the Box"},
+    {level:10,name:"Tactical Planning"},{level:15,name:"Topaz Teachings"},{level:15,name:"Over the Rails"},
+    {level:20,name:"Pincer Maneuver"},{level:25,name:"Grimoire Fandango"},{level:30,name:"Sinking Doesmaga"},
+    {level:30,name:"Austerities of Flame"},{level:35,name:"Austerities of Earth"},{level:40,name:"Shadowing the Summoner"},
+    {level:45,name:"Allagan Attire"},{level:45,name:"Austerities of Wind"},{level:50,name:"Primal Burdens"},
+    {level:50,name:"A Fitting Tomestone"},{level:52,name:"A Matter of Fact"},{level:54,name:"A Miner Negotiation"},
+    {level:56,name:"Mad, Bad, and Ebon-clad"},{level:58,name:"I Could Have Tranced All Night"},{level:60,name:"A Flare for the Dramatic"},
+    {level:60,name:"A Book with Bite"},{level:63,name:"Performing for Prin"},{level:65,name:"An Egi-stential Crisis"},
+    {level:68,name:"Off the Record"},{level:70,name:"An Art for the Living"}
+  ],
+  "Red Mage": [
+    {level:50,name:"Taking the Red"},{level:50,name:"The Crimson Duelist"},{level:52,name:"A Rewarding Struggle"},
+    {level:54,name:"Tracking the Cabal"},{level:56,name:"A Vermilion Vendetta"},{level:58,name:"On Lambard's Trail"},
+    {level:60,name:"Stained in Scarlet"},{level:60,name:"The Color of Her Hair"},{level:63,name:"Traced in Blood"},
+    {level:65,name:"Nightkin"},{level:68,name:"Child of Lilith"},{level:70,name:"With Heart and Steel"}
+  ],
+  "Blue Mage": [
+    {level:1,name:"Blue Leading the Blue"},{level:10,name:"Blue Collar Work"},{level:20,name:"Why They Call It the Blues"},
+    {level:30,name:"Scream Blue Murder"},{level:40,name:"Blue Gold"},{level:50,name:"Out of the Blue"},
+    {level:50,name:"The Real Folk Blues"},{level:50,name:"Turning Over a Blue Leaf"},{level:50,name:"Into the Blue Again"},
+    {level:53,name:"Something Borrowed, Something Blue"},{level:55,name:"Bolt from the Blue"},{level:58,name:"Blue in the Face"},
+    {level:60,name:"Blue Scream of Death"},{level:60,name:"Blue Cheese"},{level:65,name:"Azuro and Goliath"},
+    {level:68,name:"Where the Gold Goes"},{level:70,name:"Master of Mimicry"},{level:70,name:"A Future in Blue"}
+  ]
+};
+function missedJobQuests(job, level, doneMap){
+  const list = JOB_QUESTS[job] || [];
+  const done = (doneMap && doneMap[job]) || {};
+  return list.filter(q => q.level <= level && !done[q.name]);
+}
+
 // "Overall" is a roll-up: sub-categories should sum to it on both the done and total side.
 // Totals are editable per-character (Edit totals button) since they grow with patches.
 const QUEST_CATS = [
@@ -26,6 +363,24 @@ const QUEST_CATS = [
   ["leve","Levequests",1738]
 ];
 const SUB_CATS = QUEST_CATS.filter(([key])=>key!=='overall');
+
+// Sourced from ffxiv.consolegameswiki.com's Main Scenario Quests overview table, grouped
+// the way the QuestTracker plugin itself groups them (initial release + every "post-X"
+// continuation through the next expansion's start — confirmed against a real screenshot
+// showing Stormblood at 122/162, which is exactly 122 initial + 40 post-Stormblood).
+// "A Realm Reborn" here is two wiki arcs combined — Seventh Umbral Era (160-161,
+// starting-city/GC-dependent) + Seventh Astral Era (80, fixed) = 240 or 241. ARR's total
+// is deliberately editable: summing all six with 240 gives exactly 991, with 241 giving
+// exactly 992 — both independently confirmed against the plugin's real numbers, so this
+// checks out rather than being assumed.
+const MSQ_EXPANSIONS = [
+  ["arr","A Realm Reborn",240],
+  ["hw","Heavensward",138],
+  ["stb","Stormblood",162],
+  ["shb","Shadowbringers",157],
+  ["ew","Endwalker",155],
+  ["dt","Dawntrail",139]
+];
 
 // Every reset is a fixed instant in UTC (SE's own convention: GMT reference regardless of
 // player DST). Edit/extend this list when 8.0 reworks resets (2027-01-19) — no other code
@@ -40,6 +395,76 @@ const RESET_SCHEDULES = [
 ];
 const DAY_MS = 86400000;
 const ACCENTS = ['gold','teal','rose'];
+
+// Sourced from ffxiv.consolegameswiki.com's Daily and Weekly Checklist page. Seeded onto
+// every new character so the known list is there from the start — hide (not delete)
+// whatever doesn't apply to you, same idea as Haven's "I'd never do Faux Hollows as Grey."
+// No `requires` patch gates pre-filled — real per-item unlock patches weren't verified,
+// so everything defaults to always-visible; add gating yourself if you want it.
+// Schedule mapping is best-effort where the source didn't map cleanly to a fixed reset:
+// Treasure Hunt is really an 18h personal cooldown, not a fixed daily reset; Squadron
+// Training and Retainer Ventures run on their own per-action timers. All approximated to
+// the closest existing schedule — adjust the dropdown per-item if the timing bugs you.
+// "Windurst: The Third Walk" (FFXI-crossover alliance raid) is included — real content,
+// not a wiki error. "YoRHa Epilogue Quest Chain" is a one-time 6-week unlock rather than a
+// recurring weekly, but it's included anyway so people know it exists at all — once
+// finished, hide it the same way as anything else that's stopped being relevant.
+// Third value is a stable key, separate from the editable label — the one-time backfill
+// below matches on this, not on label text, so renaming "Duty Roulette" to something else
+// doesn't make it look "missing" and spawn a duplicate on the next load.
+const DEFAULT_ROUTINES = [
+  ["Allied Society Quests","daily15","allied-society"],
+  ["Duty Roulette","daily15","duty-roulette"],
+  ["Morbid Motivation (Mysterious Maps)","daily15","morbid-motivation"],
+  ["Cut from a Different Cloth (Singing Clusters)","daily15","cut-different-cloth"],
+  ["The Will to Resist (Resistance Weapon)","daily15","will-to-resist"],
+  ["Aether, Aether, Everywhere (Phantom Weapon)","daily15","aether-everywhere"],
+  ["Tank You (Tank Roulette)","daily15","tank-you"],
+  ["Mini Cactpot","daily15","mini-cactpot"],
+  ["The Hunt (Daily Marks)","daily15","hunt-daily"],
+  ["Grand Company Turn-in","daily20","gc-turnin"],
+  ["Treasure Hunt (map every 18h)","daily15","treasure-hunt"],
+  ["Adventurer Squadron Training","daily20","squadron-training"],
+  ["Cosmic Exploration Daily Successes","daily09","cosmic-exploration"],
+  ["Retainer Ventures","daily15","retainer-ventures"],
+  ["Dancing Mad (Ultimate)","weeklyTue","dancing-mad"],
+  ["AAC Heavyweight M4","weeklyTue","aac-m4"],
+  ["Windurst: The Third Walk","weeklyTue","windurst"],
+  ["YoRHa Epilogue Quest Chain (one-time unlock)","weeklyTue","yorha-epilogue"],
+  ["Cap Allagan Tomestone of Mnemonics","weeklyTue","tomestone-cap"],
+  ["AAC Heavyweight (Savage)","weeklyTue","aac-savage"],
+  ["Challenge Log","weeklyTue","challenge-log"],
+  ["Seeking Inspiration (Anima Weapon)","weeklyTue","seeking-inspiration"],
+  ["Wondrous Tails","weeklyTue","wondrous-tails"],
+  ["Jumbo Cactpot","weeklyTue","jumbo-cactpot"],
+  ["Hunt — B-Rank Elite Marks","weeklyTue","hunt-brank"],
+  ["Masked Carnivale / Blue Mage Log","weeklyTue","masked-carnivale"],
+  ["Fashion Report","weeklyTue","fashion-report"],
+  ["Custom Deliveries","weeklyTue","custom-deliveries"],
+  ["Doman Enclave Reconstruction","weeklyTue","doman-enclave"],
+  ["Squadron Missions","weeklyTue","squadron-missions"],
+  ["Faux Hollows","weeklyTue","faux-hollows"],
+  ["Island Sanctuary Weekly","weeklyTue","island-sanctuary"],
+  ["Bozjan Frontier (Delubrum Reginae)","weeklyTue","bozjan-frontier"]
+];
+function seedRoutines(){
+  return DEFAULT_ROUTINES.map(([label,schedId,seedKey])=>(
+    { id:newId(), label, schedId, lastDone:null, requires:'', hidden:false, seedKey }
+  ));
+}
+// One-time backfill for characters that existed before this seed list did (or before an
+// item was added to it) — adds only what's missing, matched by seedKey so a renamed label
+// doesn't duplicate, and never re-adds something whose seedKey is already present even if
+// the user deleted that routine on purpose. Runs once per character via routinesSeeded.
+function backfillSeedRoutines(c){
+  const have = new Set(c.routines.map(r=>r.seedKey).filter(Boolean));
+  DEFAULT_ROUTINES.forEach(([label,schedId,seedKey])=>{
+    if(!have.has(seedKey)){
+      c.routines.push({ id:newId(), label, schedId, lastDone:null, requires:'', hidden:false, seedKey });
+    }
+  });
+  c.routinesSeeded = true;
+}
 
 function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHEDULES[0]; }
 
@@ -196,14 +621,20 @@ function newCharacter(name){
     id: newId(),
     name: name || '',
     duty:0, comm:0, roleTank:false, roleHealer:false, roleDps:false,
-    playtime:{days:0,hours:0}, patch:'', showGated:false,
+    playtime:{days:0,hours:0}, patch:'', showGated:false, showHidden:false,
+    noPlugin:false,
     quests: Object.fromEntries(QUEST_CATS.map(([k])=>[k,0])),
     questTotals: Object.fromEntries(QUEST_CATS.map(([k,l,t])=>[k,t])),
+    msqBreakdown: Object.fromEntries(MSQ_EXPANSIONS.map(([k])=>[k,0])),
+    msqBreakdownTotals: Object.fromEntries(MSQ_EXPANSIONS.map(([k,l,t])=>[k,t])),
+    msqBreakdownOpen: false,
     combat: Object.fromEntries(COMBAT_JOBS.map(([n])=>[n,0])),
     craft: Object.fromEntries(CRAFT_JOBS.map(n=>[n,0])),
     gather: Object.fromEntries(GATHER_JOBS.map(n=>[n,0])),
     tradeCollected:0, tradeMade:0,
-    custom: [], routines: [], notes: ''
+    custom: [], routines: seedRoutines(), routinesSeeded: true, notes: '',
+    jobQuestsDone: {}, jobQuestsOpen: {},
+    server: {pdc:'', ldc:'', world:''}
   };
 }
 
@@ -211,7 +642,7 @@ function normalizeCharacter(c){
   if(!c.id) c.id = newId();
   if(typeof c.name !== 'string') c.name = '';
   ['duty','comm','tradeCollected','tradeMade'].forEach(k=>{ if(typeof c[k] !== 'number') c[k] = 0; });
-  ['roleTank','roleHealer','roleDps','showGated'].forEach(k=>{ c[k] = !!c[k]; });
+  ['roleTank','roleHealer','roleDps','showGated','showHidden','noPlugin'].forEach(k=>{ c[k] = !!c[k]; });
   if(typeof c.patch !== 'string') c.patch = '';
   if(typeof c.notes !== 'string') c.notes = '';
   if(!c.quests) c.quests = {};
@@ -220,18 +651,39 @@ function normalizeCharacter(c){
   if(!c.gather) c.gather = {};
   if(!c.questTotals) c.questTotals = {};
   QUEST_CATS.forEach(([key,label,total])=>{ if(c.questTotals[key] === undefined) c.questTotals[key] = total; });
+  if(!c.msqBreakdown) c.msqBreakdown = {};
+  if(!c.msqBreakdownTotals) c.msqBreakdownTotals = {};
+  MSQ_EXPANSIONS.forEach(([key,label,total])=>{
+    if(c.msqBreakdown[key] === undefined) c.msqBreakdown[key] = 0;
+    if(c.msqBreakdownTotals[key] === undefined) c.msqBreakdownTotals[key] = total;
+  });
+  c.msqBreakdownOpen = !!c.msqBreakdownOpen;
   if(typeof c.playtime === 'string'){
     const d = c.playtime.match(/(\d+)\s*d/i), h = c.playtime.match(/(\d+)\s*h/i);
     c.playtime = { days: d?parseInt(d[1]):0, hours: h?parseInt(h[1]):0 };
   }
   if(!c.playtime) c.playtime = {days:0,hours:0};
+  if(!c.jobQuestsDone || typeof c.jobQuestsDone !== 'object') c.jobQuestsDone = {};
+  if(!c.jobQuestsOpen || typeof c.jobQuestsOpen !== 'object') c.jobQuestsOpen = {};
+  if(!c.server || typeof c.server !== 'object') c.server = {pdc:'', ldc:'', world:''};
+  if(typeof c.server.pdc !== 'string') c.server.pdc = '';
+  if(typeof c.server.ldc !== 'string') c.server.ldc = '';
+  if(typeof c.server.world !== 'string') c.server.world = '';
+  // A saved LDC/world that no longer exists under its PDC (stale data, or hand-edited
+  // import) must not leave a selection the UI can't actually represent.
+  if(c.server.pdc && !SERVER_DATA[c.server.pdc]) c.server = {pdc:'', ldc:'', world:''};
+  else if(c.server.ldc && !(SERVER_DATA[c.server.pdc]||{})[c.server.ldc]){ c.server.ldc=''; c.server.world=''; }
+  else if(c.server.world && !((SERVER_DATA[c.server.pdc]||{})[c.server.ldc]||[]).includes(c.server.world)) c.server.world='';
   if(!Array.isArray(c.custom)) c.custom = [];
   if(!Array.isArray(c.routines)) c.routines = [];
   c.routines.forEach(r=>{
     if(!r.schedId || !RESET_SCHEDULES.some(s=>s.id===r.schedId)) r.schedId = 'daily15';
     r.lastDone = typeof r.lastDone === 'number' ? r.lastDone : null;
     if(typeof r.requires !== 'string') r.requires = '';
+    r.hidden = !!r.hidden;
+    if(typeof r.seedKey !== 'string') r.seedKey = null;
   });
+  if(!c.routinesSeeded) backfillSeedRoutines(c);
   return c;
 }
 
@@ -294,10 +746,17 @@ function collectCharInputs(cid){
   if(g(`${cid}-trade-made`)) c.tradeMade = num(g(`${cid}-trade-made`).value);
   if(g(`${cid}-patch`)) c.patch = g(`${cid}-patch`).value.trim();
   if(g(`${cid}-notes`)) c.notes = g(`${cid}-notes`).value;
+  if(g(`${cid}-server-pdc`)) c.server.pdc = g(`${cid}-server-pdc`).value;
+  if(g(`${cid}-server-ldc`)) c.server.ldc = g(`${cid}-server-ldc`).value;
+  if(g(`${cid}-server-world`)) c.server.world = g(`${cid}-server-world`).value;
 
   QUEST_CATS.forEach(([key])=>{
     if(g(`${cid}-quest-${key}`)) c.quests[key] = num(g(`${cid}-quest-${key}`).value);
     if(g(`${cid}-total-${key}`)) c.questTotals[key] = num(g(`${cid}-total-${key}`).value);
+  });
+  MSQ_EXPANSIONS.forEach(([key])=>{
+    if(g(`${cid}-msqexp-${key}`)) c.msqBreakdown[key] = num(g(`${cid}-msqexp-${key}`).value);
+    if(g(`${cid}-msqexptotal-${key}`)) c.msqBreakdownTotals[key] = num(g(`${cid}-msqexptotal-${key}`).value);
   });
   COMBAT_JOBS.forEach(([name])=>{
     const el = g(`${cid}-combat-${name.replace(/\s/g,'')}`);
@@ -382,6 +841,7 @@ function characterPageHTML(cid){
       <input type="text" class="char-name-input" id="${cid}-name" placeholder="Character name" oninput="onNameInput('${cid}')">
       <button class="remove-char-btn" onclick="removeCharacter('${cid}')">Remove character</button>
     </div>
+    <div class="server-picker" id="${cid}-server-picker"></div>
     <div class="dash-grid" id="${cid}-dash"></div>
   </div>
 
@@ -419,7 +879,7 @@ function characterPageHTML(cid){
   </div>
 
   <div class="section">
-    <h2>Quest categories <span class="hint-group"><span class="hint">via QuestTracker plugin</span><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
+    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via QuestTracker plugin</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
     <div class="quest-grid" id="${cid}-quests"></div>
     <div class="check-note" id="${cid}-overall-check"></div>
   </div>
@@ -444,6 +904,7 @@ function characterPageHTML(cid){
     <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><span class="patch-box">patch <input type="text" id="${cid}-patch" class="patch-input" placeholder="4.0" oninput="onPatchInput('${cid}')"></span></span></h2>
     <div class="routine-list" id="${cid}-routines"></div>
     <div class="gated-note" id="${cid}-gated"></div>
+    <div class="hidden-note" id="${cid}-hiddennote"></div>
     <button class="add-btn" onclick="addRoutine('${cid}')">+ Add routine</button>
   </div>
 
@@ -553,6 +1014,7 @@ function onTotalInput(cid){
   collectAllInputs();
   updateQuestPercents(cid);
   updateOverallCheck(cid);
+  updateMsqCheckNote(cid);
   renderCharDash(cid);
   scheduleSave();
 }
@@ -564,14 +1026,111 @@ function renderQuestsTable(cid){
     const totalCell = editingTotals[cid]
       ? `<input type="text" class="total-input" id="${cid}-total-${key}" value="${total}" oninput="onTotalInput('${cid}')">`
       : total.toLocaleString();
+    // Main Scenario gets a per-expansion breakdown option — the no-plugin fallback. Same
+    // number-entry pattern as every other category, not a quest-by-quest checklist; the
+    // user types each expansion's own done/total (from the wiki or their own count),
+    // and a mini consistency check confirms it against this row's own numbers, same
+    // relationship as Overall vs. the seven categories.
+    const labelCell = (key==='msq' && c.noPlugin)
+      ? `${label} ${msqToggleHTML(cid)}`
+      : label;
     rows += `
-      <div>${label}</div>
+      <div>${labelCell}</div>
       <div><input type="text" id="${cid}-quest-${key}" value="${v}" style="text-align:right" oninput="onMainInput('${cid}')"></div>
       <div style="text-align:right" class="cap">${totalCell}</div>
       <div style="text-align:right;font-family:var(--font-mono);color:var(--text-dim)" id="${cid}-qpct-${key}">${pct(v,total).toFixed(1)}%</div>
     `;
+    if(key==='msq' && c.noPlugin){
+      rows += `<div id="${cid}-msqrow" style="grid-column:1/-1;${c.msqBreakdownOpen?'':'display:none'}"></div>`;
+    }
   });
   document.getElementById(cid+'-quests').innerHTML = rows;
+  const msqRow = document.getElementById(`${cid}-msqrow`);
+  if(msqRow && c.noPlugin){
+    msqRow.style.display = c.msqBreakdownOpen ? '' : 'none';
+    if(c.msqBreakdownOpen) msqRow.innerHTML = msqBreakdownPanelHTML(cid);
+  }
+}
+function renderPluginMode(cid){
+  const c = getChar(cid);
+  const hint = document.getElementById(`${cid}-pluginhint`);
+  const btn = document.getElementById(`${cid}-pluginmode-btn`);
+  if(hint) hint.textContent = c.noPlugin ? 'manual entry — no plugin' : 'via QuestTracker plugin';
+  if(btn) btn.textContent = c.noPlugin ? 'I use QuestTracker' : "I don't use the plugin";
+}
+function toggleNoPlugin(cid){
+  collectAllInputs();
+  const c = getChar(cid);
+  c.noPlugin = !c.noPlugin;
+  if(!c.noPlugin) c.msqBreakdownOpen = false;
+  renderPluginMode(cid);
+  renderQuestsTable(cid);
+  scheduleSave();
+}
+
+/* ---------- MSQ per-expansion breakdown (no-plugin fallback) ---------- */
+function msqToggleHTML(cid){
+  const c = getChar(cid);
+  return `<button class="jq-toggle neutral" id="${cid}-msqbtn" onclick="toggleMsqBreakdown('${cid}')">${c.msqBreakdownOpen?'hide':'by expansion'}</button>`;
+}
+function msqCheck(cid){
+  const c = getChar(cid);
+  let sumDone=0, sumTotal=0;
+  MSQ_EXPANSIONS.forEach(([key])=>{ sumDone += c.msqBreakdown[key]||0; sumTotal += c.msqBreakdownTotals[key]||0; });
+  const doneOk = sumDone === (c.quests.msq||0), totalOk = sumTotal === (c.questTotals.msq||0);
+  if(doneOk && totalOk){
+    return { cls:'ok', text:`✓ expansions sum to ${fmt(sumDone)} / ${fmt(sumTotal)} — matches Main scenario` };
+  }
+  const parts=[];
+  if(!doneOk) parts.push(`done ${fmt(sumDone)} vs Main scenario ${fmt(c.quests.msq||0)}`);
+  if(!totalOk) parts.push(`total ${fmt(sumTotal)} vs Main scenario ${fmt(c.questTotals.msq||0)}`);
+  return { cls:'warn', text:`⚠ expansions disagree — ${parts.join('; ')}` };
+}
+function msqBreakdownPanelHTML(cid){
+  const c = getChar(cid);
+  const rows = MSQ_EXPANSIONS.map(([key,label])=>{
+    const v = c.msqBreakdown[key]||0, t = c.msqBreakdownTotals[key];
+    return `<div class="jq-item">
+      <span class="jq-name" style="flex:1">${esc(label)}</span>
+      <input type="text" id="${cid}-msqexp-${key}" value="${v}" style="width:56px;text-align:right" oninput="onMsqExpInput('${cid}')">
+      <span class="jq-level" style="width:12px;text-align:center;flex:0 0 auto">/</span>
+      <input type="text" id="${cid}-msqexptotal-${key}" value="${t}" style="width:56px;text-align:right" oninput="onMsqExpInput('${cid}')">
+      <span class="jq-level" style="width:50px;text-align:right;font-family:var(--font-mono)" id="${cid}-msqexppct-${key}">${pct(v,t).toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+  const check = msqCheck(cid);
+  return `<div class="jq-panel">${rows}<div class="check-note ${check.cls}" id="${cid}-msqcheck" style="margin-top:8px">${check.text}</div></div>`;
+}
+function toggleMsqBreakdown(cid){
+  collectAllInputs();
+  const c = getChar(cid);
+  c.msqBreakdownOpen = !c.msqBreakdownOpen;
+  const row = document.getElementById(`${cid}-msqrow`);
+  const btn = document.getElementById(`${cid}-msqbtn`);
+  if(row){
+    row.style.display = c.msqBreakdownOpen ? '' : 'none';
+    row.innerHTML = c.msqBreakdownOpen ? msqBreakdownPanelHTML(cid) : '';
+  }
+  if(btn) btn.textContent = c.msqBreakdownOpen ? 'hide' : 'by expansion';
+  scheduleSave();
+}
+function onMsqExpInput(cid){
+  collectAllInputs();
+  const c = getChar(cid);
+  MSQ_EXPANSIONS.forEach(([key])=>{
+    const v = c.msqBreakdown[key]||0, t = c.msqBreakdownTotals[key];
+    const el = document.getElementById(`${cid}-msqexppct-${key}`);
+    if(el) el.textContent = pct(v,t).toFixed(1)+'%';
+  });
+  updateMsqCheckNote(cid);
+  scheduleSave();
+}
+function updateMsqCheckNote(cid){
+  const el = document.getElementById(`${cid}-msqcheck`);
+  if(!el) return;
+  const check = msqCheck(cid);
+  el.className = 'check-note '+check.cls;
+  el.textContent = check.text;
 }
 function updateQuestPercents(cid){
   const c = getChar(cid);
@@ -583,33 +1142,112 @@ function updateQuestPercents(cid){
 }
 
 function renderJobTables(cid){
+  document.getElementById(cid+'-combat').innerHTML = COMBAT_JOBS.map(([name,role,capOverride])=>combatRowHTML(cid,name,role,capOverride)).join('');
+  document.getElementById(cid+'-craft').innerHTML = CRAFT_JOBS.map(name=>craftGatherRowHTML(cid,'craft',name)).join('');
+  document.getElementById(cid+'-gather').innerHTML = GATHER_JOBS.map(name=>craftGatherRowHTML(cid,'gather',name)).join('');
+  updateJobCaps(cid);
+}
+
+/* ---------- job quest checklist (levels 1-70) ---------- */
+// Job names never collide across combat/craft/gather, so one lookup covers all three.
+function jobLevelOf(c, job){
+  if(c.combat[job] !== undefined) return c.combat[job]||0;
+  if(c.craft[job] !== undefined) return c.craft[job]||0;
+  return c.gather[job]||0;
+}
+function jqToggleHTML(cid, job, lvl){
   const c = getChar(cid);
-  let crows = '';
-  COMBAT_JOBS.forEach(([name,role,capOverride])=>{
-    const cap = capOverride || 100, lvl = c.combat[name]||0, id = name.replace(/\s/g,'');
-    crows += `<tr>
+  // No sourced list yet (Viper, Pictomancer, Beastmaster) must read as "no data," never
+  // as a false "caught up" — zero missed only means something when there's a real list.
+  if(!JOB_QUESTS[job] || !JOB_QUESTS[job].length){
+    return `<button class="jq-toggle neutral" id="${cid}-jqbtn-${job}" onclick="toggleJobQuests('${cid}','${job}')">&mdash;</button>`;
+  }
+  const missed = missedJobQuests(job, lvl, c.jobQuestsDone);
+  const cls = lvl<=0 ? 'neutral' : (missed.length ? 'warn' : 'ok');
+  const label = lvl<=0 ? 'quests' : (missed.length ? `⚠ ${missed.length}` : '✓');
+  return `<button class="jq-toggle ${cls}" id="${cid}-jqbtn-${job}" onclick="toggleJobQuests('${cid}','${job}')">${label}</button>`;
+}
+function jqPanelHTML(cid, job){
+  const c = getChar(cid);
+  const lvl = jobLevelOf(c, job);
+  const done = c.jobQuestsDone[job] || {};
+  const list = JOB_QUESTS[job] || [];
+  const items = list.map((q,i)=>{
+    const isDone = !!done[q.name];
+    const isMissed = q.level <= lvl && !isDone;
+    return `<div class="jq-item${isMissed?' missed':''}${q.level>lvl?' future':''}">
+      <input type="checkbox" id="${cid}-jq-${job}-${i}" ${isDone?'checked':''} onchange="toggleJobQuestDone('${cid}','${job}',${i})">
+      <span class="jq-level">Lv.${q.level}</span>
+      <span class="jq-name">${esc(q.name)}</span>
+      ${isMissed?'<span class="jq-flag">not done</span>':''}
+    </div>`;
+  }).join('');
+  return `<div class="jq-panel">${items || '<div class="empty-hint">No quest data loaded for this job yet.</div>'}</div>`;
+}
+function combatRowHTML(cid, name, role, capOverride){
+  const c = getChar(cid);
+  const cap = capOverride || 100, lvl = c.combat[name]||0, id = name.replace(/\s/g,'');
+  const open = !!c.jobQuestsOpen[name];
+  return `<tr>
       <td><div class="job-cell"><span class="role-tag">${role}</span><span class="job-name">${name}</span></div></td>
       <td style="width:104px"><input type="text" id="${cid}-combat-${id}" value="${lvl}" oninput="onMainInput('${cid}')"></td>
       <td style="width:60px" class="cap">/ ${cap}</td>
       <td style="width:60px" id="${cid}-ccap-${id}">${lvl>=cap?'<span class="at-cap">at cap</span>':''}</td>
+      <td style="width:56px" id="${cid}-jqcell-${name}">${jqToggleHTML(cid,name,lvl)}</td>
+    </tr>
+    <tr class="jq-panel-row" id="${cid}-jqrow-${name}" style="${open?'':'display:none'}">
+      <td colspan="5" id="${cid}-jqpanel-${name}">${open ? jqPanelHTML(cid,name) : ''}</td>
     </tr>`;
-  });
-  document.getElementById(cid+'-combat').innerHTML = crows;
-
-  let craftRows = '';
-  CRAFT_JOBS.forEach(name=>{
-    const lvl = c.craft[name]||0;
-    craftRows += `<tr><td>${name}</td><td style="width:96px"><input type="text" id="${cid}-craft-${name}" value="${lvl}" oninput="onMainInput('${cid}')"></td><td class="cap" style="width:52px">/ 100</td><td style="width:66px" id="${cid}-craftmark-${name}"></td></tr>`;
-  });
-  document.getElementById(cid+'-craft').innerHTML = craftRows;
-
-  let gatherRows = '';
-  GATHER_JOBS.forEach(name=>{
-    const lvl = c.gather[name]||0;
-    gatherRows += `<tr><td>${name}</td><td style="width:96px"><input type="text" id="${cid}-gather-${name}" value="${lvl}" oninput="onMainInput('${cid}')"></td><td class="cap" style="width:52px">/ 100</td><td style="width:66px" id="${cid}-gathermark-${name}"></td></tr>`;
-  });
-  document.getElementById(cid+'-gather').innerHTML = gatherRows;
-  updateJobCaps(cid);
+}
+function craftGatherRowHTML(cid, kind, name){
+  const c = getChar(cid);
+  const lvl = (kind==='craft' ? c.craft[name] : c.gather[name]) || 0;
+  const open = !!c.jobQuestsOpen[name];
+  const inputId = `${cid}-${kind}-${name}`;
+  const markId = `${cid}-${kind==='craft'?'craftmark':'gathermark'}-${name}`;
+  return `<tr>
+      <td>${name}</td>
+      <td style="width:96px"><input type="text" id="${inputId}" value="${lvl}" oninput="onMainInput('${cid}')"></td>
+      <td class="cap" style="width:52px">/ 100</td>
+      <td style="width:66px" id="${markId}"></td>
+      <td style="width:56px" id="${cid}-jqcell-${name}">${jqToggleHTML(cid,name,lvl)}</td>
+    </tr>
+    <tr class="jq-panel-row" id="${cid}-jqrow-${name}" style="${open?'':'display:none'}">
+      <td colspan="5" id="${cid}-jqpanel-${name}">${open ? jqPanelHTML(cid,name) : ''}</td>
+    </tr>`;
+}
+function toggleJobQuests(cid, job){
+  collectAllInputs();
+  const c = getChar(cid);
+  c.jobQuestsOpen[job] = !c.jobQuestsOpen[job];
+  const row = document.getElementById(`${cid}-jqrow-${job}`);
+  const cell = document.getElementById(`${cid}-jqpanel-${job}`);
+  if(c.jobQuestsOpen[job]){
+    row.style.display = '';
+    cell.innerHTML = jqPanelHTML(cid, job);
+  }else{
+    row.style.display = 'none';
+    cell.innerHTML = '';
+  }
+  scheduleSave();
+}
+function toggleJobQuestDone(cid, job, index){
+  const c = getChar(cid);
+  const q = (JOB_QUESTS[job]||[])[index];
+  if(!q) return;
+  if(!c.jobQuestsDone[job]) c.jobQuestsDone[job] = {};
+  const chk = document.getElementById(`${cid}-jq-${job}-${index}`);
+  c.jobQuestsDone[job][q.name] = chk.checked;
+  const lvl = jobLevelOf(c, job);
+  const item = chk.closest('.jq-item');
+  const isMissed = q.level <= lvl && !chk.checked;
+  item.classList.toggle('missed', isMissed);
+  const flag = item.querySelector('.jq-flag');
+  if(isMissed && !flag) item.insertAdjacentHTML('beforeend', '<span class="jq-flag">not done</span>');
+  if(!isMissed && flag) flag.remove();
+  const btnCell = document.getElementById(`${cid}-jqcell-${job}`);
+  if(btnCell) btnCell.innerHTML = jqToggleHTML(cid, job, lvl);
+  scheduleSave();
 }
 function updateJobCaps(cid){
   const c = getChar(cid);
@@ -630,6 +1268,17 @@ function updateJobCaps(cid){
   gatherEntries.forEach(e=>{
     const el = document.getElementById(cid+'-gathermark-'+e.name);
     if(el) el.innerHTML = markerHTML(e.level, e.cap, gatherLow.has(e.name));
+  });
+
+  // Job-quest badges and any open checklist panel need to reflect a level typed just now,
+  // not only refresh on the next full page render.
+  [...combatEntries, ...craftEntries, ...gatherEntries].forEach(e=>{
+    const btnCell = document.getElementById(`${cid}-jqcell-${e.name}`);
+    if(btnCell) btnCell.innerHTML = jqToggleHTML(cid, e.name, e.level);
+    if(c.jobQuestsOpen[e.name]){
+      const panel = document.getElementById(`${cid}-jqpanel-${e.name}`);
+      if(panel) panel.innerHTML = jqPanelHTML(cid, e.name);
+    }
   });
 }
 
@@ -706,12 +1355,13 @@ function routineHTML(cid, item){
   const dueMs = nextResetInstant(sched, now) - now.getTime();
   const opts = RESET_SCHEDULES.map(s=>`<option value="${s.id}"${s.id===item.schedId?' selected':''}>${esc(s.label)}</option>`).join('');
   return `
-    <div class="routine-item${done?' done':''}${gated?' gated':''}" id="${cid}-rt-item-${item.id}">
+    <div class="routine-item${done?' done':''}${gated?' gated':''}${item.hidden?' user-hidden':''}" id="${cid}-rt-item-${item.id}">
       <input type="checkbox" id="${cid}-rt-chk-${item.id}"${done?' checked':''}${gated?' disabled':''} onchange="toggleRoutine('${cid}','${item.id}')">
       <input type="text" class="routine-label" id="${cid}-rt-label-${item.id}" value="${esc(item.label)}" placeholder="e.g. Ixali dailies" oninput="onRoutineInput('${cid}','${item.id}')">
       <select id="${cid}-rt-sched-${item.id}" onchange="onRoutineInput('${cid}','${item.id}')">${opts}</select>
       <input type="text" class="routine-req" id="${cid}-rt-req-${item.id}" value="${esc(item.requires||'')}" placeholder="any" title="Patch this unlocks in — blank means always available" oninput="onRoutineInput('${cid}','${item.id}')">
       <span class="routine-due" id="${cid}-rt-due-${item.id}">${gated?'locked':fmtDue(dueMs)}</span>
+      <button class="hide-btn${item.hidden?' is-hidden':''}" id="${cid}-rt-hidebtn-${item.id}" title="${item.hidden?'Unhide this routine':"Hide — doesn't apply to this character"}" onclick="toggleRoutineHidden('${cid}','${item.id}')">${item.hidden?'◉':'○'}</button>
       <button class="remove-btn" title="Remove this routine" onclick="removeRoutine('${cid}','${item.id}')">&times;</button>
     </div>`;
 }
@@ -722,11 +1372,14 @@ function renderRoutines(cid){
   const patchEl = document.getElementById(cid+'-patch');
   if(patchEl && patchEl.value !== (c.patch||'')) patchEl.value = c.patch || '';
   const all = c.routines;
-  const visible = c.showGated ? all : all.filter(r=>!isGated(r, c.patch));
+  const visible = all.filter(r =>
+    (c.showGated || !isGated(r, c.patch)) && (c.showHidden || !r.hidden)
+  );
   box.innerHTML = visible.length
     ? visible.map(item=>routineHTML(cid,item)).join('')
-    : `<div class="empty-hint">${all.length ? 'Everything here needs a later patch.' : 'Nothing yet &mdash; add the things you repeat, like Ixali dailies or GC supply missions.'}</div>`;
+    : `<div class="empty-hint">${all.length ? 'Everything here is hidden or needs a later patch.' : 'Nothing yet &mdash; add the things you repeat, like Ixali dailies or GC supply missions.'}</div>`;
   renderGatedNote(cid);
+  renderHiddenNote(cid);
 }
 function renderGatedNote(cid){
   const el = document.getElementById(cid+'-gated');
@@ -740,10 +1393,42 @@ function renderGatedNote(cid){
     : 'showing patch-locked routines';
   el.innerHTML = `<span>${label}</span><button class="link-btn" onclick="toggleShowGated('${cid}')">${c.showGated?'hide them':'show them'}</button>`;
 }
+// Separate from the patch-gated note on purpose — "locked until a patch" and "hidden
+// because you chose to" are different reasons a routine isn't showing, and conflating them
+// would make it unclear which toggle would bring a given one back.
+function renderHiddenNote(cid){
+  const el = document.getElementById(cid+'-hiddennote');
+  if(!el) return;
+  const c = getChar(cid);
+  const hidden = c.routines.filter(r=>r.hidden);
+  if(!hidden.length && !c.showHidden){ el.innerHTML=''; return; }
+  const label = hidden.length
+    ? `${hidden.length} hidden by you &mdash; ${hidden.length===1?"doesn't":"don't"} apply to this character`
+    : 'showing routines you hid';
+  el.innerHTML = `<span>${label}</span><button class="link-btn" onclick="toggleShowHidden('${cid}')">${c.showHidden?'hide them':'show them'}</button>`;
+}
 function toggleShowGated(cid){
   collectAllInputs();
   const c = getChar(cid);
   c.showGated = !c.showGated;
+  renderRoutines(cid);
+  scheduleSave();
+}
+function toggleShowHidden(cid){
+  collectAllInputs();
+  const c = getChar(cid);
+  c.showHidden = !c.showHidden;
+  renderRoutines(cid);
+  scheduleSave();
+}
+function toggleRoutineHidden(cid, id){
+  collectAllInputs();
+  const c = getChar(cid);
+  const item = c.routines.find(r=>r.id===id);
+  if(!item) return;
+  item.hidden = !item.hidden;
+  // Un-hiding while "show hidden" is off would leave it invisible right after the click
+  // that was supposed to bring it back — a full re-render keeps the visible set honest.
   renderRoutines(cid);
   scheduleSave();
 }
@@ -828,6 +1513,45 @@ function refreshRoutines(cid){
   });
 }
 
+/* ---------- server picker (PDC -> LDC -> World) ---------- */
+// Selects rebuild in full on every change — unlike text inputs, a <select> has no
+// mid-interaction typing state a rebuild could destroy, so this doesn't need the
+// focus-safe split-render treatment the rest of the app uses.
+function renderServerPicker(cid){
+  const c = getChar(cid);
+  const s = c.server;
+  const pdcList = Object.keys(SERVER_DATA);
+  const ldcList = s.pdc ? Object.keys(SERVER_DATA[s.pdc]||{}) : [];
+  const worldList = (s.pdc && s.ldc) ? ((SERVER_DATA[s.pdc]||{})[s.ldc]||[]) : [];
+
+  const options = (list, current, placeholder) =>
+    `<option value="">${placeholder}</option>` +
+    list.map(v=>`<option value="${esc(v)}"${v===current?' selected':''}>${esc(v)}</option>`).join('');
+
+  document.getElementById(cid+'-server-picker').innerHTML = `
+    <span class="sp-label">Server</span>
+    <select id="${cid}-server-pdc" onchange="onServerChange('${cid}','pdc')">${options(pdcList, s.pdc, 'Region')}</select>
+    <span class="sp-sep">/</span>
+    <select id="${cid}-server-ldc" onchange="onServerChange('${cid}','ldc')" ${s.pdc?'':'disabled'}>${options(ldcList, s.ldc, 'Data Center')}</select>
+    <span class="sp-sep">/</span>
+    <select id="${cid}-server-world" onchange="onServerChange('${cid}','world')" ${s.ldc?'':'disabled'}>${options(worldList, s.world, 'World')}</select>
+  `;
+}
+function onServerChange(cid, level){
+  const c = getChar(cid);
+  if(level==='pdc'){
+    c.server.pdc = document.getElementById(`${cid}-server-pdc`).value;
+    c.server.ldc = ''; c.server.world = '';
+  }else if(level==='ldc'){
+    c.server.ldc = document.getElementById(`${cid}-server-ldc`).value;
+    c.server.world = '';
+  }else{
+    c.server.world = document.getElementById(`${cid}-server-world`).value;
+  }
+  renderServerPicker(cid);
+  scheduleSave();
+}
+
 /* ---------- full render / input handlers (per character) ---------- */
 function renderChar(cid){
   const c = getChar(cid);
@@ -840,9 +1564,11 @@ function renderChar(cid){
   document.getElementById(cid+'-playtime-hours').value = c.playtime.hours;
   document.getElementById(cid+'-notes').value = c.notes;
   updatePlaytimeTotal(cid);
+  renderServerPicker(cid);
   renderCharDash(cid);
   renderRoles(cid);
   updateTradeMentorChecks(cid);
+  renderPluginMode(cid);
   renderQuestsTable(cid);
   updateOverallCheck(cid);
   renderJobTables(cid);
@@ -861,6 +1587,7 @@ function onMainInput(cid){
   updateTradeMentorChecks(cid);
   updateQuestPercents(cid);
   updateOverallCheck(cid);
+  updateMsqCheckNote(cid);
   updateJobCaps(cid);
   scheduleSave();
 }

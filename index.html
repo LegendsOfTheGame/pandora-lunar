@@ -130,6 +130,15 @@ body{
   font-size:11px;padding:5px 12px;border-radius:4px;cursor:pointer;font-family:var(--font-body);
 }
 .remove-char-btn:hover{border-color:var(--rose);color:var(--rose)}
+.server-picker{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.server-picker .sp-label{font-size:11px;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.6px;margin-right:2px}
+.server-picker select{
+  background:var(--ink);border:1px solid var(--line-soft);color:var(--text);
+  border-radius:4px;padding:5px 8px;font-family:var(--font-body);font-size:12.5px;max-width:170px;
+}
+.server-picker select:focus{outline:none;border-color:var(--accent,var(--gold))}
+.server-picker select:disabled{color:var(--text-faint);cursor:not-allowed}
+.server-picker .sp-sep{color:var(--text-faint);font-size:12px}
 .section{
   background:var(--panel);
   border:1px solid var(--line);
@@ -186,7 +195,7 @@ body{
 .backup-bar{display:flex;gap:8px;justify-content:center;margin-top:22px;flex-wrap:wrap}
 .routine-list{display:flex;flex-direction:column}
 .routine-item{
-  display:grid;grid-template-columns:20px 1.3fr 1fr 56px 84px 28px;
+  display:grid;grid-template-columns:20px 1.3fr 1fr 56px 84px 28px 28px;
   gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line-soft);
 }
 .routine-item:last-child{border-bottom:none}
@@ -216,6 +225,18 @@ body{
 }
 .link-btn:hover{color:var(--text)}
 .routine-item.gated{opacity:0.45}
+.routine-item.user-hidden{opacity:0.45}
+.hide-btn{
+  background:transparent;border:1px solid var(--line-soft);color:var(--text-faint);
+  width:24px;height:24px;border-radius:4px;cursor:pointer;font-size:12px;line-height:1;
+  padding:0;font-family:var(--font-body);
+}
+.hide-btn:hover{border-color:var(--accent,var(--gold));color:var(--text)}
+.hide-btn.is-hidden{border-color:var(--accent,var(--gold));color:var(--accent,var(--gold))}
+.hidden-note{
+  margin-top:8px;font-size:11.5px;color:var(--text-faint);
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+}
 .dash-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
@@ -254,6 +275,23 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .job-name{width:100%}
 .at-cap{color:var(--sage);font-size:11px;white-space:nowrap}
 .next-up{font-size:10px;white-space:nowrap;padding:2px 7px;border-radius:9px;border:1px solid currentColor;letter-spacing:0.3px;color:var(--accent,var(--gold))}
+.jq-toggle{
+  background:transparent;border:1px solid var(--line-soft);border-radius:4px;cursor:pointer;
+  font-size:10.5px;padding:3px 8px;font-family:var(--font-mono);white-space:nowrap;
+}
+.jq-toggle.warn{border-color:var(--rose);color:var(--rose)}
+.jq-toggle.ok{border-color:var(--sage);color:var(--sage)}
+.jq-toggle.neutral{border-color:var(--line-soft);color:var(--text-faint)}
+.jq-panel-row td{padding:0;border-bottom:1px solid var(--line-soft)}
+.jq-panel{background:var(--ink);padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.jq-item{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:12px}
+.jq-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--sage);cursor:pointer;flex-shrink:0}
+.jq-item .jq-level{color:var(--text-faint);font-family:var(--font-mono);font-size:11px;width:38px;flex-shrink:0}
+.jq-item .jq-name{color:var(--text-dim)}
+.jq-item.missed .jq-name{color:var(--rose)}
+.jq-item.missed .jq-level{color:var(--rose)}
+.jq-item.future{opacity:0.4}
+.jq-item .jq-flag{font-size:10px;color:var(--rose);text-transform:uppercase;letter-spacing:0.4px;margin-left:auto}
 .role-tag{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-faint);width:70px;flex-shrink:0}
 .quest-grid{display:grid;grid-template-columns:1.4fr 0.9fr 0.7fr 0.8fr;gap:8px;align-items:center;font-size:13px}
 .quest-grid .h{color:var(--text-faint);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding-bottom:6px;border-bottom:1px solid var(--line)}
@@ -300,8 +338,8 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 @media (max-width:600px){
   .two-col{grid-template-columns:1fr}
   .quest-grid{grid-template-columns:1.2fr 0.8fr 0.6fr 0.7fr;font-size:12px}
-  .routine-item{grid-template-columns:18px 1fr 50px 76px 24px;gap:6px}
-  .routine-item select{grid-column:2 / span 4}
+  .routine-item{grid-template-columns:18px 1fr 50px 76px 24px 24px;gap:6px}
+  .routine-item select{grid-column:2 / span 5}
 }
 </style>
 </head>
