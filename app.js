@@ -477,7 +477,9 @@ const RESET_SCHEDULES = [
   { id:'daily09',   kind:'daily',    hour:9,             label:'Daily · 09:00 UTC — Cosmic Exploration' },
   { id:'every12h',  kind:'interval', hours:12,           label:'Every 12h · 00:00 / 12:00 UTC — leve allowances' },
   { id:'weeklyTue', kind:'weekly',   weekday:2, hour:8,  label:'Weekly · Tuesday 08:00 UTC — Challenge Log, raids' },
-  { id:'monthly1',  kind:'monthly',  day:1,     hour:8,  label:'Monthly · 1st 08:00 UTC' }
+  { id:'weeklySat', kind:'weekly',   weekday:0, hour:2,  label:'Weekly · Sat→Sun 02:00 UTC — Jumbo Cactpot draw (NA time; EU/JP/OCE draw a few hours earlier)' },
+  { id:'monthly1',  kind:'monthly',  day:1,     hour:8,  label:'Monthly · 1st 08:00 UTC' },
+  { id:'cooldown18h', kind:'cooldown', hours:18, label:'18h from last click — Treasure Hunt' }
 ];
 const DAY_MS = 86400000;
 const ACCENTS = ['gold','teal','rose'];
@@ -488,9 +490,13 @@ const ACCENTS = ['gold','teal','rose'];
 // No `requires` patch gates pre-filled — real per-item unlock patches weren't verified,
 // so everything defaults to always-visible; add gating yourself if you want it.
 // Schedule mapping is best-effort where the source didn't map cleanly to a fixed reset:
-// Treasure Hunt is really an 18h personal cooldown, not a fixed daily reset; Squadron
-// Training and Retainer Ventures run on their own per-action timers. All approximated to
-// the closest existing schedule — adjust the dropdown per-item if the timing bugs you.
+// Squadron Training and Retainer Ventures run on their own per-action timers, approximated
+// to the closest fixed daily reset — adjust the dropdown per-item if the timing bugs you.
+// Jumbo Cactpot was originally miscoded onto the standard Tuesday weekly reset — it's
+// actually its own Saturday drawing (weeklySat), and the exact clock time is per-data-center,
+// not global; weeklySat is calibrated to North America's draw time specifically.
+// Treasure Hunt is a real 18h personal cooldown starting from whenever you last clicked
+// it (cooldown18h), not tied to any fixed UTC reset at all.
 // "Windurst: The Third Walk" (FFXI-crossover alliance raid) is included — real content,
 // not a wiki error. "YoRHa Epilogue Quest Chain" is a one-time 6-week unlock rather than a
 // recurring weekly, but it's included anyway so people know it exists at all — once
@@ -509,7 +515,7 @@ const DEFAULT_ROUTINES = [
   ["Mini Cactpot","daily15","mini-cactpot"],
   ["The Hunt (Daily Marks)","daily15","hunt-daily"],
   ["Grand Company Turn-in","daily20","gc-turnin"],
-  ["Treasure Hunt (map every 18h)","daily15","treasure-hunt"],
+  ["Treasure Hunt (map every 18h)","cooldown18h","treasure-hunt"],
   ["Adventurer Squadron Training","daily20","squadron-training"],
   ["Cosmic Exploration Daily Successes","daily09","cosmic-exploration"],
   ["Retainer Ventures","daily15","retainer-ventures"],
@@ -522,7 +528,7 @@ const DEFAULT_ROUTINES = [
   ["Challenge Log","weeklyTue","challenge-log"],
   ["Seeking Inspiration (Anima Weapon)","weeklyTue","seeking-inspiration"],
   ["Wondrous Tails","weeklyTue","wondrous-tails"],
-  ["Jumbo Cactpot","weeklyTue","jumbo-cactpot"],
+  ["Jumbo Cactpot","weeklySat","jumbo-cactpot"],
   ["Hunt — B-Rank Elite Marks","weeklyTue","hunt-brank"],
   ["Masked Carnivale / Blue Mage Log","weeklyTue","masked-carnivale"],
   ["Fashion Report","weeklyTue","fashion-report"],
@@ -550,6 +556,24 @@ function backfillSeedRoutines(c){
     }
   });
   c.routinesSeeded = true;
+}
+// One-time corrections to already-seeded routines whose original best-effort schedule
+// turned out wrong after the fact (Jumbo Cactpot was on the standard Tuesday reset; it's
+// really its own Saturday drawing. Treasure Hunt was approximated to a fixed daily reset;
+// it's really an 18h cooldown from whenever you last clicked it). Each only applies if the
+// routine is still sitting on the specific old (wrong) schedId — a deliberate manual change
+// away from that couldn't have happened before the fix existed, so this can't clobber a real
+// user choice. Add future corrections here rather than one-off functions.
+const SEED_SCHEDULE_FIXES = [
+  { seedKey:'jumbo-cactpot', from:'weeklyTue', to:'weeklySat' },
+  { seedKey:'treasure-hunt', from:'daily15',   to:'cooldown18h' }
+];
+function applySeedScheduleFixes(c){
+  SEED_SCHEDULE_FIXES.forEach(({seedKey,from,to})=>{
+    const r = c.routines.find(r=>r.seedKey===seedKey);
+    if(r && r.schedId===from) r.schedId = to;
+  });
+  c.seedScheduleFixesApplied = true;
 }
 
 function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHEDULES[0]; }
@@ -580,7 +604,14 @@ function lastResetInstant(sched, now){
   }
   return 0;
 }
-function nextResetInstant(sched, now){
+// Cooldown schedules ignore the fixed-UTC-grid model entirely — "next available" is purely
+// lastDone + duration, so this (and isRoutineDone below) need the routine's own lastDone,
+// not just the schedule definition.
+function nextResetInstant(sched, now, lastDone){
+  if(sched.kind === 'cooldown'){
+    if(!lastDone) return now.getTime();
+    return lastDone + sched.hours * 3600000;
+  }
   const last = lastResetInstant(sched, now);
   if(sched.kind === 'daily')    return last + DAY_MS;
   if(sched.kind === 'interval') return last + sched.hours * 3600000;
@@ -590,7 +621,9 @@ function nextResetInstant(sched, now){
 }
 function isRoutineDone(item, now){
   if(!item.lastDone) return false;
-  return item.lastDone >= lastResetInstant(schedById(item.schedId), now);
+  const sched = schedById(item.schedId);
+  if(sched.kind === 'cooldown') return (now.getTime() - item.lastDone) < sched.hours * 3600000;
+  return item.lastDone >= lastResetInstant(sched, now);
 }
 function fmtDue(ms){
   if(ms <= 0) return 'now';
@@ -770,6 +803,7 @@ function normalizeCharacter(c){
     if(typeof r.seedKey !== 'string') r.seedKey = null;
   });
   if(!c.routinesSeeded) backfillSeedRoutines(c);
+  if(!c.seedScheduleFixesApplied) applySeedScheduleFixes(c);
   return c;
 }
 
@@ -1455,7 +1489,7 @@ function routineHTML(cid, item){
   const sched = schedById(item.schedId);
   const done = isRoutineDone(item, now);
   const gated = isGated(item, getChar(cid).patch);
-  const dueMs = nextResetInstant(sched, now) - now.getTime();
+  const dueMs = nextResetInstant(sched, now, item.lastDone) - now.getTime();
   const opts = RESET_SCHEDULES.map(s=>`<option value="${s.id}"${s.id===item.schedId?' selected':''}>${esc(s.label)}</option>`).join('');
   return `
     <div class="routine-item${done?' done':''}${gated?' gated':''}${item.hidden?' user-hidden':''}" id="${cid}-rt-item-${item.id}">
@@ -1608,7 +1642,7 @@ function refreshRoutines(cid){
     if(due){
       if(gated){ due.textContent='locked'; due.classList.remove('soon'); }
       else{
-        const ms = nextResetInstant(sched, now) - now.getTime();
+        const ms = nextResetInstant(sched, now, item.lastDone) - now.getTime();
         due.textContent = fmtDue(ms);
         due.classList.toggle('soon', ms < 3600000);
       }
