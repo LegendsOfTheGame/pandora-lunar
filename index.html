@@ -318,12 +318,33 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .note-area:focus{outline:none;border-color:var(--accent,var(--gold))}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .subhead{font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-faint);margin:0 0 10px}
+.society-group{margin-bottom:18px}
+.society-group:last-child{margin-bottom:0}
+.society-item{
+  display:grid;grid-template-columns:1fr 150px 64px 56px;gap:10px;align-items:center;
+  padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:13px;
+}
+.society-item:last-child{border-bottom:none}
+.society-name{color:var(--text-dim)}
+.society-item select{
+  background:var(--ink);border:1px solid var(--line-soft);color:var(--text);
+  border-radius:4px;padding:5px 6px;font-family:var(--font-body);font-size:12px;
+}
+.society-item select:focus{outline:none;border-color:var(--accent,var(--gold))}
+.society-quota{color:var(--text-faint);font-family:var(--font-mono);font-size:12px}
+.society-capped{
+  grid-column:3 / span 2;color:var(--text-faint);font-size:11px;font-style:italic;
+}
+@media (max-width:600px){
+  .society-item{grid-template-columns:1fr 130px 50px 44px;gap:6px;font-size:12px}
+}
 .save-note{
   text-align:center;font-size:11px;color:var(--text-faint);margin-top:20px;
   display:flex;align-items:center;justify-content:center;gap:6px;
 }
 .dot{width:6px;height:6px;border-radius:50%;background:var(--sage)}
 .copyright{text-align:center;font-size:10.5px;color:var(--text-faint);margin-top:10px}
+.build-stamp{text-align:center;font-size:10px;color:var(--text-faint);opacity:0.6;margin-top:4px;font-family:var(--font-mono)}
 .sec-toggle{
   background:transparent;border:none;color:var(--text-faint);cursor:pointer;
   font-size:15px;line-height:1;padding:0 0 0 10px;font-family:var(--font-body);
@@ -385,6 +406,7 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 
   <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
   <div class="copyright">&copy; Kaye Sharpedge</div>
+  <div class="build-stamp">Last updated 02/08/2026 @ 15:35 UTC</div>
 
   <div class="backup-bar">
     <button class="edit-btn" onclick="exportData()">Download backup</button>

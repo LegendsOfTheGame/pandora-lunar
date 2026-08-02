@@ -40,6 +40,74 @@ const SERVER_DATA = {
   }
 };
 
+// Beast tribe / allied society reputation. Rank resets to 0 points on every rank-up — NOT
+// cumulative from Neutral — confirmed against a real in-game screenshot (three different
+// Friendly-rank societies all showing "X/510" regardless of total lifetime points earned).
+// Quota is fixed per rank, same for every society. ARR societies plus Moogle and Vanu Vanu
+// start at rank 1 (Neutral); Vath and everything Stormblood-onward starts at rank 3
+// (Friendly), skipping Neutral/Recognized entirely. Rank 8 is the point-based cap for
+// everyone ("Allied" for ARR societies, "Bloodsworn" for HW+); HW+ societies have a further
+// rank 9 "Allied" reachable only via that expansion's Intersocietal Quests, not points —
+// quota 0 for both terminal ranks, same as the wiki shows "0/0".
+const SOCIETY_RANKS = [
+  {rank:1, name:'Neutral',    quota:150},
+  {rank:2, name:'Recognized', quota:360},
+  {rank:3, name:'Friendly',   quota:510},
+  {rank:4, name:'Trusted',    quota:720},
+  {rank:5, name:'Respected',  quota:990},
+  {rank:6, name:'Honored',    quota:1320},
+  {rank:7, name:'Sworn',      quota:1730},
+  {rank:8, name:'Allied/Bloodsworn', quota:0},
+  {rank:9, name:'Allied',     quota:0}
+];
+// Which MSQ progress (same patch-number stand-in as the header field and routine gating)
+// unlocks each expansion's societies. Ungated entirely if MSQ progress is blank, same as
+// routine gating's default.
+const SOCIETY_EXP_GATE = {
+  "A Realm Reborn": 2.1, "Heavensward": 3.1, "Stormblood": 4.1,
+  "Shadowbringers": 5.1, "Endwalker": 6.1, "Dawntrail": 7.1
+};
+// Per-expansion Intersocietal Quests — the actual gate on reaching the terminal "Allied"/
+// "Bloodsworn" rank. Require having every listed society at its own point-earning cap first
+// (Trusted for the four ARR societies below, Sworn for everyone else). Shadowbringers never
+// got an Intersocietal Quests chain at all — Bloodsworn is the true max for Pixie/Qitari/Dwarf,
+// there's no rank 9 for them.
+const INTERSOCIETAL_QUESTS = {
+  "A Realm Reborn": "A Realm Reborn Intersocietal Quests",
+  "Heavensward": "Heavensward Intersocietal Quests",
+  "Stormblood": "Stormblood Intersocietal Quests",
+  "Endwalker": "Endwalker Intersocietal Quests",
+  "Dawntrail": "Dawntrail Intersocietal Quests"
+  // Shadowbringers deliberately has no entry — no chain exists, Bloodsworn is the cap.
+};
+// [name, expansion group, starting rank, last rank reachable purely by points, has a rank-9
+// "Allied" tier]. Amalj'aa/Kobold/Sahagin/Sylph stop earning points at Trusted(4) — Ixal is
+// the one ARR society that goes all the way to Sworn(7), same as every non-ARR society. Every
+// society's points stop entirely at rank 8 (Allied for ARR, Bloodsworn for HW+); a further
+// rank 9 "Allied" only exists where an Intersocietal Quests chain exists for that expansion.
+const ALLIED_SOCIETIES = [
+  ["Amalj'aa","A Realm Reborn",1,4,false], ["Sylph","A Realm Reborn",1,4,false],
+  ["Kobold","A Realm Reborn",1,4,false], ["Sahagin","A Realm Reborn",1,4,false],
+  ["Ixal","A Realm Reborn",1,7,false],
+  ["Vanu Vanu","Heavensward",1,7,true], ["Moogle","Heavensward",1,7,true], ["Vath","Heavensward",3,7,true],
+  ["Kojin","Stormblood",3,7,true], ["Ananta","Stormblood",3,7,true], ["Namazu","Stormblood",3,7,true],
+  ["Pixie","Shadowbringers",3,7,false], ["Qitari","Shadowbringers",3,7,false], ["Dwarf","Shadowbringers",3,7,false],
+  ["Arkasodara","Endwalker",3,7,true], ["Omicron","Endwalker",3,7,true], ["Loporrit","Endwalker",3,7,true],
+  ["Pelupelu","Dawntrail",3,7,true], ["Mamool Ja","Dawntrail",3,7,true], ["Yok Huy","Dawntrail",3,7,true]
+];
+function rankInfo(rankNum){ return SOCIETY_RANKS.find(r=>r.rank===rankNum) || SOCIETY_RANKS[0]; }
+function socId(name){ return name.replace(/[^a-zA-Z0-9]/g,''); }
+// The actual selectable ranks for a society — not a plain range, since the four early-cap
+// ARR societies skip straight from Trusted(4) to Allied(8) with no 5/6/7 in between.
+function validRanksFor(name){
+  const [, , startRank, capAt, hasRank9] = ALLIED_SOCIETIES.find(a=>a[0]===name);
+  const ranks = [];
+  for(let r=startRank; r<=capAt; r++) ranks.push(r);
+  ranks.push(8);
+  if(hasRank9) ranks.push(9);
+  return ranks;
+}
+
 // Sourced from ffxiv.consolegameswiki.com's per-job "X_Quests" pages (fetched directly,
 // not from memory). All 11 DoH/DoL jobs share the same level pattern through level 70:
 // 1, 1, 5, 10, 15, ..., 50, 50, 53, ..., 70. Two entries share level 1 (class unlock, then
@@ -753,7 +821,9 @@ function newCharacter(name){
     tradeCollected:0, tradeMade:0,
     custom: [], routines: seedRoutines(), routinesSeeded: true, notes: '',
     jobQuestsDone: {}, jobQuestsOpen: {},
-    server: {pdc:'', ldc:'', world:''}
+    server: {pdc:'', ldc:'', world:''},
+    societies: Object.fromEntries(ALLIED_SOCIETIES.map(([name,exp,startRank])=>[name,{rank:startRank,points:0}])),
+    intersocietalDone: {}
   };
 }
 
@@ -804,6 +874,16 @@ function normalizeCharacter(c){
   });
   if(!c.routinesSeeded) backfillSeedRoutines(c);
   if(!c.seedScheduleFixesApplied) applySeedScheduleFixes(c);
+  if(!c.societies || typeof c.societies !== 'object') c.societies = {};
+  ALLIED_SOCIETIES.forEach(([name,exp,startRank])=>{
+    const s = c.societies[name];
+    if(!s || typeof s !== 'object') c.societies[name] = {rank:startRank, points:0};
+    else{
+      if(typeof s.rank !== 'number' || !validRanksFor(name).includes(s.rank)) s.rank = startRank;
+      if(typeof s.points !== 'number' || s.points < 0) s.points = 0;
+    }
+  });
+  if(!c.intersocietalDone || typeof c.intersocietalDone !== 'object') c.intersocietalDone = {};
   return c;
 }
 
@@ -895,6 +975,11 @@ function collectCharInputs(cid){
     if(g(`${cid}-rt-sched-${item.id}`)) item.schedId = g(`${cid}-rt-sched-${item.id}`).value;
     if(g(`${cid}-rt-req-${item.id}`)) item.requires = g(`${cid}-rt-req-${item.id}`).value.trim();
   });
+  ALLIED_SOCIETIES.forEach(([name])=>{
+    const id = socId(name);
+    if(g(`${cid}-soc-rank-${id}`)) c.societies[name].rank = num(g(`${cid}-soc-rank-${id}`).value);
+    if(g(`${cid}-soc-points-${id}`)) c.societies[name].points = num(g(`${cid}-soc-points-${id}`).value);
+  });
 }
 
 /* ---------- switcher ---------- */
@@ -969,7 +1054,7 @@ function characterPageHTML(cid){
   </div>
 
   <div class="section">
-    <h2>Achievement requirements
+    <h2>Battle Mentor requirements
       <span class="hint">1000 dungeons &middot; 1500 comms &middot; tank + healer + 1 dps role quest</span>
     </h2>
     <table style="margin-bottom:10px">
@@ -1005,6 +1090,11 @@ function characterPageHTML(cid){
     <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via QuestTracker plugin</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
     <div class="quest-grid" id="${cid}-quests"></div>
     <div class="check-note" id="${cid}-overall-check"></div>
+  </div>
+
+  <div class="section">
+    <h2>Allied society relations <span class="hint">rank + points reset to 0 on every rank-up; expansions unlock as your MSQ progress does</span></h2>
+    <div id="${cid}-societies"></div>
   </div>
 
   <div class="section">
@@ -1269,6 +1359,87 @@ function renderJobTables(cid){
   document.getElementById(cid+'-craft').innerHTML = CRAFT_JOBS.map(name=>craftGatherRowHTML(cid,'craft',name)).join('');
   document.getElementById(cid+'-gather').innerHTML = GATHER_JOBS.map(name=>craftGatherRowHTML(cid,'gather',name)).join('');
   updateJobCaps(cid);
+}
+
+/* ---------- allied society reputation ---------- */
+function societyRowHTML(cid, name){
+  const c = getChar(cid);
+  const s = c.societies[name];
+  const [, exp] = ALLIED_SOCIETIES.find(a=>a[0]===name);
+  const info = rankInfo(s.rank);
+  const id = socId(name);
+  const rankOpts = validRanksFor(name)
+    .map(rank=>{ const r = rankInfo(rank); return `<option value="${r.rank}"${r.rank===s.rank?' selected':''}>${r.rank}. ${esc(r.name)}</option>`; }).join('');
+  const capped = info.quota === 0;
+  const cappedText = INTERSOCIETAL_QUESTS[exp]
+    ? `capped &mdash; needs ${esc(INTERSOCIETAL_QUESTS[exp])}`
+    : `capped &mdash; Bloodsworn is the max (no Intersocietal Quests exist for ${esc(exp)})`;
+  return `
+    <div class="society-item">
+      <span class="society-name">${esc(name)}</span>
+      <select id="${cid}-soc-rank-${id}" onchange="onSocietyRankChange('${cid}','${name}')">${rankOpts}</select>
+      ${capped
+        ? `<span class="society-capped">${cappedText}</span>`
+        : `<input type="text" id="${cid}-soc-points-${id}" value="${s.points}" style="text-align:right" oninput="onSocietyPointsInput('${cid}','${name}')">
+           <span class="society-quota">/ ${info.quota}</span>`
+      }
+    </div>`;
+}
+// True once every society in the group is sitting at rank 8 — the point-earning cap for all
+// of them regardless of how far their individual ladder runs (Trusted for the four early-cap
+// ARR societies, Sworn for everyone else). That's the real in-game gate on starting the
+// Intersocietal Quests chain.
+function intersocietalReady(c, exp){
+  return ALLIED_SOCIETIES.filter(a=>a[1]===exp).every(([name])=>c.societies[name].rank>=8);
+}
+function intersocietalRowHTML(cid, exp){
+  const c = getChar(cid);
+  const done = !!c.intersocietalDone[exp];
+  const id = 'inter-'+socId(exp);
+  return `
+    <div class="check-row">
+      <label><input type="checkbox" id="${cid}-${id}" ${done?'checked':''} onchange="toggleIntersocietal('${cid}','${exp}')"> ${esc(INTERSOCIETAL_QUESTS[exp])}</label>
+      ${done?'<span class="stamp">done</span>':'<span class="stamp pending">ready</span>'}
+    </div>`;
+}
+// Full render, safe to call on any rank change (a discrete <select> change, not continuous
+// typing) since it rebuilds every row — including toggling the points input vs. the capped
+// note depending on the newly selected rank's quota, and whether the Intersocietal Quests
+// prompt should appear below the group at all.
+function renderSocieties(cid){
+  const c = getChar(cid);
+  const have = patchValue(c.patch);
+  const groups = [...new Set(ALLIED_SOCIETIES.map(a=>a[1]))]
+    .filter(exp => !(have !== null && SOCIETY_EXP_GATE[exp] > have));
+  const html = groups.map(exp => `
+    <div class="subhead">${esc(exp)}</div>
+    <div class="society-group">${ALLIED_SOCIETIES.filter(a=>a[1]===exp).map(a=>societyRowHTML(cid,a[0])).join('')}</div>
+    ${INTERSOCIETAL_QUESTS[exp] && intersocietalReady(c,exp) ? intersocietalRowHTML(cid,exp) : ''}
+  `).join('');
+  document.getElementById(cid+'-societies').innerHTML = html || '<div class="empty-hint">Set your MSQ progress above to see allied societies as you unlock them.</div>';
+}
+function toggleIntersocietal(cid, exp){
+  const c = getChar(cid);
+  const id = 'inter-'+socId(exp);
+  const chk = document.getElementById(`${cid}-${id}`);
+  if(!chk) return;
+  c.intersocietalDone[exp] = chk.checked;
+  const stamp = chk.closest('.check-row').querySelector('.stamp');
+  stamp.textContent = chk.checked ? 'done' : 'ready';
+  stamp.classList.toggle('pending', !chk.checked);
+  scheduleSave();
+}
+function onSocietyRankChange(cid, name){
+  collectAllInputs();
+  renderSocieties(cid);
+  scheduleSave();
+}
+// Points typed in never need anything else on screen to update (quota only depends on
+// rank), so this deliberately never touches the DOM — never rebuild a text input the user
+// is mid-keystroke in.
+function onSocietyPointsInput(cid, name){
+  collectAllInputs();
+  scheduleSave();
 }
 
 /* ---------- job quest checklist (levels 1-70) ---------- */
@@ -1574,6 +1745,7 @@ function onPatchInput(cid){
   const c = getChar(cid);
   if(el) c.patch = el.value.trim();
   renderRoutines(cid);
+  renderSocieties(cid);
   scheduleSave();
 }
 function addRoutine(cid){
@@ -1608,6 +1780,9 @@ function toggleRoutine(cid, id){
   item.lastDone = chk.checked ? Date.now() : null;
   const wrap = document.getElementById(`${cid}-rt-item-${id}`);
   if(wrap) wrap.classList.toggle('done', chk.checked);
+  // Recompute the due countdown immediately — otherwise it's stuck showing whatever it read
+  // before the click (e.g. "now") until the next 30s periodic refresh or a page reload.
+  refreshRoutines(cid);
   scheduleSave();
 }
 function onRoutineInput(cid, id){
@@ -1709,6 +1884,7 @@ function renderChar(cid){
   renderQuestsTable(cid);
   updateOverallCheck(cid);
   renderJobTables(cid);
+  renderSocieties(cid);
   renderRoutines(cid);
   renderCustom(cid);
 }
