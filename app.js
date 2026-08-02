@@ -764,6 +764,12 @@ function pct(a,b){ return b ? ((a/b)*100) : 0; }
 function esc(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// Safe for interpolating into a single-quoted JS string literal inside an inline
+// onclick/onchange attribute (e.g. names like "Amalj'aa" would otherwise close the
+// string early and silently break the handler).
+function jsStr(s){
+  return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
 function newId(){ return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
 /* ---------- character data model ---------- */
@@ -1341,10 +1347,10 @@ function societyRowHTML(cid, name){
   return `
     <div class="society-item">
       <span class="society-name">${esc(name)}</span>
-      <select id="${cid}-soc-rank-${id}" onchange="onSocietyRankChange('${cid}','${name}')">${rankOpts}</select>
+      <select id="${cid}-soc-rank-${id}" onchange="onSocietyRankChange('${cid}','${jsStr(name)}')">${rankOpts}</select>
       ${capped
         ? `<span class="society-capped">${cappedText}</span>`
-        : `<input type="text" id="${cid}-soc-points-${id}" value="${s.points}" style="text-align:right" oninput="onSocietyPointsInput('${cid}','${name}')">
+        : `<input type="text" id="${cid}-soc-points-${id}" value="${s.points}" style="text-align:right" oninput="onSocietyPointsInput('${cid}','${jsStr(name)}')">
            <span class="society-quota">/ ${info.quota}</span>`
       }
     </div>`;
