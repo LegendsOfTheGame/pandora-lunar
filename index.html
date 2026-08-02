@@ -119,6 +119,7 @@ body{
 .page{display:none}
 .page.active{display:block}
 .char-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.char-name-group{display:flex;align-items:center;gap:12px}
 .char-name-input{
   background:transparent;border:none;border-bottom:1px solid var(--line-soft);
   color:var(--accent,var(--gold));font-family:var(--font-display);font-size:22px;
@@ -211,7 +212,7 @@ body{
 .patch-box{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-faint);
   text-transform:uppercase;letter-spacing:0.5px}
 .patch-input{
-  width:58px;background:var(--ink);border:1px solid var(--line-soft);color:var(--text);
+  width:58px!important;background:var(--ink);border:1px solid var(--line-soft);color:var(--text);
   border-radius:4px;padding:3px 6px;font-family:var(--font-mono);font-size:12px;text-align:center;
 }
 .patch-input:focus{outline:none;border-color:var(--accent,var(--gold))}
@@ -292,6 +293,8 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .jq-item.missed .jq-level{color:var(--rose)}
 .jq-item.future{opacity:0.4}
 .jq-item .jq-flag{font-size:10px;color:var(--rose);text-transform:uppercase;letter-spacing:0.4px;margin-left:auto}
+.jq-item .jq-shared-tag{font-size:9px;color:var(--text-faint);border:1px solid var(--line-soft);border-radius:8px;padding:1px 6px;text-transform:uppercase;letter-spacing:0.3px}
+.jq-item.missed .jq-shared-tag{border-color:var(--rose);color:var(--rose)}
 .role-tag{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-faint);width:70px;flex-shrink:0}
 .quest-grid{display:grid;grid-template-columns:1.4fr 0.9fr 0.7fr 0.8fr;gap:8px;align-items:center;font-size:13px}
 .quest-grid .h{color:var(--text-faint);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding-bottom:6px;border-bottom:1px solid var(--line)}
@@ -369,8 +372,8 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
     <p>Each browser can hold up to 3 characters. If you play more than 3 and want to track them all, use a second browser (e.g. Firefox alongside Edge) &mdash; each one keeps its own completely separate storage, so nothing overlaps.</p>
     <h3>Backing up your data</h3>
     <p>Click <code>Download backup</code> any time to save a <code>.json</code> file with everything. <code>Restore from file</code> loads one back &mdash; useful for moving to a new device or recovering from a cleared browser. Clearing your browser's site data <em>will</em> erase your tracker, so back up before you do that.</p>
-    <h3>Routines &amp; patch gating</h3>
-    <p>The Routines section is for anything that repeats on the game's reset schedule (dailies, weeklies) &mdash; it clears itself automatically, on real UTC reset times. The <code>requires</code> field lets you hide a routine until you've reached a given patch (type your current patch into the box above the list first).</p>
+    <h3>Routines &amp; MSQ progress gating</h3>
+    <p>The Routines section is for anything that repeats on the game's reset schedule (dailies, weeklies) &mdash; it clears itself automatically, on real UTC reset times. The <code>requires</code> field lets you hide a routine until you've reached a given point in the story &mdash; set the <code>MSQ progress</code> box next to your character's name first (it takes a patch number like <code>5.3</code> as a stand-in for how far along you are, not necessarily the current live patch).</p>
     <h3>Ocean Fishing</h3>
     <p>The bar at the very top is global and always live &mdash; registration opens for 15 minutes every 2 hours (even UTC hours), independent of any character.</p>
   </div>

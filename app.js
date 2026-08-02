@@ -44,11 +44,15 @@ const SERVER_DATA = {
 // not from memory). All 11 DoH/DoL jobs share the same level pattern through level 70:
 // 1, 1, 5, 10, 15, ..., 50, 50, 53, ..., 70. Two entries share level 1 (class unlock, then
 // first job quest) and level 50/60 (class capstone, then the next expansion's opener) —
-// that's real, not a data error.
+// that's real, not a data error. DoH/DoL stop at 70 — their post-70 hub questlines
+// (Crystalline Mean/The Studium/Wachumeqimeqi) aren't sourced yet.
 //
-// This is NOT the full picture through 100. Past 70, the traditional per-job quest chain
-// hands off to shared hub questlines instead: The Crystalline Mean (Shadowbringers),
-// The Studium (Endwalker), Wachumeqimeqi (Dawntrail) — not yet sourced/added here.
+// Combat jobs go all the way to 100. Past level 70 each job still has its own handful of
+// private "capstone" quests (one at the top of each bracket, e.g. Paladin's "Worth Fighting
+// For" at 80) but the bulk of 71-100 is ROLE quests — one shared chain per role (tank/melee/
+// ranged/caster/healer), same NPCs and same quest regardless of which job in that role you're
+// on. Those live in ROLE_QUESTS below, tracked separately per-role rather than duplicated into
+// every job's array, so clearing "Vengeance in Defeat" on Dragoon also clears it for Ninja.
 const JOB_QUESTS = {
   Carpenter: [
     {level:1,name:"Way of the Carpenter"},{level:1,name:"My First Saw"},{level:5,name:"To Be the Wood"},
@@ -181,7 +185,7 @@ const JOB_QUESTS = {
     {level:50,name:"An Exemplary Example"},{level:52,name:"The Paladin Who Cried Wolf"},{level:54,name:"Big Sollerets to Fill"},
     {level:56,name:"Hey Soul Crystal"},{level:58,name:"All According to Plan"},{level:60,name:"This Little Sword of Mine"},
     {level:60,name:"Tournament of the Century"},{level:63,name:"In Thal's Name"},{level:65,name:"In Nald's Name"},
-    {level:68,name:"Fade to Black Lotus"},{level:70,name:"Raising the Sword"}
+    {level:68,name:"Fade to Black Lotus"},{level:70,name:"Raising the Sword"},{level:80,name:"Worth Fighting For"}
   ],
   Warrior: [
     {level:1,name:"Way of the Marauder"},{level:1,name:"My First Axe"},{level:5,name:"Axe in the Stone"},
@@ -193,7 +197,7 @@ const JOB_QUESTS = {
     {level:54,name:"The Bear Necessity"},{level:56,name:"Pirates of Shallow Water"},{level:56,name:"How to Train Your Warrior"},
     {level:58,name:"Slap an' Chop"},{level:60,name:"And My Axe"},{level:60,name:"Curious Gorge Meets His Match"},
     {level:63,name:"Field Training"},{level:65,name:"When Push Comes to Shove"},{level:68,name:"Going the Distance"},
-    {level:70,name:"The Heart of the Problem"}
+    {level:70,name:"The Heart of the Problem"},{level:80,name:"Once, Twice, Three Times a Warrior"}
   ],
   "Dark Knight": [
     {level:30,name:"Ishgardian Justice"},{level:35,name:"The Voice in the Abyss"},{level:40,name:"Heroic Reprise"},
@@ -201,11 +205,11 @@ const JOB_QUESTS = {
     {level:50,name:"Our End"},{level:50,name:"The Wages of Mercy"},{level:52,name:"The Knight and the Maiden Fair"},
     {level:54,name:"Kindred Spirits"},{level:56,name:"Original Sins"},{level:58,name:"The Flame in the Abyss"},
     {level:60,name:"Absolution"},{level:60,name:"In Memories We Walked"},{level:63,name:"The Widow and Her Love"},
-    {level:65,name:"The Orphans and the Broken Blade"},{level:68,name:"We Can Never Go Home"},{level:70,name:"Our Compromise"}
+    {level:65,name:"The Orphans and the Broken Blade"},{level:68,name:"We Can Never Go Home"},{level:70,name:"Our Compromise"},{level:80,name:"Our Closure"}
   ],
   Gunbreaker: [
     {level:60,name:"The Makings of a Gunbreaker"},{level:60,name:"Hired Gunblades"},{level:63,name:"For Better or Worse"},
-    {level:65,name:"Confessions of a Flaming Mongrel"},{level:68,name:"Of Defectors and Defenders"},{level:70,name:"Steel against Steel"}
+    {level:65,name:"Confessions of a Flaming Mongrel"},{level:68,name:"Of Defectors and Defenders"},{level:70,name:"Steel against Steel"},{level:80,name:"Gunblades of the Patriots"}
   ],
   "White Mage": [
     {level:1,name:"Way of the Conjurer"},{level:1,name:"My First Cane"},{level:5,name:"Trial by Earth"},
@@ -216,7 +220,7 @@ const JOB_QUESTS = {
     {level:50,name:"Taint Misbehaving"},{level:52,name:"A Journey of Purification"},{level:54,name:"The Girl with the Dragon Tissue"},
     {level:56,name:"The Dark Blight Writhes"},{level:58,name:"In the Wake of Death"},{level:58,name:"Trials of the Padjals"},
     {level:60,name:"Hands of Healing"},{level:60,name:"Unease in East End"},{level:63,name:"An Aura for Trouble"},
-    {level:65,name:"A Beacon for Bad Things"},{level:68,name:"The Problem with Padjals"},{level:70,name:"What She Always Wanted"}
+    {level:65,name:"A Beacon for Bad Things"},{level:68,name:"The Problem with Padjals"},{level:70,name:"What She Always Wanted"},{level:80,name:"Whence the Healing Springs"}
   ],
   Scholar: [
     {level:1,name:"Way of the Arcanist"},{level:1,name:"My First Grimoire"},{level:5,name:"What's in the Box"},
@@ -227,7 +231,7 @@ const JOB_QUESTS = {
     {level:50,name:"The Green Death"},{level:52,name:"Quarantine"},{level:54,name:"False Friends"},
     {level:56,name:"Ooh Rah"},{level:58,name:"Unseen"},{level:60,name:"Forward, Royal Marines"},
     {level:60,name:"The Vanishing Act"},{level:63,name:"A Safe Place to Hide"},{level:65,name:"In Loving Memory"},
-    {level:68,name:"The Chase"},{level:70,name:"Our Unsung Heroes"}
+    {level:68,name:"The Chase"},{level:70,name:"Our Unsung Heroes"},{level:80,name:"True Beauty"}
   ],
   Astrologian: [
     {level:30,name:"Fortune Favors the Bole"},{level:35,name:"Hanging in the Balance"},{level:40,name:"A Lesson in Patience"},
@@ -235,10 +239,11 @@ const JOB_QUESTS = {
     {level:50,name:"Spearheading Initiatives"},{level:50,name:"Sharlayan Ascending"},{level:52,name:"Empty Nest"},
     {level:54,name:"Conviction"},{level:56,name:"Feather in the Cap"},{level:58,name:"Trumped"},
     {level:60,name:"The Hands of Fate"},{level:60,name:"East Meets West"},{level:63,name:"Ride Like the Wind"},
-    {level:65,name:"Come Rain or Shrine"},{level:68,name:"Behind Door Number Two"},{level:70,name:"Foxfire"}
+    {level:65,name:"Come Rain or Shrine"},{level:68,name:"Behind Door Number Two"},{level:70,name:"Foxfire"},{level:80,name:"Love, Astrologically"}
   ],
   Sage: [
-    {level:70,name:"Sage's Path"},{level:70,name:"Sage's Focus"}
+    {level:70,name:"Sage's Path"},{level:70,name:"Sage's Focus"},{level:73,name:"Sands of Despair"},
+    {level:75,name:"A Poisoned Gift"},{level:78,name:"Pledge of Hope"},{level:80,name:"Life Ephemeral, Path Eternal"}
   ],
   Monk: [
     {level:1,name:"Way of the Pugilist"},{level:1,name:"My First Hora"},{level:5,name:"Harder than Rock"},
@@ -249,7 +254,7 @@ const JOB_QUESTS = {
     {level:50,name:"The Legend Continues"},{level:52,name:"Let's Talk about Sects"},{level:54,name:"Against the Shadow"},
     {level:56,name:"Fight the Battle to Win"},{level:58,name:"Stop the Senseless Killing"},{level:60,name:"Appetite for Destruction"},
     {level:60,name:"A Fistful of Resolve"},{level:63,name:"Return of the Monk"},{level:65,name:"Cross-fist Training"},
-    {level:68,name:"Choices and Paths"},{level:70,name:"The Power to Protect"}
+    {level:68,name:"Choices and Paths"},{level:70,name:"The Power to Protect"},{level:80,name:"A Monk's Legacy"}
   ],
   Dragoon: [
     {level:1,name:"Way of the Lancer"},{level:1,name:"My First Spear"},{level:5,name:"Spear of the Fearless"},
@@ -260,7 +265,7 @@ const JOB_QUESTS = {
     {level:50,name:"Sky's the Limit"},{level:52,name:"Days of Azure"},{level:52,name:"Heart of Justice"},
     {level:54,name:"Sworn Upon a Lance"},{level:56,name:"Dragoon's Errand"},{level:58,name:"Sanguine Dragoon"},
     {level:60,name:"Dragoon's Fate"},{level:60,name:"Friends Through Eternity"},{level:63,name:"Drowsy Dragons"},
-    {level:65,name:"Serpent and the Sea of Rubies"},{level:68,name:"Dark as the Night Sky"},{level:70,name:"Dragon Sound"}
+    {level:65,name:"Serpent and the Sea of Rubies"},{level:68,name:"Dark as the Night Sky"},{level:70,name:"Dragon Sound"},{level:80,name:"Gone but Not Forgiven"}
   ],
   Ninja: [
     {level:1,name:"My First Daggers"},{level:1,name:"Stabbers in Yer Fambles"},{level:5,name:"A Dainty Dilemma"},
@@ -273,16 +278,21 @@ const JOB_QUESTS = {
     {level:50,name:"Strangers in a Strange Land"},{level:52,name:"The Impossible Girl"},{level:54,name:"Ninja Assassin"},
     {level:56,name:"Medieval Espionage"},{level:58,name:"Staying Alive"},{level:60,name:"In Her Defense"},
     {level:60,name:"Search for the Stolen Scroll"},{level:63,name:"Ninja Bathin' Redux"},{level:65,name:"A Game of Life and Death"},
-    {level:68,name:"True Enlightenment"},{level:70,name:"When Clans Collide"}
+    {level:68,name:"True Enlightenment"},{level:70,name:"When Clans Collide"},{level:80,name:"Oboro's Big Idea"}
   ],
   Samurai: [
     {level:50,name:"The Way of the Samurai"},{level:50,name:"Master Musosai"},{level:52,name:"The Sands of Debt"},
     {level:54,name:"Blood on the Deck"},{level:56,name:"A Fraudster in the Forest"},{level:58,name:"Tears in the Snow"},
     {level:60,name:"The Face of True Evil"},{level:60,name:"A Dignified Visitor"},{level:63,name:"Trials of the Sekiseigumi"},
-    {level:65,name:"Matsuba Mayhem"},{level:68,name:"The Hunt for Ugetsu"},{level:70,name:"The Battle on Bekko"}
+    {level:65,name:"Matsuba Mayhem"},{level:68,name:"The Hunt for Ugetsu"},{level:70,name:"The Battle on Bekko"},{level:80,name:"The Legend of Musosai"}
   ],
   Reaper: [
-    {level:70,name:"The Killer Instinct"},{level:70,name:"The Harvest Begins"}
+    {level:70,name:"The Killer Instinct"},{level:70,name:"The Harvest Begins"},{level:73,name:"On the Hunt"},
+    {level:75,name:"Dark Days"},{level:78,name:"Thicker than Blood"},{level:80,name:"The Killing Art"}
+  ],
+  Viper: [
+    {level:80,name:"Enter the Viper"},{level:80,name:"Fangs of the Viper"},{level:83,name:"Viper in the Vidraal's Shadow"},
+    {level:85,name:"Vipers on the Hunt"},{level:88,name:"Into the Viper Pit"},{level:90,name:"Vengeance of the Viper"}
   ],
   Bard: [
     {level:1,name:"Way of the Archer"},{level:1,name:"My First Bow"},{level:5,name:"A Matter of Perspective"},
@@ -293,7 +303,7 @@ const JOB_QUESTS = {
     {level:50,name:"On the Road Again"},{level:52,name:"The Stiff and the Spent"},{level:54,name:"Requiem on Ice"},
     {level:56,name:"When Gnaths Cry"},{level:58,name:"A Saint of Song"},{level:60,name:"The Ballad of Oblivion"},
     {level:60,name:"Three's a Company"},{level:63,name:"Masked Motives"},{level:65,name:"One Autumn's Secret"},
-    {level:68,name:"Sleeping Truths Lie"},{level:70,name:"Sweet Dreams Are Made of Peace"}
+    {level:68,name:"Sleeping Truths Lie"},{level:70,name:"Sweet Dreams Are Made of Peace"},{level:80,name:"A Harmony from the Heavens"}
   ],
   Machinist: [
     {level:30,name:"Master of Marksmanship"},{level:35,name:"Always the Last Place You Look"},{level:40,name:"Rook Before You Reap"},
@@ -302,11 +312,11 @@ const JOB_QUESTS = {
     {level:52,name:"Pushing the Brume"},{level:54,name:"A Joye-ful Reunion"},{level:56,name:"Wheels of Justice"},
     {level:58,name:"Taking the Fall"},{level:58,name:"Rusted Steel"},{level:60,name:"Rise of the Machinists"},
     {level:60,name:"The Machinists' Choice"},{level:63,name:"The Hrunting Heist"},{level:65,name:"Release the Hounds"},
-    {level:68,name:"Snouts Down, Tails Up"},{level:70,name:"The Mongrel and the Knight"}
+    {level:68,name:"Snouts Down, Tails Up"},{level:70,name:"The Mongrel and the Knight"},{level:80,name:"Machinists for the Morrow"}
   ],
   Dancer: [
     {level:60,name:"Shall We Dance"},{level:60,name:"Gamboling for Gil"},{level:63,name:"A Soirée in the Sultanate"},
-    {level:65,name:"Dances with Duskwights"},{level:68,name:"High-steppin' in the Holy See"},{level:70,name:"Save the Last Dance for Me"}
+    {level:65,name:"Dances with Duskwights"},{level:68,name:"High-steppin' in the Holy See"},{level:70,name:"Save the Last Dance for Me"},{level:80,name:"Rising to the Occasion"}
   ],
   "Black Mage": [
     {level:1,name:"Way of the Thaumaturge"},{level:1,name:"My First Scepter"},{level:5,name:"The Threat of Intimacy"},
@@ -317,7 +327,7 @@ const JOB_QUESTS = {
     {level:50,name:"Black Books"},{level:52,name:"An Unexpected Journey"},{level:54,name:"A Cunning Plan"},
     {level:56,name:"Black Squawk Down"},{level:58,name:"Destruction in the Name of Justice"},{level:60,name:"The Defiant Ones"},
     {level:60,name:"Shades of Shatotto"},{level:63,name:"Golems Gone Wild"},{level:65,name:"When the Golems Get Tough"},
-    {level:68,name:"Unnatural Selection"},{level:70,name:"One Golem to Rule Them All"}
+    {level:68,name:"Unnatural Selection"},{level:70,name:"One Golem to Rule Them All"},{level:80,name:"A Home for a Tome"}
   ],
   Summoner: [
     {level:1,name:"Way of the Arcanist"},{level:1,name:"My First Grimoire"},{level:5,name:"What's in the Box"},
@@ -328,13 +338,17 @@ const JOB_QUESTS = {
     {level:50,name:"A Fitting Tomestone"},{level:52,name:"A Matter of Fact"},{level:54,name:"A Miner Negotiation"},
     {level:56,name:"Mad, Bad, and Ebon-clad"},{level:58,name:"I Could Have Tranced All Night"},{level:60,name:"A Flare for the Dramatic"},
     {level:60,name:"A Book with Bite"},{level:63,name:"Performing for Prin"},{level:65,name:"An Egi-stential Crisis"},
-    {level:68,name:"Off the Record"},{level:70,name:"An Art for the Living"}
+    {level:68,name:"Off the Record"},{level:70,name:"An Art for the Living"},{level:80,name:"To Be Second Best"}
   ],
   "Red Mage": [
     {level:50,name:"Taking the Red"},{level:50,name:"The Crimson Duelist"},{level:52,name:"A Rewarding Struggle"},
     {level:54,name:"Tracking the Cabal"},{level:56,name:"A Vermilion Vendetta"},{level:58,name:"On Lambard's Trail"},
     {level:60,name:"Stained in Scarlet"},{level:60,name:"The Color of Her Hair"},{level:63,name:"Traced in Blood"},
-    {level:65,name:"Nightkin"},{level:68,name:"Child of Lilith"},{level:70,name:"With Heart and Steel"}
+    {level:65,name:"Nightkin"},{level:68,name:"Child of Lilith"},{level:70,name:"With Heart and Steel"},{level:80,name:"Succession of Steel"}
+  ],
+  Pictomancer: [
+    {level:80,name:"The Joy of Pictomancy"},{level:80,name:"Mind over Manor"},{level:83,name:"Perspectives in Pursuit"},
+    {level:85,name:"The Crate Beyond"},{level:88,name:"Beruru's Clues"},{level:90,name:"Somewhere Only She Knows"}
   ],
   "Blue Mage": [
     {level:1,name:"Blue Leading the Blue"},{level:10,name:"Blue Collar Work"},{level:20,name:"Why They Call It the Blues"},
@@ -342,13 +356,85 @@ const JOB_QUESTS = {
     {level:50,name:"The Real Folk Blues"},{level:50,name:"Turning Over a Blue Leaf"},{level:50,name:"Into the Blue Again"},
     {level:53,name:"Something Borrowed, Something Blue"},{level:55,name:"Bolt from the Blue"},{level:58,name:"Blue in the Face"},
     {level:60,name:"Blue Scream of Death"},{level:60,name:"Blue Cheese"},{level:65,name:"Azuro and Goliath"},
-    {level:68,name:"Where the Gold Goes"},{level:70,name:"Master of Mimicry"},{level:70,name:"A Future in Blue"}
+    {level:68,name:"Where the Gold Goes"},{level:70,name:"Master of Mimicry"},{level:70,name:"A Future in Blue"},
+    {level:80,name:"A New Gold Standard"},{level:80,name:"The Brave and the Blue"}
   ]
 };
+// Which shared role-quest chain each combat job draws on.
+const JOB_ROLE = {
+  Paladin:"tank", Warrior:"tank", "Dark Knight":"tank", Gunbreaker:"tank",
+  "White Mage":"healer", Scholar:"healer", Astrologian:"healer", Sage:"healer",
+  Monk:"melee", Dragoon:"melee", Ninja:"melee", Samurai:"melee", Reaper:"melee", Viper:"melee",
+  Bard:"ranged", Machinist:"ranged", Dancer:"ranged",
+  "Black Mage":"caster", Summoner:"caster", "Red Mage":"caster", Pictomancer:"caster"
+  // Blue Mage has no role quests — it's excluded from the role quest system entirely.
+};
+// Viper and Pictomancer don't exist below level 80, so they never pass through the
+// Shadowbringers bracket (71-80) as that job — skip straight to Endwalker/Dawntrail.
+const JOB_ROLE_FLOOR = { Viper:80, Pictomancer:80 };
+// Which pool of completion state a role's quests share, per bracket. Shadowbringers runs
+// melee and physical ranged as ONE combined "Physical DPS" chain (same quests, same NPCs) —
+// clearing it on any melee or ranged job clears it for all of them. Endwalker/Dawntrail split
+// back into separate melee/ranged chains. Tank/caster/healer never combine with anything.
+const ROLE_TRACK_KEY = {
+  shb: { tank:"tank", melee:"physDPS", ranged:"physDPS", caster:"caster", healer:"healer" },
+  ew:  { tank:"tank", melee:"melee",   ranged:"ranged",  caster:"caster", healer:"healer" },
+  dt:  { tank:"tank", melee:"melee",   ranged:"ranged",  caster:"caster", healer:"healer" }
+};
+// Known gap: role quests actually gate on MSQ progress into that expansion, not just job
+// level. A job hitting 70 while still finishing Stormblood's post-MSQ content (i.e. before
+// setting foot in Shadowbringers) will show its bracket-70 role quest as "missed" a little
+// early, since level is all this tracker has to go on. Not fixable without tracking exact
+// MSQ position, which isn't data this app collects.
+
+const ROLE_QUESTS = {
+  shb: {
+    tank:   [{level:70,name:"The Man with Too Many Scars"},{level:72,name:"Shaped by Tragedy"},{level:74,name:"Defined by Loss"},{level:76,name:"The Princess and Her Knight"},{level:78,name:"The Hardened Heart"},{level:80,name:"To Have Loved and Lost"}],
+    melee:  [{level:70,name:"No Greater Sport"},{level:72,name:"Vengeance in Defeat"},{level:74,name:"Freedom from Privilege"},{level:76,name:"The Hunter's Legacy"},{level:78,name:"Fellowship Restored"},{level:80,name:"Courage Born of Fear"}],
+    ranged: [{level:70,name:"No Greater Sport"},{level:72,name:"Vengeance in Defeat"},{level:74,name:"Freedom from Privilege"},{level:76,name:"The Hunter's Legacy"},{level:78,name:"Fellowship Restored"},{level:80,name:"Courage Born of Fear"}],
+    caster: [{level:70,name:"Hollow Pursuits"},{level:72,name:"A Voice from the Void"},{level:74,name:"Echoes of the Past"},{level:76,name:"Nyelbert's Lament"},{level:78,name:"Taynor's Training Day"},{level:80,name:"A Tearful Reunion"}],
+    healer: [{level:70,name:"Traditions and Travails"},{level:72,name:"Affronts and Allies"},{level:74,name:"The Scientific Method"},{level:76,name:"The Lost and the Found"},{level:78,name:"Never to Return"},{level:80,name:"The Soul of Temperance"}]
+  },
+  ew: {
+    tank:   [{level:85,name:"Shrouded in Peril"},{level:86,name:"To Give Voice"},{level:87,name:"A Gift Undone"},{level:88,name:"A Pact Proven"},{level:89,name:"Hearts True"},{level:90,name:"A Path Unveiled"}],
+    melee:  [{level:85,name:"Storm Clouds Brewing"},{level:86,name:"The Crushing Tide"},{level:87,name:"Old Heroes Never Die"},{level:88,name:"A Mother's Suffering"},{level:89,name:"Out of the Shadows"},{level:90,name:"To Calmer Seas"}],
+    ranged: [{level:85,name:"Seeds of Disquiet"},{level:86,name:"When the Kami Answer"},{level:87,name:"Home No Longer"},{level:88,name:"The Devoted Daughter"},{level:89,name:"A Singular Gift"},{level:90,name:"Laid to Rest"}],
+    caster: [{level:85,name:"Our Aching Souls"},{level:86,name:"No Forgiveness, No Deliverance"},{level:87,name:"Only Justice, Only Vengeance"},{level:88,name:"Wills Unending, Faith Unbending"},{level:89,name:"O Mighty Fury, Guide Us to Victory"},{level:90,name:"Ever March Heavensward"}],
+    healer: [{level:85,name:"Far from Free"},{level:86,name:"The Butcher's Blade"},{level:87,name:"A New Battleground"},{level:88,name:"Laying the Past to Rest"},{level:89,name:"Trail of Skulls"},{level:90,name:"The Gift of Mercy"}]
+  },
+  dt: {
+    tank:   [{level:90,name:"The Narwhal Beckons"},{level:92,name:"Sleepless in Ishgard"},{level:94,name:"Between Sleep and Death"},{level:96,name:"Beacon in the Darkness"},{level:98,name:"Awakened, Not Stirred"},{level:100,name:"Dreams of a New Day"}],
+    melee:  [{level:90,name:"The Hunter and the Hunted"},{level:92,name:"A Sea of Blood"},{level:94,name:"Who's Who"},{level:96,name:"Cornered Prey"},{level:98,name:"Impostor Syndrome"},{level:100,name:"A Hunter True"}],
+    ranged: [{level:90,name:"To Steal a Steelhog"},{level:92,name:"Bandits Abound"},{level:94,name:"Take Me to Your Leader"},{level:96,name:"The Milk of Mamool Ja Kindness"},{level:98,name:"Ally in the Alley"},{level:100,name:"The Mightiest Shield"}],
+    caster: [{level:90,name:"Power Forgotten"},{level:92,name:"A Brand of Justice"},{level:94,name:"The Seeds of Popularity"},{level:96,name:"Floundering Fame"},{level:98,name:"Behind the Helm"},{level:100,name:"Heroes and Pretenders"}],
+    healer: [{level:90,name:"In the Sting of Things"},{level:92,name:"Causing Problems on Purpose"},{level:94,name:"Living among the Deadly"},{level:96,name:"Taste of a Toxin Paradise"},{level:98,name:"Downed by the River"},{level:100,name:"An Antidote for Anarchy"}]
+  }
+};
+// Every role-quest bracket that applies to a job, in level order, respecting JOB_ROLE_FLOOR.
+// Each returned quest carries its own trackKey — melee/ranged quests in the Shadowbringers
+// bracket both come back tagged "physDPS" so their completion state is shared; the same
+// quests in Endwalker/Dawntrail come back tagged "melee"/"ranged" since those don't share.
+function roleQuestsFor(job){
+  const role = JOB_ROLE[job];
+  if(!role) return [];
+  const floor = JOB_ROLE_FLOOR[job] || 1;
+  return ['shb','ew','dt'].flatMap(exp => {
+    const list = ROLE_QUESTS[exp][role];
+    // These chains are sequential — a job that doesn't exist yet when a bracket opens
+    // (Viper/Pictomancer skip Shadowbringers entirely) never gets access to any of it,
+    // not just the entries below its floor.
+    if(list[0].level < floor) return [];
+    return list.map(q => ({...q, trackKey: ROLE_TRACK_KEY[exp][role]}));
+  });
+}
 function missedJobQuests(job, level, doneMap){
   const list = JOB_QUESTS[job] || [];
   const done = (doneMap && doneMap[job]) || {};
-  return list.filter(q => q.level <= level && !done[q.name]);
+  const ownMissed = list.filter(q => q.level <= level && !done[q.name]);
+  const roleList = roleQuestsFor(job);
+  if(!roleList.length) return ownMissed;
+  const roleMissed = roleList.filter(q => q.level <= level && !((doneMap && doneMap['role:'+q.trackKey]) || {})[q.name]);
+  return ownMissed.concat(roleMissed);
 }
 
 // "Overall" is a roll-up: sub-categories should sum to it on both the done and total side.
@@ -838,7 +924,10 @@ function characterPageHTML(cid){
   return `
   <div class="section">
     <div class="char-header">
-      <input type="text" class="char-name-input" id="${cid}-name" placeholder="Character name" oninput="onNameInput('${cid}')">
+      <div class="char-name-group">
+        <input type="text" class="char-name-input" id="${cid}-name" placeholder="Character name" oninput="onNameInput('${cid}')">
+        <span class="patch-box">MSQ progress <input type="text" id="${cid}-patch" class="patch-input" placeholder="4.0" oninput="onPatchInput('${cid}')"></span>
+      </div>
       <button class="remove-char-btn" onclick="removeCharacter('${cid}')">Remove character</button>
     </div>
     <div class="server-picker" id="${cid}-server-picker"></div>
@@ -901,7 +990,7 @@ function characterPageHTML(cid){
   </div>
 
   <div class="section">
-    <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><span class="patch-box">patch <input type="text" id="${cid}-patch" class="patch-input" placeholder="4.0" oninput="onPatchInput('${cid}')"></span></span></h2>
+    <h2>Routines <span class="hint">clears itself on the game's reset</span></h2>
     <div class="routine-list" id="${cid}-routines"></div>
     <div class="gated-note" id="${cid}-gated"></div>
     <div class="hidden-note" id="${cid}-hiddennote"></div>
@@ -1167,18 +1256,26 @@ function jqToggleHTML(cid, job, lvl){
   const label = lvl<=0 ? 'quests' : (missed.length ? `⚠ ${missed.length}` : '✓');
   return `<button class="jq-toggle ${cls}" id="${cid}-jqbtn-${job}" onclick="toggleJobQuests('${cid}','${job}')">${label}</button>`;
 }
+// Own (per-job) quests and shared role quests, merged and level-sorted. Same deterministic
+// order every call (stable sort, own always concatenated before role) so an index computed
+// here still points at the same quest when toggleJobQuestDone looks it back up.
+function mergedJobQuestList(job){
+  const ownList = (JOB_QUESTS[job] || []).map(q => ({level:q.level, name:q.name, src:'own'}));
+  const roleList = roleQuestsFor(job).map(q => ({level:q.level, name:q.name, src:'role', trackKey:q.trackKey}));
+  return ownList.concat(roleList).sort((a,b)=>a.level-b.level);
+}
 function jqPanelHTML(cid, job){
   const c = getChar(cid);
   const lvl = jobLevelOf(c, job);
   const done = c.jobQuestsDone[job] || {};
-  const list = JOB_QUESTS[job] || [];
+  const list = mergedJobQuestList(job);
   const items = list.map((q,i)=>{
-    const isDone = !!done[q.name];
+    const isDone = q.src==='own' ? !!done[q.name] : !!((c.jobQuestsDone['role:'+q.trackKey] || {})[q.name]);
     const isMissed = q.level <= lvl && !isDone;
     return `<div class="jq-item${isMissed?' missed':''}${q.level>lvl?' future':''}">
       <input type="checkbox" id="${cid}-jq-${job}-${i}" ${isDone?'checked':''} onchange="toggleJobQuestDone('${cid}','${job}',${i})">
       <span class="jq-level">Lv.${q.level}</span>
-      <span class="jq-name">${esc(q.name)}</span>
+      <span class="jq-name">${esc(q.name)}${q.src==='role'?' <span class="jq-shared-tag">shared</span>':''}</span>
       ${isMissed?'<span class="jq-flag">not done</span>':''}
     </div>`;
   }).join('');
@@ -1233,11 +1330,17 @@ function toggleJobQuests(cid, job){
 }
 function toggleJobQuestDone(cid, job, index){
   const c = getChar(cid);
-  const q = (JOB_QUESTS[job]||[])[index];
+  const q = mergedJobQuestList(job)[index];
   if(!q) return;
-  if(!c.jobQuestsDone[job]) c.jobQuestsDone[job] = {};
   const chk = document.getElementById(`${cid}-jq-${job}-${index}`);
-  c.jobQuestsDone[job][q.name] = chk.checked;
+  if(q.src==='role'){
+    const key = 'role:'+q.trackKey;
+    if(!c.jobQuestsDone[key]) c.jobQuestsDone[key] = {};
+    c.jobQuestsDone[key][q.name] = chk.checked;
+  }else{
+    if(!c.jobQuestsDone[job]) c.jobQuestsDone[job] = {};
+    c.jobQuestsDone[job][q.name] = chk.checked;
+  }
   const lvl = jobLevelOf(c, job);
   const item = chk.closest('.jq-item');
   const isMissed = q.level <= lvl && !chk.checked;
