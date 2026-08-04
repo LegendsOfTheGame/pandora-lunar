@@ -1,0 +1,11 @@
+#!/bin/sh
+# Auto-bump the footer's "Last updated" build stamp on every commit, so it never
+# depends on anyone remembering to do it by hand. There's no build pipeline for
+# this site (static index.html/app.js/style.css on GitHub Pages), so this hook is
+# the mechanism instead.
+FILE="index.html"
+if [ -f "$FILE" ]; then
+  STAMP=$(date -u "+%d/%m/%Y @ %H:%M")
+  sed -E -i "s#(<div class=\"build-stamp\">Last updated )[0-9]{2}/[0-9]{2}/[0-9]{4} @ [0-9]{2}:[0-9]{2}( UTC</div>)#\1${STAMP}\2#" "$FILE"
+  git add "$FILE"
+fi
