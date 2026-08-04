@@ -547,7 +547,7 @@ const RESET_SCHEDULES = [
   { id:'weeklyTue', kind:'weekly',   weekday:2, hour:8,  label:'Weekly · Tuesday 08:00 UTC — Challenge Log, raids' },
   { id:'weeklySat', kind:'weekly',   weekday:0, hour:2,  label:'Weekly · Sat→Sun 02:00 UTC — Jumbo Cactpot draw (NA time; EU/JP/OCE draw a few hours earlier)' },
   { id:'monthly1',  kind:'monthly',  day:1,     hour:8,  label:'Monthly · 1st 08:00 UTC' },
-  { id:'cooldown18h', kind:'cooldown', hours:18, label:'18h from last click — Treasure Hunt' }
+  { id:'cooldown18h', kind:'cooldown', hours:18, label:"18h from last click — matches your own last dispatch/click, not a shared clock" }
 ];
 const DAY_MS = 86400000;
 const ACCENTS = ['gold','teal','rose'];
@@ -586,7 +586,7 @@ const DEFAULT_ROUTINES = [
   ["Treasure Hunt (map every 18h)","cooldown18h","treasure-hunt"],
   ["Adventurer Squadron Training","daily20","squadron-training"],
   ["Cosmic Exploration Daily Successes","daily09","cosmic-exploration"],
-  ["Retainer Ventures","daily15","retainer-ventures"],
+  ["Retainer Ventures","cooldown18h","retainer-ventures"],
   ["Dancing Mad (Ultimate)","weeklyTue","dancing-mad"],
   ["AAC Heavyweight M4","weeklyTue","aac-m4"],
   ["Windurst: The Third Walk","weeklyTue","windurst"],
@@ -633,8 +633,9 @@ function backfillSeedRoutines(c){
 // away from that couldn't have happened before the fix existed, so this can't clobber a real
 // user choice. Add future corrections here rather than one-off functions.
 const SEED_SCHEDULE_FIXES = [
-  { seedKey:'jumbo-cactpot', from:'weeklyTue', to:'weeklySat' },
-  { seedKey:'treasure-hunt', from:'daily15',   to:'cooldown18h' }
+  { seedKey:'jumbo-cactpot',      from:'weeklyTue', to:'weeklySat' },
+  { seedKey:'treasure-hunt',      from:'daily15',   to:'cooldown18h' },
+  { seedKey:'retainer-ventures',  from:'daily15',   to:'cooldown18h' }
 ];
 function applySeedScheduleFixes(c){
   SEED_SCHEDULE_FIXES.forEach(({seedKey,from,to})=>{
@@ -681,9 +682,11 @@ function routineSection(item){
 // daily, which has no seedKey at all — falls into "Other".
 // Morbid Motivation (Mysterious Maps) was tied to the Relic Weapon line once, but that
 // association was phased out in patch 3.0 — it's a plain repeatable dungeon/map activity
-// now, same category as Tank You or Retainer Ventures, no level check needed.
+// now, same category as Tank You or Mini Cactpot, no level check needed.
+// Retainer Ventures isn't in this list at all — it's an 18h personal cooldown (same
+// mechanism as Treasure Hunt), so it lives in the top-level Other section, not Daily.
 const DAILY_SUBGROUPS = [
-  ['Continuous', ['tank-you','retainer-ventures','hunt-daily','mini-cactpot','duty-roulette','morbid-motivation']],
+  ['Continuous', ['tank-you','hunt-daily','mini-cactpot','duty-roulette','morbid-motivation']],
   ['Relic Weapons', ['cut-different-cloth','will-to-resist','aether-everywhere']],
   ['Allied Societies', ['allied-society']],
   ['Grand Company', ['squadron-training','gc-turnin']]
@@ -757,6 +760,81 @@ function fmtDue(ms){
   if(h >= 24) return Math.floor(h/24) + 'd ' + (h % 24) + 'h';
   if(h > 0) return h + 'h ' + m + 'm';
   return m + 'm';
+}
+
+/* ---------- reset sound cues ---------- */
+// Tiny WebAudio beeps — no audio files to host, matches the site's local-only footprint.
+let audioCtx = null;
+function beep(notes){
+  if(!DATA.ui.soundEnabled) return;
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime;
+    notes.forEach(({freq,start,dur})=>{
+      const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, t0+start);
+      gain.gain.exponentialRampToValueAtTime(0.16, t0+start+0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0+start+dur);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0+start); osc.stop(t0+start+dur+0.02);
+    });
+  }catch(e){ /* autoplay-blocked or unsupported — silent no-op, never breaks the page */ }
+}
+const RESET_SOUND_PLAYERS = {
+  bell:  () => beep([{freq:880,start:0,dur:0.22},{freq:660,start:0.16,dur:0.3}]),   // daily / interval
+  gong:  () => beep([{freq:196,start:0,dur:0.7}]),                                  // weekly — lower, longer
+  chirp: () => beep([{freq:520,start:0,dur:0.09},{freq:920,start:0.07,dur:0.12}])   // 18h cooldown
+};
+const RESET_SOUND_BY_KIND = { daily:'bell', interval:'bell', weekly:'gong', monthly:'gong', cooldown:'chirp' };
+function playResetSound(kind){ (RESET_SOUND_PLAYERS[kind] || RESET_SOUND_PLAYERS.bell)(); }
+// In-memory only, never persisted. Two different signals depending on kind, since a
+// cooldown's expiry instant is fixed once lastDone is set (it doesn't advance on its own),
+// while a clock-based schedule's "current period" boundary advances forward every day/week
+// on its own regardless of any item. So: clock-based kinds watch lastResetInstant() advance
+// to a new value (the period just rolled over — that IS the reset); cooldown kind watches
+// a plain "now >= expiry" boolean flip false->true. Either way, keying by schedId (not by
+// item) for clock-based, and by item.id for cooldown, means N items sharing one schedule
+// (e.g. 13 dailies all on daily15) collapse into one Map entry — and the Set below collapses
+// multiple *different* keys that map to the same sound into a single play per tick.
+const seenResetState = new Map();
+function checkResetSounds(){
+  const now = Date.now();
+  const nowDate = new Date(now);
+  const firedSounds = new Set();
+  DATA.chars.forEach(c=>{
+    c.routines.forEach(item=>{
+      const sched = schedById(item.schedId);
+      if(sched.kind === 'cooldown'){
+        if(!item.lastDone) return; // nothing to expire if never done
+        const key = `item:${item.id}`;
+        const isDue = now >= item.lastDone + sched.hours*3600000;
+        const wasDue = seenResetState.get(key);
+        if(wasDue === false && isDue) firedSounds.add('chirp');
+        seenResetState.set(key, isDue);
+        return;
+      }
+      const key = `sched:${item.schedId}`;
+      const periodStart = lastResetInstant(sched, nowDate);
+      const prevStart = seenResetState.get(key);
+      if(prevStart !== undefined && periodStart > prevStart){
+        firedSounds.add(RESET_SOUND_BY_KIND[sched.kind] || 'bell');
+      }
+      seenResetState.set(key, periodStart);
+    });
+  });
+  firedSounds.forEach(playResetSound);
+}
+function toggleResetSound(){
+  DATA.ui.soundEnabled = !DATA.ui.soundEnabled;
+  updateSoundToggleUI();
+  scheduleSave();
+}
+function updateSoundToggleUI(){
+  const btn = document.getElementById('oc-mute-btn');
+  if(!btn) return;
+  btn.textContent = DATA.ui.soundEnabled ? '🔔' : '🔕';
+  btn.title = DATA.ui.soundEnabled ? 'Reset sounds on — click to mute' : 'Reset sounds muted — click to unmute';
 }
 
 /* ---------- patch gating ---------- */
@@ -938,6 +1016,7 @@ function normalizeData(){
   if(!DATA.chars.find(c=>c.id===DATA.activeId)) DATA.activeId = DATA.chars[0].id;
   if(!DATA.ui || typeof DATA.ui !== 'object') DATA.ui = {};
   if(!DATA.ui.collapsed || typeof DATA.ui.collapsed !== 'object') DATA.ui.collapsed = {};
+  if(typeof DATA.ui.soundEnabled !== 'boolean') DATA.ui.soundEnabled = true;
 }
 function getChar(cid){ return DATA.chars.find(c=>c.id===cid); }
 
@@ -1148,7 +1227,7 @@ function characterPageHTML(cid){
   </div>
 
   <div class="section">
-    <h2>Routines <span class="hint">clears itself on the game's reset</span></h2>
+    <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn" onclick="resetRoutines('${cid}')">Reset to defaults</button></span></h2>
     <div class="routine-list" id="${cid}-routines"></div>
     <div class="gated-note" id="${cid}-gated"></div>
     <div class="hidden-note" id="${cid}-hiddennote"></div>
@@ -1805,6 +1884,16 @@ function onPatchInput(cid){
   renderSocieties(cid);
   scheduleSave();
 }
+// Scoped to routines only — everything else tracked for this character (name, job levels,
+// quest categories, societies, notes, custom trackers) is untouched.
+function resetRoutines(cid){
+  const c = getChar(cid);
+  const label = (c.name||'').trim() || 'this character';
+  if(!confirm(`Reset all routines for ${label} back to the default list?\n\nThis removes anything you've added, renamed, hidden, rescheduled, or marked done in Routines. Nothing else you track for this character is affected, and the character itself is not removed.`)) return;
+  c.routines = seedRoutines();
+  renderRoutines(cid);
+  scheduleSave();
+}
 function addRoutine(cid){
   collectAllInputs();
   const item = { id:newId(), label:'', schedId:'daily15', lastDone:null, requires:'' };
@@ -2062,6 +2151,7 @@ function importData(input){
       document.querySelectorAll('.section[data-collapsible-ready]').forEach(s=>delete s.dataset.collapsibleReady);
       rebuildPages();
       renderSwitcher();
+      updateSoundToggleUI();
       save();
       document.getElementById('save-status').textContent = 'Backup restored';
     }catch(err){
@@ -2236,5 +2326,6 @@ function applyTmImport(){
   await loadData();
   rebuildPages();
   renderSwitcher();
-  setInterval(()=>{ DATA.chars.forEach(c=>refreshRoutines(c.id)); }, 30000);
+  updateSoundToggleUI();
+  setInterval(()=>{ DATA.chars.forEach(c=>refreshRoutines(c.id)); checkResetSounds(); }, 30000);
 })();

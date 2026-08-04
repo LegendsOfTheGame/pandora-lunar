@@ -39,6 +39,8 @@ body{
 .ocean-bar.registering{border-color:var(--sage)}
 .ocean-bar.registering .oc-time{color:var(--sage)}
 .ocean-bar.registering .oc-label{color:var(--sage)}
+.oc-mute{background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:13px;line-height:1;padding:0;margin-left:2px}
+.oc-mute:hover{color:var(--text)}
 .masthead{
   text-align:center;
   margin-bottom:20px;
