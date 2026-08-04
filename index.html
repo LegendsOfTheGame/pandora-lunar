@@ -51,6 +51,18 @@
     <button class="edit-btn" onclick="exportData()">Download backup</button>
     <button class="edit-btn" onclick="document.getElementById('import-file').click()">Restore from file</button>
     <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(this)">
+    <button class="edit-btn" onclick="toggleTmImportPanel()">Import from Time Memoria</button>
+  </div>
+
+  <div class="tm-import-panel" id="tm-import-panel" style="display:none">
+    <h2>Import from Time Memoria <button class="link-btn" onclick="toggleTmImportPanel()">Close</button></h2>
+    <p class="hint">Paste a Time Memoria clipboard export below. It's parsed entirely in this browser — nothing is sent anywhere, same as everywhere else on this site.</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0">
+      <button class="edit-btn" onclick="tmPasteFromClipboard()">Paste from clipboard</button>
+      <span class="tm-import-error" id="tm-import-error"></span>
+    </div>
+    <textarea class="note-area" id="tm-import-text" style="min-height:90px" placeholder="Or paste manually here (Ctrl+V)" oninput="onTmPasteInput()"></textarea>
+    <div id="tm-import-summary"></div>
   </div>
 
 </div>

@@ -575,11 +575,11 @@ const ACCENTS = ['gold','teal','rose'];
 const DEFAULT_ROUTINES = [
   ["Allied Society Quests","daily15","allied-society"],
   ["Duty Roulette","daily15","duty-roulette"],
-  ["Morbid Motivation (Mysterious Maps)","daily15","morbid-motivation"],
+  ["Morbid Motivation (Mysterious Maps - High Level Dungeons)","daily15","morbid-motivation"],
   ["Cut from a Different Cloth (Singing Clusters)","daily15","cut-different-cloth"],
   ["The Will to Resist (Resistance Weapon)","daily15","will-to-resist"],
   ["Aether, Aether, Everywhere (Phantom Weapon)","daily15","aether-everywhere"],
-  ["Tank You (Tank Roulette)","daily15","tank-you"],
+  ["Tank You (Tank Roulette — any tank job)","daily15","tank-you"],
   ["Mini Cactpot","daily15","mini-cactpot"],
   ["The Hunt (Daily Marks)","daily15","hunt-daily"],
   ["Grand Company Turn-in","daily20","gc-turnin"],
@@ -643,8 +643,65 @@ function applySeedScheduleFixes(c){
   });
   c.seedScheduleFixesApplied = true;
 }
+// Same one-time, only-if-still-default safety as SEED_SCHEDULE_FIXES, but for wording
+// corrections instead of schedule corrections — a user's own rename is never touched.
+const SEED_LABEL_FIXES = [
+  { seedKey:'morbid-motivation', from:'Morbid Motivation (Mysterious Maps)', to:'Morbid Motivation (Mysterious Maps - High Level Dungeons)' },
+  // "Tank You" is a per-job achievement family (Tank You, Warrior IV; Tank You, Paladin IV;
+  // etc.) but the underlying activity — Tank Roulette — counts toward whichever tank job
+  // you're queuing as, not one specific job. Clarified so it doesn't read as Warrior-only.
+  { seedKey:'tank-you', from:'Tank You (Tank Roulette)', to:'Tank You (Tank Roulette — any tank job)' }
+];
+function applySeedLabelFixes(c){
+  SEED_LABEL_FIXES.forEach(({seedKey,from,to})=>{
+    const r = c.routines.find(r=>r.seedKey===seedKey);
+    if(r && r.label===from) r.label = to;
+  });
+  c.seedLabelFixesApplied = true;
+}
 
 function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHEDULES[0]; }
+
+const ROUTINE_SECTIONS = ['Daily','Weekly','Monthly','Other'];
+// No monthly-reset content has ever existed in FFXIV — Monthly stays folded into Other
+// (so nothing a user adds goes missing) until patch 8.0 actually ships. Flip this to true
+// once it does; the Monthly heading then appears on its own automatically.
+const PATCH_8_0_RELEASED = false;
+function routineSection(item){
+  const kind = schedById(item.schedId).kind;
+  if(kind === 'monthly') return PATCH_8_0_RELEASED ? 'Monthly' : 'Other';
+  if(kind === 'weekly') return 'Weekly';
+  if(kind === 'daily' || kind === 'interval') return 'Daily';
+  return 'Other'; // cooldown (Treasure Hunt) and anything else that isn't clock-based
+}
+
+// Finer grouping within Daily specifically — Weekly/Monthly/Other don't need this level of
+// detail yet. Keyed by seedKey (stable, unlike the editable label) rather than schedId
+// (shared by unrelated items). Anything with no match — including every manually-added
+// daily, which has no seedKey at all — falls into "Other".
+// Morbid Motivation (Mysterious Maps) was tied to the Relic Weapon line once, but that
+// association was phased out in patch 3.0 — it's a plain repeatable dungeon/map activity
+// now, same category as Tank You or Retainer Ventures, no level check needed.
+const DAILY_SUBGROUPS = [
+  ['Continuous', ['tank-you','retainer-ventures','hunt-daily','mini-cactpot','duty-roulette','morbid-motivation']],
+  ['Relic Weapons', ['cut-different-cloth','will-to-resist','aether-everywhere']],
+  ['Allied Societies', ['allied-society']],
+  ['Grand Company', ['squadron-training','gc-turnin']]
+];
+function dailySubgroup(item){
+  for(const [name, keys] of DAILY_SUBGROUPS){
+    if(item.seedKey && keys.includes(item.seedKey)) return name;
+  }
+  return 'Other';
+}
+function dailySubgroupHTML(cid, items){
+  const names = DAILY_SUBGROUPS.map(([name])=>name).concat(['Other']);
+  return names.map(name=>{
+    const groupItems = items.filter(item => dailySubgroup(item) === name);
+    if(!groupItems.length) return '';
+    return `<div class="routine-subgroup"><div class="routine-subhead">${esc(name)}</div>${groupItems.map(item=>routineHTML(cid,item)).join('')}</div>`;
+  }).join('');
+}
 
 function lastResetInstant(sched, now){
   const t = now.getTime();
@@ -793,7 +850,8 @@ function newCharacter(name){
     jobQuestsDone: {}, jobQuestsOpen: {},
     server: {pdc:'', ldc:'', world:''},
     societies: Object.fromEntries(ALLIED_SOCIETIES.map(([name,exp,startRank])=>[name,{rank:startRank,points:0}])),
-    intersocietalDone: {}
+    intersocietalDone: {},
+    tmSyncedAt: null, tmSyncedVersion: null, playtimeAsOf: null
   };
 }
 
@@ -844,6 +902,7 @@ function normalizeCharacter(c){
   });
   if(!c.routinesSeeded) backfillSeedRoutines(c);
   if(!c.seedScheduleFixesApplied) applySeedScheduleFixes(c);
+  if(!c.seedLabelFixesApplied) applySeedLabelFixes(c);
   if(!c.societies || typeof c.societies !== 'object') c.societies = {};
   ALLIED_SOCIETIES.forEach(([name,exp,startRank])=>{
     const s = c.societies[name];
@@ -854,6 +913,9 @@ function normalizeCharacter(c){
     }
   });
   if(!c.intersocietalDone || typeof c.intersocietalDone !== 'object') c.intersocietalDone = {};
+  if(typeof c.tmSyncedAt !== 'string') c.tmSyncedAt = null;
+  if(typeof c.tmSyncedVersion !== 'string') c.tmSyncedVersion = null;
+  if(typeof c.playtimeAsOf !== 'string') c.playtimeAsOf = null;
   return c;
 }
 
@@ -1019,6 +1081,7 @@ function characterPageHTML(cid){
       </div>
       <button class="remove-char-btn" onclick="removeCharacter('${cid}')">Remove character</button>
     </div>
+    <span class="cap" id="${cid}-tm-sync-note"></span>
     <div class="server-picker" id="${cid}-server-picker"></div>
     <div class="dash-grid" id="${cid}-dash"></div>
   </div>
@@ -1051,6 +1114,7 @@ function characterPageHTML(cid){
           <input type="text" id="${cid}-playtime-days" class="playtime-input" oninput="onPlaytimeInput('${cid}')"><span class="cap">d</span>
           <input type="text" id="${cid}-playtime-hours" class="playtime-input" oninput="onPlaytimeInput('${cid}')"><span class="cap">h</span>
           <span class="cap" id="${cid}-playtime-total" style="margin-left:8px"></span>
+          <span class="cap" id="${cid}-playtime-asof" style="margin-left:8px"></span>
         </div>
       </td></tr>
     </table>
@@ -1164,6 +1228,22 @@ function updateTradeMentorChecks(cid){
 function updatePlaytimeTotal(cid){
   const c = getChar(cid);
   document.getElementById(cid+'-playtime-total').textContent = `= ${c.playtime.days*24 + c.playtime.hours}h total`;
+  const asofEl = document.getElementById(cid+'-playtime-asof');
+  if(asofEl) asofEl.textContent = c.playtimeAsOf ? `· as of ${fmtTmTimestamp(c.playtimeAsOf)}` : '';
+}
+// Playtime only advances when the player runs /playtime in-game, so its own freshness
+// (playtimeAsOf) can lag behind the rest of a Time Memoria import — tracked separately
+// from tmSyncedAt, which stamps the whole import.
+function renderTmSyncNote(cid){
+  const c = getChar(cid);
+  const el = document.getElementById(cid+'-tm-sync-note');
+  if(!el) return;
+  el.textContent = c.tmSyncedAt ? `Synced from Time Memoria v${c.tmSyncedVersion||'?'} · ${fmtTmTimestamp(c.tmSyncedAt)}` : '';
+}
+function fmtTmTimestamp(iso){
+  const d = new Date(iso);
+  if(isNaN(d.getTime())) return iso;
+  return d.toLocaleString([], {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
 }
 
 function updateOverallCheck(cid){
@@ -1636,7 +1716,7 @@ function routineHTML(cid, item){
     <div class="routine-item${done?' done':''}${gated?' gated':''}${item.hidden?' user-hidden':''}" id="${cid}-rt-item-${item.id}">
       <input type="checkbox" id="${cid}-rt-chk-${item.id}"${done?' checked':''}${gated?' disabled':''} onchange="toggleRoutine('${cid}','${item.id}')">
       <input type="text" class="routine-label" id="${cid}-rt-label-${item.id}" value="${esc(item.label)}" placeholder="e.g. Ixali dailies" oninput="onRoutineInput('${cid}','${item.id}')">
-      <select id="${cid}-rt-sched-${item.id}" onchange="onRoutineInput('${cid}','${item.id}')">${opts}</select>
+      <select id="${cid}-rt-sched-${item.id}" onchange="onRoutineSchedChange('${cid}','${item.id}')">${opts}</select>
       <input type="text" class="routine-req" id="${cid}-rt-req-${item.id}" value="${esc(item.requires||'')}" placeholder="any" title="Patch this unlocks in — blank means always available" oninput="onRoutineInput('${cid}','${item.id}')">
       <span class="routine-due" id="${cid}-rt-due-${item.id}">${gated?'locked':fmtDue(dueMs)}</span>
       <button class="hide-btn${item.hidden?' is-hidden':''}" id="${cid}-rt-hidebtn-${item.id}" title="${item.hidden?'Unhide this routine':"Hide — doesn't apply to this character"}" onclick="toggleRoutineHidden('${cid}','${item.id}')">${item.hidden?'◉':'○'}</button>
@@ -1653,9 +1733,16 @@ function renderRoutines(cid){
   const visible = all.filter(r =>
     (c.showGated || !isGated(r, c.patch)) && (c.showHidden || !r.hidden)
   );
-  box.innerHTML = visible.length
-    ? visible.map(item=>routineHTML(cid,item)).join('')
-    : `<div class="empty-hint">${all.length ? 'Everything here is hidden or needs a later patch.' : 'Nothing yet &mdash; add the things you repeat, like Ixali dailies or GC supply missions.'}</div>`;
+  if(!visible.length){
+    box.innerHTML = `<div class="empty-hint">${all.length ? 'Everything here is hidden or needs a later patch.' : 'Nothing yet &mdash; add the things you repeat, like Ixali dailies or GC supply missions.'}</div>`;
+  }else{
+    box.innerHTML = ROUTINE_SECTIONS.map(sec=>{
+      const items = visible.filter(r => routineSection(r) === sec);
+      if(!items.length) return '';
+      const body = sec === 'Daily' ? dailySubgroupHTML(cid, items) : items.map(item=>routineHTML(cid,item)).join('');
+      return `<div class="routine-section"><div class="subhead">${esc(sec)}</div>${body}</div>`;
+    }).join('');
+  }
   renderGatedNote(cid);
   renderHiddenNote(cid);
 }
@@ -1722,10 +1809,9 @@ function addRoutine(cid){
   collectAllInputs();
   const item = { id:newId(), label:'', schedId:'daily15', lastDone:null, requires:'' };
   getChar(cid).routines.push(item);
-  const box = document.getElementById(cid+'-routines');
-  const hint = box.querySelector('.empty-hint');
-  if(hint) hint.remove();
-  box.insertAdjacentHTML('beforeend', routineHTML(cid, item));
+  // Full re-render (rather than appending in place) so the new item lands under its
+  // correct Daily/Weekly/Monthly/Other section instead of always at the very bottom.
+  renderRoutines(cid);
   const labelEl = document.getElementById(`${cid}-rt-label-${item.id}`);
   if(labelEl) labelEl.focus();
   scheduleSave();
@@ -1739,7 +1825,13 @@ function removeRoutine(cid, id){
   }
   c.routines = c.routines.filter(i=>i.id!==id);
   const node = document.getElementById(`${cid}-rt-item-${id}`);
+  const subgroup = node ? node.closest('.routine-subgroup') : null;
+  const section = node ? node.closest('.routine-section') : null;
   if(node) node.remove();
+  // Removing the last item in a (sub)section should take its heading with it, not leave
+  // an empty "Weekly" or "Relic Weapons" label sitting above nothing.
+  if(subgroup && !subgroup.querySelector('.routine-item')) subgroup.remove();
+  if(section && !section.querySelector('.routine-item')) section.remove();
   if(c.routines.length===0) renderRoutines(cid);
   scheduleSave();
 }
@@ -1753,6 +1845,14 @@ function toggleRoutine(cid, id){
   // Recompute the due countdown immediately — otherwise it's stuck showing whatever it read
   // before the click (e.g. "now") until the next 30s periodic refresh or a page reload.
   refreshRoutines(cid);
+  scheduleSave();
+}
+// A schedule change can move an item into a different Daily/Weekly/Monthly/Other section
+// (unlike label/requires edits), so this needs a full re-render — same reasoning as
+// onSocietyRankChange vs. onSocietyPointsInput.
+function onRoutineSchedChange(cid, id){
+  collectAllInputs();
+  renderRoutines(cid);
   scheduleSave();
 }
 function onRoutineInput(cid, id){
@@ -1857,6 +1957,7 @@ function renderChar(cid){
   renderSocieties(cid);
   renderRoutines(cid);
   renderCustom(cid);
+  renderTmSyncNote(cid);
 }
 function onNameInput(cid){
   collectAllInputs();
@@ -1970,6 +2071,164 @@ function importData(input){
   };
   reader.onerror = function(){ alert('Could not read that file.'); input.value=''; };
   reader.readAsText(file);
+}
+
+/* ---------- Time Memoria import ---------- */
+// One-way plugin -> ledger, clipboard only. Never auto-matched to a character (the plugin
+// reports the in-game name, e.g. "Haurche Greystone", which won't generally match whatever
+// the ledger has typed in, e.g. "Haurchefaunt Greystone") and never creates a new character —
+// linking is always an explicit choice from the characters already in this browser. Every
+// field is merge-only: only keys actually present in the payload are touched, everything
+// else (routines, notes, societies, quest totals, jobQuestsDone, ids, ...) is left alone.
+let tmImportPayload = null;
+
+function toggleTmImportPanel(){
+  const panel = document.getElementById('tm-import-panel');
+  const opening = panel.style.display === 'none';
+  panel.style.display = opening ? '' : 'none';
+  if(!opening){
+    tmImportPayload = null;
+    document.getElementById('tm-import-text').value = '';
+    document.getElementById('tm-import-error').textContent = '';
+    document.getElementById('tm-import-summary').innerHTML = '';
+  }
+}
+function tmPasteFromClipboard(){
+  const errEl = document.getElementById('tm-import-error');
+  if(!navigator.clipboard || !navigator.clipboard.readText){
+    errEl.textContent = "Clipboard access isn't available here — paste manually into the box below (Ctrl+V).";
+    return;
+  }
+  navigator.clipboard.readText().then(text=>{
+    document.getElementById('tm-import-text').value = text;
+    onTmPasteInput();
+  }).catch(()=>{
+    errEl.textContent = 'Clipboard permission denied — paste manually into the box below (Ctrl+V).';
+  });
+}
+function onTmPasteInput(){
+  const text = document.getElementById('tm-import-text').value.trim();
+  const errEl = document.getElementById('tm-import-error');
+  const summaryEl = document.getElementById('tm-import-summary');
+  tmImportPayload = null;
+  summaryEl.innerHTML = '';
+  if(!text){ errEl.textContent = ''; return; }
+  let obj;
+  try{ obj = JSON.parse(text); }
+  catch(e){ errEl.textContent = 'Not valid JSON.'; return; }
+  if(!obj || typeof obj !== 'object' || obj.source !== 'time-memoria'){
+    errEl.textContent = 'Doesn’t look like a Time Memoria export (missing or unexpected "source" field).';
+    return;
+  }
+  if(typeof obj.name !== 'string' || !obj.name.trim()){
+    errEl.textContent = 'Export is missing a character name.';
+    return;
+  }
+  errEl.textContent = '';
+  tmImportPayload = obj;
+  renderTmImportSummary();
+}
+function renderTmImportSummary(){
+  const summaryEl = document.getElementById('tm-import-summary');
+  const p = tmImportPayload;
+  if(!p){ summaryEl.innerHTML = ''; return; }
+  const options = DATA.chars.map((c,i)=>
+    `<option value="${c.id}">${esc(c.name || `Character ${i+1}`)}</option>`
+  ).join('');
+  summaryEl.innerHTML = `
+    <div class="tm-import-meta">${esc(p.name)} &middot; ${esc((p.server&&p.server.world)||'?')} &mdash; Time Memoria v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
+    <select class="tm-import-select" id="tm-import-target" onchange="onTmTargetChange()">
+      <option value="">&mdash; Link to which tracked character? &mdash;</option>
+      ${options}
+    </select>
+    <div id="tm-import-diff"></div>
+    <button class="edit-btn tm-import-apply-btn" id="tm-import-apply-btn" onclick="applyTmImport()" disabled>Apply merge</button>
+  `;
+}
+function onTmTargetChange(){
+  const cid = document.getElementById('tm-import-target').value;
+  const applyBtn = document.getElementById('tm-import-apply-btn');
+  const diffEl = document.getElementById('tm-import-diff');
+  if(!cid){ diffEl.innerHTML = ''; applyBtn.disabled = true; return; }
+  diffEl.innerHTML = computeTmDiffHTML(tmImportPayload, getChar(cid));
+  applyBtn.disabled = false;
+}
+// Values already arrive pre-combined as level + (exp/expToNext), same convention the ledger's
+// own manual entry uses — this is purely a display formatter for the diff preview.
+function fmtTmJobVal(v){
+  if(v >= 100) return 'Lv 100 (max)';
+  const lvl = Math.floor(v);
+  const pct = Math.round((v - lvl) * 1000) / 10;
+  return `Lv ${lvl} (${pct.toFixed(1)}%)`;
+}
+function computeTmDiffHTML(p, c){
+  const rows = [];
+  if(typeof p.comm === 'number' && p.comm !== c.comm) rows.push(['Commendations', c.comm, p.comm]);
+  if(p.playtime){
+    const from = `${c.playtime.days}d ${c.playtime.hours}h`;
+    const to = `${p.playtime.days}d ${p.playtime.hours}h`;
+    if(from !== to) rows.push(['Playtime', from, to]);
+  }
+  if(p.server && (p.server.world||'') !== (c.server.world||'')){
+    rows.push(['Server', c.server.world || '(none)', p.server.world || '(none)']);
+  }
+  ['combat','craft','gather'].forEach(group=>{
+    if(!p[group]) return;
+    Object.keys(p[group]).forEach(job=>{
+      const from = c[group][job] || 0, to = p[group][job];
+      if(from !== to) rows.push([job, fmtTmJobVal(from), fmtTmJobVal(to)]);
+    });
+  });
+  if(p.msqBreakdown){
+    MSQ_EXPANSIONS.forEach(([key,label])=>{
+      if(p.msqBreakdown[key] === undefined) return;
+      const from = c.msqBreakdown[key] || 0, to = p.msqBreakdown[key];
+      if(from !== to) rows.push([label, from, to]);
+    });
+  }
+  if(!rows.length) return '<div class="tm-diff-row"><span class="tm-diff-label">No changes — this character already matches the export.</span></div>';
+  return rows.map(([label,from,to])=>
+    `<div class="tm-diff-row"><span class="tm-diff-label">${esc(label)}</span><span class="tm-diff-change">${esc(String(from))}<span class="tm-diff-arrow">→</span>${esc(String(to))}</span></div>`
+  ).join('');
+}
+function applyTmImport(){
+  const p = tmImportPayload;
+  const cid = document.getElementById('tm-import-target').value;
+  if(!p || !cid) return;
+  const c = getChar(cid);
+  if(!c) return;
+
+  if(p.server && typeof p.server === 'object'){
+    c.server = { pdc: p.server.pdc || '', ldc: p.server.ldc || '', world: p.server.world || '' };
+  }
+  if(typeof p.comm === 'number') c.comm = p.comm;
+  if(p.playtime && typeof p.playtime === 'object'){
+    if(typeof p.playtime.days === 'number') c.playtime.days = p.playtime.days;
+    if(typeof p.playtime.hours === 'number') c.playtime.hours = p.playtime.hours;
+    if(typeof p.playtime.asOf === 'string') c.playtimeAsOf = p.playtime.asOf;
+  }
+  ['combat','craft','gather'].forEach(group=>{
+    if(p[group] && typeof p[group] === 'object'){
+      Object.keys(p[group]).forEach(job=>{ c[group][job] = p[group][job]; });
+    }
+  });
+  // msqBreakdown is the completed-count only; msqBreakdownTotals from the plugin is
+  // deliberately ignored — the ledger's own totals stay authoritative for now.
+  if(p.msqBreakdown && typeof p.msqBreakdown === 'object'){
+    Object.keys(p.msqBreakdown).forEach(key=>{
+      if(c.msqBreakdown[key] !== undefined) c.msqBreakdown[key] = p.msqBreakdown[key];
+    });
+  }
+
+  c.tmSyncedAt = p.exported || new Date().toISOString();
+  c.tmSyncedVersion = p.version || null;
+
+  toggleTmImportPanel();
+  DATA.activeId = cid;
+  rebuildPages();
+  renderSwitcher();
+  scheduleSave();
+  document.getElementById('save-status').textContent = 'Imported from Time Memoria';
 }
 
 /* ---------- init ---------- */
