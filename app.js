@@ -834,6 +834,7 @@ function updateSoundToggleUI(){
   const btn = document.getElementById('oc-mute-btn');
   if(!btn) return;
   btn.textContent = DATA.ui.soundEnabled ? '🔔' : '🔕';
+  btn.classList.toggle('muted', !DATA.ui.soundEnabled);
   btn.title = DATA.ui.soundEnabled ? 'Reset sounds on — click to mute' : 'Reset sounds muted — click to unmute';
 }
 
@@ -2262,6 +2263,13 @@ function computeTmDiffHTML(p, c){
   if(p.server && (p.server.world||'') !== (c.server.world||'')){
     rows.push(['Server', c.server.world || '(none)', p.server.world || '(none)']);
   }
+  if(p.msqPatch && typeof p.msqPatch.reached === 'string'){
+    const imported = patchValue(p.msqPatch.reached);
+    const stored = patchValue(c.patch);
+    if(imported !== null && (stored === null || imported > stored)){
+      rows.push(['MSQ progress', c.patch || '(none)', p.msqPatch.reached]);
+    }
+  }
   ['combat','craft','gather'].forEach(group=>{
     if(!p[group]) return;
     Object.keys(p[group]).forEach(job=>{
@@ -2292,6 +2300,16 @@ function applyTmImport(){
     c.server = { pdc: p.server.pdc || '', ldc: p.server.ldc || '', world: p.server.world || '' };
   }
   if(typeof p.comm === 'number') c.comm = p.comm;
+  // "reached" (not "cleared") — gating unlocks as soon as you're into that patch's content.
+  // Take the GREATER of stored and imported — msqPatch.reached is always a floor, never an
+  // overstatement (on patch day, before the plugin's bookends are updated, a finished player
+  // still reports the previous patch). Blindly overwriting would silently downgrade anyone
+  // whose stored value is already ahead of what the plugin can report.
+  if(p.msqPatch && typeof p.msqPatch.reached === 'string'){
+    const imported = patchValue(p.msqPatch.reached);
+    const stored = patchValue(c.patch);
+    if(imported !== null && (stored === null || imported > stored)) c.patch = p.msqPatch.reached;
+  }
   if(p.playtime && typeof p.playtime === 'object'){
     if(typeof p.playtime.days === 'number') c.playtime.days = p.playtime.days;
     if(typeof p.playtime.hours === 'number') c.playtime.hours = p.playtime.hours;
