@@ -1201,7 +1201,7 @@ function characterPageHTML(cid){
   </div>
 
   <div class="section">
-    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via QuestTracker plugin</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
+    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via Time Memoria</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
     <div class="quest-grid" id="${cid}-quests"></div>
     <div class="check-note" id="${cid}-overall-check"></div>
   </div>
@@ -1398,8 +1398,8 @@ function renderPluginMode(cid){
   const c = getChar(cid);
   const hint = document.getElementById(`${cid}-pluginhint`);
   const btn = document.getElementById(`${cid}-pluginmode-btn`);
-  if(hint) hint.textContent = c.noPlugin ? 'manual entry — no plugin' : 'via QuestTracker plugin';
-  if(btn) btn.textContent = c.noPlugin ? 'I use QuestTracker' : "I don't use the plugin";
+  if(hint) hint.textContent = c.noPlugin ? 'manual entry — no plugin' : 'via Time Memoria';
+  if(btn) btn.textContent = c.noPlugin ? 'I use Time Memoria' : "I don't use the plugin";
 }
 function toggleNoPlugin(cid){
   collectAllInputs();
