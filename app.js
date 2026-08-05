@@ -2284,6 +2284,22 @@ function computeTmDiffHTML(p, c){
       if(from !== to) rows.push([label, from, to]);
     });
   }
+  if(p.quests && typeof p.quests === 'object'){
+    // overall is always the sum of the 6 subcategories — never compared directly because
+    // take-the-greater on individual subs means TM's pre-computed overall would diverge.
+    const QUEST_SUBS = [['msq','Main scenario'],['era','Chronicles of a New Era'],['side','Sidequests'],['allied','Allied Society'],['class','Class & Job quests'],['leve','Levequests']];
+    let anySubChanged = false;
+    QUEST_SUBS.forEach(([key,label])=>{
+      if(p.quests[key] === undefined) return;
+      const from = c.quests[key]||0, to = p.quests[key];
+      if(to > from){ rows.push([label, from, to]); anySubChanged = true; }
+    });
+    if(anySubChanged){
+      const projOverall = QUEST_SUBS.reduce((sum,[key])=>sum+Math.max(c.quests[key]||0, p.quests[key]||0), 0);
+      const storedOverall = c.quests.overall||0;
+      if(projOverall !== storedOverall) rows.push(['Overall quests', storedOverall, projOverall]);
+    }
+  }
   if(!rows.length) return '<div class="tm-diff-row"><span class="tm-diff-label">No changes — this character already matches the export.</span></div>';
   return rows.map(([label,from,to])=>
     `<div class="tm-diff-row"><span class="tm-diff-label">${esc(label)}</span><span class="tm-diff-change">${esc(String(from))}<span class="tm-diff-arrow">→</span>${esc(String(to))}</span></div>`
@@ -2326,6 +2342,18 @@ function applyTmImport(){
     Object.keys(p.msqBreakdown).forEach(key=>{
       if(c.msqBreakdown[key] !== undefined) c.msqBreakdown[key] = p.msqBreakdown[key];
     });
+  }
+  // Quest counts only go up — take the greater on each subcategory, then recompute overall
+  // from the sum so the "sub-cats sum to Overall" panel invariant is always preserved.
+  // TM's own overall is ignored: it was computed before our take-the-greater merge and would
+  // diverge if stored values were higher for any individual subcategory.
+  if(p.quests && typeof p.quests === 'object'){
+    const QUEST_SUBS = ['msq','era','side','allied','class','leve'];
+    QUEST_SUBS.forEach(key=>{
+      if(typeof p.quests[key] === 'number' && p.quests[key] > (c.quests[key]||0))
+        c.quests[key] = p.quests[key];
+    });
+    c.quests.overall = QUEST_SUBS.reduce((sum,key)=>sum+(c.quests[key]||0), 0);
   }
 
   c.tmSyncedAt = p.exported || new Date().toISOString();
