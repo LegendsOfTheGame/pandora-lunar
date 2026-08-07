@@ -25,7 +25,11 @@ body{
   font-family:var(--font-body);
   padding:0 20px 60px;
 }
-.wrap{max-width:920px;margin:0 auto}
+/* Wide enough to use a desktop monitor, capped so prose in the instructions and
+   notes does not run to an unreadable line length. Grouping sections into tabs
+   made the page shorter, which turned the old 920px cap from focus into
+   obvious empty space either side. */
+.wrap{max-width:1360px;margin:0 auto}
 .ocean-bar{
   position:sticky;top:0;z-index:30;
   background:var(--panel);border:1px solid var(--line);border-radius:0 0 8px 8px;
@@ -387,3 +391,156 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   .routine-item{grid-template-columns:18px 1fr 50px 76px 24px 24px;gap:6px}
   .routine-item select{grid-column:2 / span 5}
 }
+
+/* ---------- section tabs ---------- */
+/* Grouping rather than a single long scroll. The character header stays above
+   these: it is who you are looking at, not one of the things you look at. */
+.tabbar{
+  display:flex;
+  gap:4px;
+  margin:0 0 18px;
+  flex-wrap:wrap;
+  border-bottom:1px solid var(--line);
+  padding-bottom:0;
+}
+.tab-btn{
+  background:transparent;
+  border:1px solid transparent;
+  border-bottom:none;
+  border-radius:6px 6px 0 0;
+  color:var(--text-dim);
+  font-family:var(--font-display);
+  font-size:14px;
+  letter-spacing:0.3px;
+  padding:9px 16px;
+  cursor:pointer;
+  position:relative;
+  top:1px;
+  transition:color .15s,background .15s;
+}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{
+  background:var(--panel);
+  border-color:var(--line);
+  color:var(--gold);
+}
+/* Sits over the bar's own border so the active tab reads as joined to its panel. */
+.tab-btn.active::after{
+  content:'';
+  position:absolute;
+  left:0;right:0;bottom:-1px;
+  height:1px;
+  background:var(--panel);
+}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+@media (max-width:600px){
+  .tabbar{gap:2px}
+  .tab-btn{padding:8px 11px;font-size:13px}
+}
+
+/* ---------- wide-screen ---------- */
+/* At 1360px prose would run to an uncomfortable line length, so the passages
+   meant to be read keep their own limit while grids and tables use the width. */
+.instructions-panel p,
+.instructions-panel h3{max-width:80ch}
+.note-area{max-width:100ch}
+
+/* Jobs and societies have plenty of short rows, so the width is better spent
+   on more columns than on longer ones. */
+@media (min-width:1100px){
+  .two-col{grid-template-columns:1fr 1fr 1fr}
+}
+
+/* ---------- themes ---------- */
+/* Midnight mirrors the plugin's Classic (ImGui) window. That window is almost entirely
+   white-on-black with crimson reserved for the selected tab, so the palette is
+   deliberately monochrome — spending the red anywhere else would lose the one
+   thing that identifies the look. */
+:root[data-theme="midnight"]{
+  --ink:#0b0b0d;
+  --panel:#16161a;
+  --panel2:#1c1c2182;
+  --line:#33333a;
+  --line-soft:#232329;
+  --text:#ececef;
+  --text-dim:#9c9ca4;
+  --text-faint:#6b6b74;
+  --accent:#a83232;
+  --gold:#a83232;
+  --gold-dim:#6e2222;
+  --teal:#5a86ad;
+  --teal-dim:#3a5670;
+  --rose:#b5555a;
+  --sage:#6f9e6a;
+  /* ImGui draws no serif anywhere. */
+  --font-display:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+/* Headings stay neutral: in the plugin the only coloured element is the active
+   tab, and colouring every section header would read as a different program. */
+:root[data-theme="midnight"] .section h2,
+:root[data-theme="midnight"] .instructions-panel h2,
+:root[data-theme="midnight"] .masthead h1{color:var(--text)}
+/* ImGui rounds corners barely, and packs rows tighter than a web layout would. */
+:root[data-theme="midnight"] .section,
+:root[data-theme="midnight"] .instructions-panel,
+:root[data-theme="midnight"] .tm-import-panel{border-radius:3px;padding:16px 18px}
+:root[data-theme="midnight"] .metric{border-radius:3px}
+:root[data-theme="midnight"] .ocean-bar{border-radius:0 0 3px 3px}
+:root[data-theme="midnight"] .tab-btn{border-radius:3px 3px 0 0}
+/* The selected tab is a filled crimson block, not an underline. */
+:root[data-theme="midnight"] .tab-btn.active{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#fff;
+}
+:root[data-theme="midnight"] .tab-btn.active::after{background:var(--accent)}
+
+/* Daylight mirrors the plugin's Native (KamiToolKit) window: mid slate grey-blue
+   with white text, warm tan on the selected row, gold on section headers and
+   green on anything finished. It is lighter than the other two themes without
+   being a true light mode — the game keeps its text white, and inverting to dark
+   text would stop it reading as the game's window. */
+:root[data-theme="daylight"]{
+  color-scheme:dark;
+  --ink:#4b5157;
+  --panel:#5c626a;
+  --panel2:#545a6182;
+  --line:#3f454c;
+  --line-soft:#525860;
+  --text:#f3f5f6;
+  --text-dim:#d0d5d9;
+  --text-faint:#a8aeb4;
+  --gold:#dcc084;
+  --gold-dim:#a28a58;
+  --teal:#7ab8c7;
+  --teal-dim:#4d7f8c;
+  --rose:#d99292;
+  --sage:#8ed08e;
+}
+/* The game rounds its panels and tabs far more generously than either the site
+   or ImGui does, and that shape is most of what identifies the window. */
+:root[data-theme="daylight"] .section,
+:root[data-theme="daylight"] .instructions-panel,
+:root[data-theme="daylight"] .tm-import-panel{border-radius:7px}
+:root[data-theme="daylight"] .metric{border-radius:6px}
+:root[data-theme="daylight"] .ocean-bar{border-radius:0 0 7px 7px}
+:root[data-theme="daylight"] .tab-btn{border-radius:9px 9px 0 0}
+/* Selected rows in the native list are a filled warm tan, not an outline. */
+:root[data-theme="daylight"] .tab-btn.active{
+  background:var(--gold-dim);
+  border-color:var(--gold-dim);
+  color:#fff;
+}
+:root[data-theme="daylight"] .tab-btn.active::after{background:var(--gold-dim)}
+
+/* Theme switcher */
+.theme-switch{display:inline-flex;gap:4px;margin-left:10px;vertical-align:middle}
+.theme-switch button{
+  background:transparent;border:1px solid var(--line);color:var(--text-faint);
+  font-family:var(--font-body);font-size:11px;letter-spacing:0.5px;
+  text-transform:uppercase;padding:4px 10px;border-radius:4px;cursor:pointer;
+}
+.theme-switch button:hover{color:var(--text)}
+.theme-switch button.active{border-color:var(--accent,var(--gold));color:var(--accent,var(--gold))}

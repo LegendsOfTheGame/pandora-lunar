@@ -1018,6 +1018,11 @@ function normalizeData(){
   if(!DATA.ui || typeof DATA.ui !== 'object') DATA.ui = {};
   if(!DATA.ui.collapsed || typeof DATA.ui.collapsed !== 'object') DATA.ui.collapsed = {};
   if(typeof DATA.ui.soundEnabled !== 'boolean') DATA.ui.soundEnabled = true;
+  // Earlier builds named these after the plugin's own UIs before they were
+  // given aesthetic names, so a stored value may still use the old spelling.
+  if(DATA.ui.theme === 'ledger') DATA.ui.theme = 'poetic';
+  if(DATA.ui.theme === 'classic') DATA.ui.theme = 'midnight';
+  if(!THEMES.includes(DATA.ui.theme)) DATA.ui.theme = 'poetic';
 }
 function getChar(cid){ return DATA.chars.find(c=>c.id===cid); }
 
@@ -1166,26 +1171,21 @@ function characterPageHTML(cid){
     <div class="dash-grid" id="${cid}-dash"></div>
   </div>
 
-  <div class="section">
-    <h2>Battle Mentor requirements
-      <span class="hint">1000 dungeons &middot; 1500 comms &middot; tank + healer + 1 dps role quest</span>
-    </h2>
-    <table style="margin-bottom:10px">
-      <tr><td style="width:120px"><input type="text" id="${cid}-duty" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,000 duty completions</td></tr>
-      <tr><td><input type="text" id="${cid}-comm" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,500 commendations</td></tr>
-    </table>
-    <div id="${cid}-roles"></div>
+  <div class="tabbar" data-cid="${cid}">
+      <button class="tab-btn" data-tab="overview" onclick="switchTab('${cid}','overview')">Overview</button>
+      <button class="tab-btn" data-tab="routines" onclick="switchTab('${cid}','routines')">Routines</button>
+      <button class="tab-btn" data-tab="jobs" onclick="switchTab('${cid}','jobs')">Jobs</button>
+      <button class="tab-btn" data-tab="societies" onclick="switchTab('${cid}','societies')">Societies</button>
+      <button class="tab-btn" data-tab="mentor" onclick="switchTab('${cid}','mentor')">Mentor</button>
+      <button class="tab-btn" data-tab="notes" onclick="switchTab('${cid}','notes')">Notes</button>
   </div>
 
+  <div class="tab-panel" data-tab="overview">
   <div class="section">
-    <h2>Trade mentor requirements <span class="hint">300 collectables &middot; 100 synthesized &middot; a craft + gather job at 100</span></h2>
-    <table style="margin-bottom:10px">
-      <tr><td style="width:140px"><input type="text" id="${cid}-trade-collected" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 300 collectables gathered or caught</td><td style="width:60px" id="${cid}-trade-collected-done"></td></tr>
-      <tr><td><input type="text" id="${cid}-trade-made" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 100 collectables synthesized</td><td style="width:60px" id="${cid}-trade-made-done"></td></tr>
-    </table>
-    <div id="${cid}-trade-jobs"></div>
+    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via Time Memoria</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
+    <div class="quest-grid" id="${cid}-quests"></div>
+    <div class="check-note" id="${cid}-overall-check"></div>
   </div>
-
   <div class="section">
     <h2>Session</h2>
     <table>
@@ -1199,18 +1199,17 @@ function characterPageHTML(cid){
       </td></tr>
     </table>
   </div>
-
-  <div class="section">
-    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via Time Memoria</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
-    <div class="quest-grid" id="${cid}-quests"></div>
-    <div class="check-note" id="${cid}-overall-check"></div>
   </div>
-
+  <div class="tab-panel" data-tab="routines">
   <div class="section">
-    <h2>Allied society relations <span class="hint">rank + points reset to 0 on every rank-up; expansions unlock as your MSQ progress does</span></h2>
-    <div id="${cid}-societies"></div>
+    <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn" onclick="resetRoutines('${cid}')">Reset to defaults</button></span></h2>
+    <div class="routine-list" id="${cid}-routines"></div>
+    <div class="gated-note" id="${cid}-gated"></div>
+    <div class="hidden-note" id="${cid}-hiddennote"></div>
+    <button class="add-btn" onclick="addRoutine('${cid}')">+ Add routine</button>
   </div>
-
+  </div>
+  <div class="tab-panel" data-tab="jobs">
   <div class="section">
     <h2>Job levels</h2>
     <div class="subhead">Combat &middot; cap 100 (Blue Mage 80, Beastmaster 50)</div>
@@ -1226,24 +1225,43 @@ function characterPageHTML(cid){
       </div>
     </div>
   </div>
-
-  <div class="section">
-    <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn" onclick="resetRoutines('${cid}')">Reset to defaults</button></span></h2>
-    <div class="routine-list" id="${cid}-routines"></div>
-    <div class="gated-note" id="${cid}-gated"></div>
-    <div class="hidden-note" id="${cid}-hiddennote"></div>
-    <button class="add-btn" onclick="addRoutine('${cid}')">+ Add routine</button>
   </div>
-
+  <div class="tab-panel" data-tab="societies">
+  <div class="section">
+    <h2>Allied society relations <span class="hint">rank + points reset to 0 on every rank-up; expansions unlock as your MSQ progress does</span></h2>
+    <div id="${cid}-societies"></div>
+  </div>
+  </div>
+  <div class="tab-panel" data-tab="mentor">
+  <div class="section">
+    <h2>Battle Mentor requirements
+      <span class="hint">1000 dungeons &middot; 1500 comms &middot; tank + healer + 1 dps role quest</span>
+    </h2>
+    <table style="margin-bottom:10px">
+      <tr><td style="width:120px"><input type="text" id="${cid}-duty" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,000 duty completions</td></tr>
+      <tr><td><input type="text" id="${cid}-comm" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,500 commendations</td></tr>
+    </table>
+    <div id="${cid}-roles"></div>
+  </div>
+  <div class="section">
+    <h2>Trade mentor requirements <span class="hint">300 collectables &middot; 100 synthesized &middot; a craft + gather job at 100</span></h2>
+    <table style="margin-bottom:10px">
+      <tr><td style="width:140px"><input type="text" id="${cid}-trade-collected" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 300 collectables gathered or caught</td><td style="width:60px" id="${cid}-trade-collected-done"></td></tr>
+      <tr><td><input type="text" id="${cid}-trade-made" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 100 collectables synthesized</td><td style="width:60px" id="${cid}-trade-made-done"></td></tr>
+    </table>
+    <div id="${cid}-trade-jobs"></div>
+  </div>
+  </div>
+  <div class="tab-panel" data-tab="notes">
   <div class="section">
     <h2>Custom trackers <span class="hint">achievements, mounts, minions, logs &mdash; add your own</span></h2>
     <div class="custom-list" id="${cid}-custom"></div>
     <button class="add-btn" onclick="addCustomRow('${cid}')">+ Add tracker</button>
   </div>
-
   <div class="section">
     <h2>Notes</h2>
     <textarea class="note-area" id="${cid}-notes" placeholder="Anything worth remembering — GC, retainers, sync points, whatever." oninput="scheduleSave()"></textarea>
+  </div>
   </div>`;
 }
 
@@ -1254,6 +1272,53 @@ function rebuildPages(){
   ).join('');
   DATA.chars.forEach(c=>renderChar(c.id));
   initCollapsible();
+  DATA.chars.forEach(c=>applyTab(c.id, activeTab(c.id)));
+}
+
+/* ---------- tabs ---------- */
+/* Sections are grouped rather than stacked, so reaching routines is a click
+   instead of a scroll past everything else. Each character remembers its own
+   tab, since two characters are usually being tracked for different reasons. */
+function activeTab(cid){
+  const saved = (DATA.ui.tabs||{})[cid];
+  const exists = saved && document.querySelector(`#page-${cid} .tab-panel[data-tab="${saved}"]`);
+  return exists ? saved : 'overview';
+}
+
+function switchTab(cid, tab){
+  DATA.ui.tabs = DATA.ui.tabs || {};
+  DATA.ui.tabs[cid] = tab;
+  applyTab(cid, tab);
+  scheduleSave();
+}
+
+/* ---------- theme ---------- */
+/* Every colour in the stylesheet resolves through a custom property, so a theme
+   is a variable swap on the root element rather than a second set of rules.
+   Poetic is the site's own look; Midnight and Daylight follow the plugin's
+   Classic and Native windows. */
+const THEMES = ['poetic','midnight','daylight'];
+function setTheme(name){
+  DATA.ui.theme = name;
+  applyTheme();
+  scheduleSave();
+}
+function applyTheme(){
+  const theme = DATA.ui.theme || 'poetic';
+  // The default palette lives in :root itself, so it is the absence of the
+  // attribute rather than a value of its own.
+  if(theme === 'poetic') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  document.querySelectorAll('.theme-switch button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.theme === theme);
+  });
+}
+
+function applyTab(cid, tab){
+  const page = document.getElementById('page-'+cid);
+  if(!page) return;
+  page.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.dataset.tab===tab));
+  page.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
 }
 
 /* ---------- per-character render/update ---------- */
@@ -2370,6 +2435,7 @@ function applyTmImport(){
 /* ---------- init ---------- */
 (async function init(){
   await loadData();
+  applyTheme();
   rebuildPages();
   renderSwitcher();
   updateSoundToggleUI();
