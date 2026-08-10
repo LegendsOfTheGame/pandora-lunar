@@ -95,6 +95,21 @@ const ALLIED_SOCIETIES = [
   ["Arkasodara","Endwalker",3,7,true], ["Omicron","Endwalker",3,7,true], ["Loporrit","Endwalker",3,7,true],
   ["Pelupelu","Dawntrail",3,7,true], ["Mamool Ja","Dawntrail",3,7,true], ["Yok Huy","Dawntrail",3,7,true]
 ];
+// Time Memoria sends societies keyed by the game's own BeastTribe row id, because at least
+// four spellings of each society are in circulation — the sheet says "sylphs", the wiki says
+// "Sylphs", this page says "Sylph". The id cannot drift; the wording can.
+//
+// Note 6/7/8: the plugin's ids run Vanu, Vath, Moogle while ALLIED_SOCIETIES above runs
+// Vanu Vanu, Moogle, Vath. Matching by position would quietly swap two societies, which is
+// exactly the kind of wrong-but-plausible result that never gets noticed.
+const TM_SOCIETY_IDS = {
+  1:"Amalj'aa", 2:"Sylph", 3:"Kobold", 4:"Sahagin", 5:"Ixal",
+  6:"Vanu Vanu", 7:"Vath", 8:"Moogle",
+  9:"Kojin", 10:"Ananta", 11:"Namazu",
+  12:"Pixie", 13:"Qitari", 14:"Dwarf",
+  15:"Arkasodara", 16:"Omicron", 17:"Loporrit",
+  18:"Pelupelu", 19:"Mamool Ja", 20:"Yok Huy"
+};
 function rankInfo(rankNum){ return SOCIETY_RANKS.find(r=>r.rank===rankNum) || SOCIETY_RANKS[0]; }
 function socId(name){ return name.replace(/[^a-zA-Z0-9]/g,''); }
 // The actual selectable ranks for a society — not a plain range, since the four early-cap
@@ -930,6 +945,7 @@ function newCharacter(name){
     server: {pdc:'', ldc:'', world:''},
     societies: Object.fromEntries(ALLIED_SOCIETIES.map(([name,exp,startRank])=>[name,{rank:startRank,points:0}])),
     intersocietalDone: {},
+    societiesSynced:false,
     tmSyncedAt: null, tmSyncedVersion: null, playtimeAsOf: null
   };
 }
@@ -938,7 +954,7 @@ function normalizeCharacter(c){
   if(!c.id) c.id = newId();
   if(typeof c.name !== 'string') c.name = '';
   ['duty','comm','tradeCollected','tradeMade'].forEach(k=>{ if(typeof c[k] !== 'number') c[k] = 0; });
-  ['roleTank','roleHealer','roleDps','showGated','showHidden','noPlugin'].forEach(k=>{ c[k] = !!c[k]; });
+  ['roleTank','roleHealer','roleDps','showGated','showHidden','noPlugin','societiesSynced'].forEach(k=>{ c[k] = !!c[k]; });
   if(typeof c.patch !== 'string') c.patch = '';
   if(typeof c.notes !== 'string') c.notes = '';
   if(!c.quests) c.quests = {};
@@ -1213,7 +1229,7 @@ function characterPageHTML(cid){
   <div class="section">
     <h2>Job levels</h2>
     <div class="subhead">Combat &middot; cap 100 (Blue Mage 80, Beastmaster 50)</div>
-    <table id="${cid}-combat" style="margin-bottom:20px"></table>
+    <div id="${cid}-combat" class="job-columns"></div>
     <div class="two-col">
       <div>
         <div class="subhead">Crafting &middot; cap 100</div>
@@ -1228,8 +1244,8 @@ function characterPageHTML(cid){
   </div>
   <div class="tab-panel" data-tab="societies">
   <div class="section">
-    <h2>Allied society relations <span class="hint">rank + points reset to 0 on every rank-up; expansions unlock as your MSQ progress does</span></h2>
-    <div id="${cid}-societies"></div>
+    <h2>Allied society relations <span class="hint-group"><span class="hint" id="${cid}-sochint">rank + points reset to 0 on every rank-up</span><button class="link-btn" id="${cid}-socmode-btn" onclick="toggleSocietiesManual('${cid}')">Edit manually</button></span></h2>
+    <div id="${cid}-societies" class="society-columns"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="mentor">
@@ -1550,7 +1566,25 @@ function updateQuestPercents(cid){
 }
 
 function renderJobTables(cid){
-  document.getElementById(cid+'-combat').innerHTML = COMBAT_JOBS.map(([name,role,capOverride])=>combatRowHTML(cid,name,role,capOverride)).join('');
+  // Grouped by role rather than one flat list of twenty-three, which is how the
+  // game's own job panel reads and how people think about it — "what are my
+  // healers on", not "what is job fourteen". Limited jobs keep their own group
+  // instead of sitting under Melee and Magical Ranged where the game files them:
+  // they cap early and cannot be levelled by the same means, so grouping them
+  // with jobs that can would invite the wrong comparison.
+  const ROLE_ORDER = ['Tank','Healer','Melee','Phys R','Mag R','Limited'];
+  const ROLE_LABEL = {
+    'Tank':'Tank', 'Healer':'Healer', 'Melee':'Melee DPS',
+    'Phys R':'Physical Ranged DPS', 'Mag R':'Magical Ranged DPS',
+    'Limited':'Limited &middot; Blue Mage 80, Beastmaster 50'
+  };
+
+  document.getElementById(cid+'-combat').innerHTML = ROLE_ORDER.map(role=>{
+    const rows = COMBAT_JOBS.filter(j=>j[1]===role)
+      .map(([name,r,capOverride])=>combatRowHTML(cid,name,r,capOverride)).join('');
+    if(!rows) return '';
+    return `<div class="job-role"><div class="subhead">${ROLE_LABEL[role]}</div><table>${rows}</table></div>`;
+  }).join('');
   document.getElementById(cid+'-craft').innerHTML = CRAFT_JOBS.map(name=>craftGatherRowHTML(cid,'craft',name)).join('');
   document.getElementById(cid+'-gather').innerHTML = GATHER_JOBS.map(name=>craftGatherRowHTML(cid,'gather',name)).join('');
   updateJobCaps(cid);
@@ -1569,15 +1603,26 @@ function societyRowHTML(cid, name){
   const cappedText = INTERSOCIETAL_QUESTS[exp]
     ? `capped &mdash; needs ${esc(INTERSOCIETAL_QUESTS[exp])}`
     : `capped &mdash; Bloodsworn is the max (no Intersocietal Quests exist for ${esc(exp)})`;
+  // Read-only once Time Memoria has sent the real figures: the plugin reads them from the
+  // game every time, so an editable control would only ever let someone make it wrong.
+  // Everyone else keeps the dropdowns — most of the FC does not run the plugin, and this
+  // page is for them too.
+  const rankCell = c.societiesSynced
+    ? `<span class="society-rank">${info.rank}. ${esc(info.name)}</span>`
+    : `<select id="${cid}-soc-rank-${id}" onchange="onSocietyRankChange('${cid}','${jsStr(name)}')">${rankOpts}</select>`;
+
+  const pointsCell = capped
+    ? `<span class="society-capped">${cappedText}</span>`
+    : c.societiesSynced
+      ? `<span class="society-points">${s.points}</span><span class="society-quota">/ ${info.quota}</span>`
+      : `<input type="text" id="${cid}-soc-points-${id}" value="${s.points}" style="text-align:right" oninput="onSocietyPointsInput('${cid}','${jsStr(name)}')">
+         <span class="society-quota">/ ${info.quota}</span>`;
+
   return `
     <div class="society-item">
       <span class="society-name">${esc(name)}</span>
-      <select id="${cid}-soc-rank-${id}" onchange="onSocietyRankChange('${cid}','${jsStr(name)}')">${rankOpts}</select>
-      ${capped
-        ? `<span class="society-capped">${cappedText}</span>`
-        : `<input type="text" id="${cid}-soc-points-${id}" value="${s.points}" style="text-align:right" oninput="onSocietyPointsInput('${cid}','${jsStr(name)}')">
-           <span class="society-quota">/ ${info.quota}</span>`
-      }
+      ${rankCell}
+      ${pointsCell}
     </div>`;
 }
 // True once every society in the group is sitting at rank 8 — the point-earning cap for all
@@ -1606,13 +1651,50 @@ function renderSocieties(cid){
   const have = patchValue(c.patch);
   const groups = [...new Set(ALLIED_SOCIETIES.map(a=>a[1]))]
     .filter(exp => !(have !== null && SOCIETY_EXP_GATE[exp] > have));
+  // Each expansion is one block rather than loose siblings, so the columns on a
+  // wide screen can never split a heading from the societies under it.
   const html = groups.map(exp => `
-    <div class="subhead">${esc(exp)}</div>
-    <div class="society-group">${ALLIED_SOCIETIES.filter(a=>a[1]===exp).map(a=>societyRowHTML(cid,a[0])).join('')}</div>
-    ${INTERSOCIETAL_QUESTS[exp] && intersocietalReady(c,exp) ? intersocietalRowHTML(cid,exp) : ''}
+    <div class="society-exp">
+      <div class="subhead">${esc(exp)}</div>
+      <div class="society-group">${ALLIED_SOCIETIES.filter(a=>a[1]===exp).map(a=>societyRowHTML(cid,a[0])).join('')}</div>
+      ${INTERSOCIETAL_QUESTS[exp] && intersocietalReady(c,exp) ? intersocietalRowHTML(cid,exp) : ''}
+    </div>
   `).join('');
   document.getElementById(cid+'-societies').innerHTML = html || '<div class="empty-hint">Set your MSQ progress above to see allied societies as you unlock them.</div>';
+  updateSocietyModeUi(cid);
 }
+// Hands the section back to manual entry, or back to the plugin's figures. Not a
+// destructive switch either way — the stored values are the same numbers; this only
+// decides who is allowed to write them.
+function toggleSocietiesManual(cid){
+  const c = getChar(cid);
+  if(!c) return;
+
+  collectAllInputs();
+  c.societiesSynced = !c.societiesSynced;
+  renderSocieties(cid);
+  scheduleSave();
+}
+
+// Reflects which mode the section is in, the same way the quest categories header does.
+function updateSocietyModeUi(cid){
+  const c = getChar(cid);
+  if(!c) return;
+
+  const hint = document.getElementById(`${cid}-sochint`);
+  const btn = document.getElementById(`${cid}-socmode-btn`);
+
+  if(hint) hint.textContent = c.societiesSynced
+    ? 'via Time Memoria'
+    : 'rank + points reset to 0 on every rank-up';
+
+  if(btn){
+    btn.textContent = c.societiesSynced ? 'Edit manually' : 'Use Time Memoria';
+    // Nothing to go back to until an import has actually happened.
+    btn.style.display = (c.societiesSynced || c.tmSyncedAt) ? '' : 'none';
+  }
+}
+
 function toggleIntersocietal(cid, exp){
   const c = getChar(cid);
   const id = 'inter-'+socId(exp);
@@ -2419,6 +2501,32 @@ function applyTmImport(){
         c.quests[key] = p.quests[key];
     });
     c.quests.overall = QUEST_SUBS.reduce((sum,key)=>sum+(c.quests[key]||0), 0);
+  }
+
+  // Allied societies. Matched on the game's row id rather than the name, and only
+  // applied when the payload actually carries the block — an older plugin build sends
+  // nothing here, and absence must not be read as "everything is zero".
+  //
+  // Rank 0 means never started, which this page represents as the society's own opening
+  // rank with no points, so that is what it becomes.
+  if(Array.isArray(p.societies) && p.societies.length){
+    p.societies.forEach(entry=>{
+      const name = TM_SOCIETY_IDS[entry && entry.id];
+      if(!name || !c.societies[name]) return;
+
+      const meta = ALLIED_SOCIETIES.find(a=>a[0]===name);
+      if(!meta) return;
+
+      const startRank = meta[2];
+      const rank = num(entry.rank);
+
+      c.societies[name].rank = rank > 0 ? rank : startRank;
+      c.societies[name].points = rank > 0 ? num(entry.points) : 0;
+    });
+
+    // Only set once a block has actually arrived, so a character synced by an older
+    // build keeps its dropdowns rather than being locked to values nobody sent.
+    c.societiesSynced = true;
   }
 
   c.tmSyncedAt = p.exported || new Date().toISOString();

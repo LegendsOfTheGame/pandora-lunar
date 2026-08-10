@@ -327,11 +327,57 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .subhead{font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-faint);margin:0 0 10px}
 .society-group{margin-bottom:18px}
 .society-group:last-child{margin-bottom:0}
+/* Three short columns do not need a 1360px row. Left to fill the container the
+   name ends up an inch from its own numbers, and the eye has to travel to pair
+   them up — the failure the wide layout was supposed to avoid, not cause. */
+/* Expansions side by side once there is room for two, since the rows are capped
+   and would otherwise leave half the section empty. Six expansions stacked in one
+   column is a lot of scrolling for a page whose point is seeing things at once. */
+@media (min-width:1100px){
+  .society-columns{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;align-items:start}
+
+  /* Two columns fill left-to-right, so items 1 and 2 are the top row and want no
+     rule above them. Everything from the third on begins a new row and does.
+     Adjacency would be wrong here — it would draw a line above whatever sits at
+     the top of the second column. */
+  .society-columns .society-exp + .society-exp{border-top:none;margin-top:0;padding-top:0}
+  .society-columns .society-exp:nth-child(n+3){
+    border-top:1px solid var(--accent,var(--gold));
+    margin-top:20px;padding-top:16px;
+  }
+}
+.society-exp{break-inside:avoid}
+
+/* Combat jobs by role, laid out the way the game's own job panel is. Same rules
+   as the societies above: blocks side by side once there is room, a rule between
+   rows rather than between columns. */
+@media (min-width:1100px){
+  .job-columns{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;align-items:start}
+  .job-columns .job-role + .job-role{border-top:none;margin-top:0;padding-top:0}
+  .job-columns .job-role:nth-child(n+3){
+    border-top:1px solid var(--accent,var(--gold));
+    margin-top:20px;padding-top:16px;
+  }
+}
+.job-role + .job-role{
+  border-top:1px solid var(--accent,var(--gold));
+  margin-top:20px;padding-top:16px;
+}
+.job-columns{margin-bottom:20px}
+
+/* Stacked in one column, every block after the first starts a new section. */
+.society-exp + .society-exp{
+  border-top:1px solid var(--accent,var(--gold));
+  margin-top:20px;padding-top:16px;
+}
+.society-group{max-width:660px}
 .society-item{
   display:grid;grid-template-columns:1fr 150px 64px 56px;gap:10px;align-items:center;
-  padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:13px;
+  padding:6px 8px;font-size:13px;border-radius:3px;
 }
-.society-item:last-child{border-bottom:none}
+/* Striping rather than rules between rows: with the row this short, alternating
+   bands tie a name to its numbers better than a line underneath both. */
+.society-item:nth-child(even){background:var(--panel2)}
 .society-name{color:var(--text-dim)}
 .society-item select{
   background:var(--ink);border:1px solid var(--line-soft);color:var(--text);
@@ -339,6 +385,11 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 }
 .society-item select:focus{outline:none;border-color:var(--accent,var(--gold))}
 .society-quota{color:var(--text-faint);font-family:var(--font-mono);font-size:12px}
+/* Read-only equivalents of the rank select and points input, for characters whose
+   figures come from the plugin. Sized and aligned to match so switching between the
+   two modes does not shift the row. */
+.society-rank{color:var(--text);font-size:12px}
+.society-points{color:var(--text);font-family:var(--font-mono);font-size:12px;text-align:right}
 .society-capped{
   grid-column:3 / span 2;color:var(--text-faint);font-size:11px;font-style:italic;
 }
