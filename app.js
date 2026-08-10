@@ -2317,7 +2317,7 @@ function importData(input){
 // the ledger has typed in, e.g. "Haurchefaunt Greystone") and never creates a new character —
 // linking is always an explicit choice from the characters already in this browser. Every
 // field is merge-only: only keys actually present in the payload are touched, everything
-// else (routines, notes, societies, quest totals, jobQuestsDone, ids, ...) is left alone.
+// else (routines, notes, ids, ...) is left alone.
 let tmImportPayload = null;
 
 function toggleTmImportPanel(){
@@ -2399,6 +2399,53 @@ function fmtTmJobVal(v){
   const pct = Math.round((v - lvl) * 1000) / 10;
   return `Lv ${lvl} (${pct.toFixed(1)}%)`;
 }
+// Class & job quests. The plugin sends a flat array of completed quest titles and nothing
+// else — it has no notion of which job this page files each one under, so the mapping is
+// done here from the lists this page already holds. Role quests fall out of the same pass
+// without being asked for: the game files them in the same category.
+//
+// Ticks only, never unticks. A title absent from the export means one of two things — not
+// done, or worded differently in one of the two places — and this page cannot tell those
+// apart. Ticking is right under either reading; unticking would silently erase hand-entered
+// history the first time a title was revised. The boxes stay clickable for everyone either
+// way, for the same reason the manual quest totals never went away.
+let TM_QUEST_KEYS = null;
+function tmQuestKeyIndex(){
+  if(TM_QUEST_KEYS) return TM_QUEST_KEYS;
+  const index = new Map();
+  const add = (name, key)=>{
+    const keys = index.get(name);
+    if(keys){ if(!keys.includes(key)) keys.push(key); }
+    else index.set(name, [key]);
+  };
+  // A title can land under more than one key — the Shadowbringers physical DPS chain is one
+  // list shared by every melee and ranged job — so each match is applied, not just the first.
+  Object.keys(JOB_QUESTS).forEach(job => JOB_QUESTS[job].forEach(q => add(q.name, job)));
+  Object.keys(ROLE_QUESTS).forEach(exp =>
+    Object.keys(ROLE_QUESTS[exp]).forEach(role =>
+      ROLE_QUESTS[exp][role].forEach(q => add(q.name, 'role:' + ROLE_TRACK_KEY[exp][role]))));
+  TM_QUEST_KEYS = index;
+  return index;
+}
+// Every (storage key, title) pair this export would newly tick on that character. Shared by
+// the preview and the merge so the two cannot disagree about what is about to happen.
+function tmClassQuestTicks(p, c){
+  const ticks = [];
+  if(!Array.isArray(p.classQuests)) return ticks;
+  const index = tmQuestKeyIndex();
+  p.classQuests.forEach(name=>{
+    const keys = index.get(name);
+    if(!keys) return;
+    keys.forEach(key=>{
+      if(!((c.jobQuestsDone[key] || {})[name])) ticks.push([key, name]);
+    });
+  });
+  return ticks;
+}
+function tmTickedCount(c){
+  return Object.keys(c.jobQuestsDone || {})
+    .reduce((sum,key)=>sum + Object.keys(c.jobQuestsDone[key]).filter(n=>c.jobQuestsDone[key][n]).length, 0);
+}
 function computeTmDiffHTML(p, c){
   const rows = [];
   if(typeof p.comm === 'number' && p.comm !== c.comm) rows.push(['Commendations', c.comm, p.comm]);
@@ -2446,6 +2493,11 @@ function computeTmDiffHTML(p, c){
       const storedOverall = c.quests.overall||0;
       if(projOverall !== storedOverall) rows.push(['Overall quests', storedOverall, projOverall]);
     }
+  }
+  const classTicks = tmClassQuestTicks(p, c);
+  if(classTicks.length){
+    const before = tmTickedCount(c);
+    rows.push(['Job quest checklist', `${before} ticked`, `${before + classTicks.length} ticked`]);
   }
   if(!rows.length) return '<div class="tm-diff-row"><span class="tm-diff-label">No changes — this character already matches the export.</span></div>';
   return rows.map(([label,from,to])=>
@@ -2528,6 +2580,13 @@ function applyTmImport(){
     // build keeps its dropdowns rather than being locked to values nobody sent.
     c.societiesSynced = true;
   }
+
+  // Class, job and role quests, ticked from the export's completed titles. Nothing is ever
+  // unticked here — see tmClassQuestTicks for why.
+  tmClassQuestTicks(p, c).forEach(([key,name])=>{
+    if(!c.jobQuestsDone[key]) c.jobQuestsDone[key] = {};
+    c.jobQuestsDone[key][name] = true;
+  });
 
   c.tmSyncedAt = p.exported || new Date().toISOString();
   c.tmSyncedVersion = p.version || null;
