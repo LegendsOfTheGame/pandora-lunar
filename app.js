@@ -940,6 +940,9 @@ function newCharacter(name){
     craft: Object.fromEntries(CRAFT_JOBS.map(n=>[n,0])),
     gather: Object.fromEntries(GATHER_JOBS.map(n=>[n,0])),
     tradeCollected:0, tradeMade:0,
+    tradeCollectedAsOf:null, tradeCollectedExact:true,
+    tradeMadeAsOf:null, tradeMadeExact:true,
+    dutyAsOf:null, dutyExact:true,
     custom: [], routines: seedRoutines(), routinesSeeded: true, notes: '',
     jobQuestsDone: {}, jobQuestsOpen: {},
     server: {pdc:'', ldc:'', world:''},
@@ -954,6 +957,12 @@ function normalizeCharacter(c){
   if(!c.id) c.id = newId();
   if(typeof c.name !== 'string') c.name = '';
   ['duty','comm','tradeCollected','tradeMade'].forEach(k=>{ if(typeof c[k] !== 'number') c[k] = 0; });
+  // Counts read out of an achievement can be a floor rather than an exact figure, and
+  // are only as current as the last time the player opened that window, so each carries
+  // its own reading age and exactness. Typed-in values are exact by definition and have
+  // no age — hence the true/null defaults.
+  ['tradeCollectedAsOf','tradeMadeAsOf','dutyAsOf'].forEach(k=>{ if(typeof c[k] !== 'string') c[k] = null; });
+  ['tradeCollectedExact','tradeMadeExact','dutyExact'].forEach(k=>{ if(typeof c[k] !== 'boolean') c[k] = true; });
   ['roleTank','roleHealer','roleDps','showGated','showHidden','noPlugin','societiesSynced'].forEach(k=>{ c[k] = !!c[k]; });
   if(typeof c.patch !== 'string') c.patch = '';
   if(typeof c.notes !== 'string') c.notes = '';
@@ -1068,15 +1077,17 @@ function collectCharInputs(cid){
   const c = getChar(cid); if(!c) return;
   const g = id => document.getElementById(id);
   if(g(`${cid}-name`)) c.name = g(`${cid}-name`).value;
-  if(g(`${cid}-duty`)) c.duty = num(g(`${cid}-duty`).value);
+  if(g(`${cid}-duty`)) setReadCount(c, 'duty', num(g(`${cid}-duty`).value));
   if(g(`${cid}-comm`)) c.comm = num(g(`${cid}-comm`).value);
   if(g(`${cid}-role-tank`)) c.roleTank = g(`${cid}-role-tank`).checked;
   if(g(`${cid}-role-healer`)) c.roleHealer = g(`${cid}-role-healer`).checked;
   if(g(`${cid}-role-dps`)) c.roleDps = g(`${cid}-role-dps`).checked;
   if(g(`${cid}-playtime-days`)) c.playtime.days = num(g(`${cid}-playtime-days`).value);
   if(g(`${cid}-playtime-hours`)) c.playtime.hours = num(g(`${cid}-playtime-hours`).value);
-  if(g(`${cid}-trade-collected`)) c.tradeCollected = num(g(`${cid}-trade-collected`).value);
-  if(g(`${cid}-trade-made`)) c.tradeMade = num(g(`${cid}-trade-made`).value);
+  // Only a real change clears the reading stamps, since this runs on every keystroke
+  // anywhere on the page.
+  if(g(`${cid}-trade-collected`)) setReadCount(c, 'tradeCollected', num(g(`${cid}-trade-collected`).value));
+  if(g(`${cid}-trade-made`)) setReadCount(c, 'tradeMade', num(g(`${cid}-trade-made`).value));
   if(g(`${cid}-patch`)) c.patch = g(`${cid}-patch`).value.trim();
   if(g(`${cid}-notes`)) c.notes = g(`${cid}-notes`).value;
   if(g(`${cid}-server-pdc`)) c.server.pdc = g(`${cid}-server-pdc`).value;
@@ -1254,8 +1265,8 @@ function characterPageHTML(cid){
       <span class="hint">1000 dungeons &middot; 1500 comms &middot; tank + healer + 1 dps role quest</span>
     </h2>
     <table style="margin-bottom:10px">
-      <tr><td style="width:120px"><input type="text" id="${cid}-duty" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,000 duty completions</td></tr>
-      <tr><td><input type="text" id="${cid}-comm" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,500 commendations</td></tr>
+      <tr><td style="width:120px"><input type="text" id="${cid}-duty" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,000 duty completions</td><td style="text-align:right" id="${cid}-duty-asof"></td></tr>
+      <tr><td><input type="text" id="${cid}-comm" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,500 commendations</td><td></td></tr>
     </table>
     <div id="${cid}-roles"></div>
   </div>
@@ -1361,6 +1372,13 @@ function renderCharDash(cid){
 
 function renderRoles(cid){
   const c = getChar(cid);
+  // Duties come from an achievement the same way the collectable counts do, so the
+  // figure is only as current as the last time that window was open. Commendations
+  // are read live and need no such note.
+  const asof = document.getElementById(cid+'-duty-asof');
+  if(asof) asof.innerHTML = c.dutyAsOf
+    ? `<span class="asof">read ${esc(fmtTmTimestamp(c.dutyAsOf))}${c.dutyExact === false ? ' &middot; at least' : ''}</span>`
+    : '';
   const tankReady = COMBAT_JOBS.filter(([n,r])=>r==="Tank").some(([n])=>c.combat[n]>=100);
   document.getElementById(cid+'-roles').innerHTML = `
     <div class="check-row"><label><input type="checkbox" id="${cid}-role-tank" ${c.roleTank?'checked':''} onchange="onMainInput('${cid}')"> Tank role quest &mdash; No Sleep Till Tuliyollal <span class="qname">${tankReady?'':'(needs a tank at 100)'}</span></label>${c.roleTank?'<span class="stamp">done</span>':'<span class="stamp pending">pending</span>'}</div>
@@ -1369,17 +1387,73 @@ function renderRoles(cid){
   `;
 }
 
+// Typing over an imported count makes it yours: the reading age and floor/exact flag
+// describe a number that is no longer on screen.
+function setReadCount(c, key, value){
+  if(c[key] === value) return;
+  c[key] = value;
+  c[key+'AsOf'] = null;
+  c[key+'Exact'] = true;
+}
+
+// Trade Mentor progress, as four equally weighted parts averaged into one figure.
+//
+// Each part is capped at 1: 173 synthesized of the 100 required is finished, not 173%
+// of the way there, and without the cap one overshooting requirement would mask three
+// untouched ones. The two job parts are a level out of 100 rather than a count.
+//
+// A count read from the plugin can be a floor (see tradeCollectedExact), which is why
+// this reports whether the figure it used was exact — "56.27%" off a floor is a
+// lower bound on progress, and the UI says so rather than implying precision.
+const TRADE_MENTOR_TARGETS = { collected: 300, made: 100 };
+function tradeMentorProgress(c){
+  const highest = (group, names) => names.reduce((max,n)=>Math.max(max, c[group][n]||0), 0);
+  const craftJob = highest('craft', CRAFT_JOBS);
+  const gatherJob = highest('gather', GATHER_JOBS);
+  const parts = [
+    { key:'collected', label:'Collectables gathered or caught', value: Math.min(1, (c.tradeCollected||0) / TRADE_MENTOR_TARGETS.collected) },
+    { key:'made',      label:'Collectables synthesized',        value: Math.min(1, (c.tradeMade||0) / TRADE_MENTOR_TARGETS.made) },
+    { key:'craft',     label:'Highest crafting job',            value: Math.min(1, craftJob / 100) },
+    { key:'gather',    label:'Highest gathering job',           value: Math.min(1, gatherJob / 100) }
+  ];
+  return {
+    parts,
+    craftJob, gatherJob,
+    overall: parts.reduce((sum,p)=>sum+p.value, 0) / parts.length,
+    exact: c.tradeCollectedExact !== false && c.tradeMadeExact !== false
+  };
+}
+
 function updateTradeMentorChecks(cid){
   const c = getChar(cid);
-  const craftJob = CRAFT_JOBS.find(name => (c.craft[name]||0) >= 100);
-  const gatherJob = GATHER_JOBS.find(name => (c.gather[name]||0) >= 100);
-  const row = (label, job) => `
+  const p = tradeMentorProgress(c);
+  // The job parts name whichever job is furthest along, since "64% of a crafting job"
+  // is meaningless without knowing which one the tracker settled on.
+  const best = (group, names) => names.reduce((a,b)=>(c[group][b]||0) > (c[group][a]||0) ? b : a, names[0]);
+  // A count read from the plugin says when it was read. It only refreshes while the
+  // Achievements window is open, so an undated figure and a fortnight-old one would
+  // otherwise look identical.
+  const age = at => at ? ` <span class="asof">read ${esc(fmtTmTimestamp(at))}</span>` : '';
+  const count = (n, exact) => `${(n||0).toLocaleString()}${exact === false ? '+' : ''}`;
+  const detail = {
+    collected: `<span class="qname">${count(c.tradeCollected, c.tradeCollectedExact)} / 300</span>${age(c.tradeCollectedAsOf)}`,
+    made: `<span class="qname">${count(c.tradeMade, c.tradeMadeExact)} / 100</span>${age(c.tradeMadeAsOf)}`,
+    craft: `<span class="qname">${esc(best('craft', CRAFT_JOBS))} ${fmtLvl(p.craftJob)} / 100</span>`,
+    gather: `<span class="qname">${esc(best('gather', GATHER_JOBS))} ${fmtLvl(p.gatherJob)} / 100</span>`
+  };
+  const rows = p.parts.map(part=>`
     <div class="check-row">
-      <span>${label}${job ? ` <span class="qname">(${job})</span>` : ''}</span>
-      ${job ? '<span class="stamp">done</span>' : '<span class="stamp pending">pending</span>'}
-    </div>`;
-  document.getElementById(cid+'-trade-jobs').innerHTML =
-    row('Crafting job at level 100', craftJob) + row('Gathering job at level 100', gatherJob);
+      <span>${part.label} ${detail[part.key]}</span>
+      <span class="trade-pct">${(part.value*100).toFixed(2)}%</span>
+      ${part.value >= 1 ? '<span class="stamp">done</span>' : '<span class="stamp pending">pending</span>'}
+    </div>`).join('');
+  const overall = `
+    <div class="check-row trade-overall">
+      <span>Trade mentor progress${p.exact ? '' : ' <span class="qname">(at least &mdash; a count is a floor)</span>'}</span>
+      <span class="trade-pct">${(p.overall*100).toFixed(3)}%</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" style="width:${(p.overall*100).toFixed(3)}%"></div></div>`;
+  document.getElementById(cid+'-trade-jobs').innerHTML = rows + overall;
   const collectedEl = document.getElementById(cid+'-trade-collected-done');
   const madeEl = document.getElementById(cid+'-trade-made-done');
   if(collectedEl) collectedEl.innerHTML = c.tradeCollected >= 300 ? '<span class="at-cap">done</span>' : '';
@@ -2409,6 +2483,42 @@ function fmtTmJobVal(v){
 // apart. Ticking is right under either reading; unticking would silently erase hand-entered
 // history the first time a title was revised. The boxes stay clickable for everyone either
 // way, for the same reason the manual quest totals never went away.
+// Collectable counts, which the game keeps only inside an achievement — the plugin can
+// see them when the player has opened the Achievements window and not otherwise, so a
+// side it has never read is simply absent and must not be read as zero.
+//
+// Each carries the moment it was seen and whether it is exact; a count taken from an
+// already-completed tier is a floor, because a finished tier reports its requirement
+// rather than the running total.
+function tmReadCounts(p){
+  const src = (p.collectables && typeof p.collectables === 'object') ? p.collectables : {};
+  return [
+    ['tradeCollected', 'Collectables gathered', src.gathered],
+    ['tradeMade', 'Collectables synthesized', src.crafted],
+    ['duty', 'Duties completed', p.duties]
+  ].filter(([,,entry]) => entry && typeof entry.count === 'number');
+}
+// What a payload would actually change about the collectable counts. Shared by the
+// preview and the merge so the two cannot disagree.
+//
+// A re-read that returns the same number is still a change: the count is only as good
+// as the moment it was taken, so a fresher reading of the same figure is worth having
+// and worth showing. Conversely an older payload is ignored outright — pasting last
+// week's export must not age a reading backwards.
+function tmReadCountChanges(p, c){
+  return tmReadCounts(p).map(([key,label,entry])=>{
+    const storedAt = c[key+'AsOf'] ? Date.parse(c[key+'AsOf']) : null;
+    const incomingAt = entry.asOf ? Date.parse(entry.asOf) : null;
+    if(storedAt && incomingAt && incomingAt < storedAt) return null;
+
+    const countChanged = entry.count !== c[key];
+    const ageChanged = (entry.asOf || null) !== (c[key+'AsOf'] || null);
+    if(!countChanged && !ageChanged) return null;
+
+    return { key, label, entry, countChanged };
+  }).filter(Boolean);
+}
+
 let TM_QUEST_KEYS = null;
 function tmQuestKeyIndex(){
   if(TM_QUEST_KEYS) return TM_QUEST_KEYS;
@@ -2494,6 +2604,12 @@ function computeTmDiffHTML(p, c){
       if(projOverall !== storedOverall) rows.push(['Overall quests', storedOverall, projOverall]);
     }
   }
+  tmReadCountChanges(p, c).forEach(({key,label,entry,countChanged})=>{
+    const shown = n => n + (entry.exact === false ? '+' : '');
+    if(countChanged) rows.push([label, c[key], shown(entry.count)]);
+    // Same number, newer reading — say so plainly rather than showing "7 → 7".
+    else rows.push([label + ', re-read', c[key+'AsOf'] ? fmtTmTimestamp(c[key+'AsOf']) : 'never read', fmtTmTimestamp(entry.asOf)]);
+  });
   const classTicks = tmClassQuestTicks(p, c);
   if(classTicks.length){
     const before = tmTickedCount(c);
@@ -2580,6 +2696,16 @@ function applyTmImport(){
     // build keeps its dropdowns rather than being locked to values nobody sent.
     c.societiesSynced = true;
   }
+
+  // Collectable counts, with the age and exactness of each reading. Taken as sent rather
+  // than take-the-greater: unlike quest totals these can legitimately be revised downward
+  // by a better reading, and the age travelling with the number is what makes a lower
+  // figure interpretable instead of alarming.
+  tmReadCountChanges(p, c).forEach(({key,entry})=>{
+    c[key] = entry.count;
+    c[key+'AsOf'] = typeof entry.asOf === 'string' ? entry.asOf : null;
+    c[key+'Exact'] = entry.exact !== false;
+  });
 
   // Class, job and role quests, ticked from the export's completed titles. Nothing is ever
   // unticked here — see tmClassQuestTicks for why.
