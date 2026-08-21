@@ -570,8 +570,25 @@ const ACCENTS = ['gold','teal','rose'];
 // Sourced from ffxiv.consolegameswiki.com's Daily and Weekly Checklist page. Seeded onto
 // every new character so the known list is there from the start — hide (not delete)
 // whatever doesn't apply to you, same idea as Haven's "I'd never do Faux Hollows as Grey."
-// No `requires` patch gates pre-filled — real per-item unlock patches weren't verified,
-// so everything defaults to always-visible; add gating yourself if you want it.
+// `requires` is pre-filled from the wiki's own Unlock/Requirements sections, walked back
+// to the main scenario quest each feature actually sits behind. It is the MSQ patch you
+// must be at, NOT the patch the content shipped in — Faux Hollows arrived in 5.3 but only
+// asks for Shadowbringers, so it reads 5.0. Getting that backwards would hide content from
+// people who can already do it.
+// Every value is the plain patch of the gating quest, never nudged up or down. WHICH of the
+// two MSQ figures it is measured against is SEED_CLEARED_GATES' job, further down — don't
+// encode that distinction by fudging the number.
+// Blank means "no main scenario gate worth expressing". Everything that resolved to 2.0 is
+// left blank deliberately: a Grand Company rank, an Envoy quest or "The Ultimate Weapon"
+// gates nobody who has a patch number to type, and writing 2.0 into twenty rows would bury
+// the gates that matter. Level requirements are not MSQ gates and aren't encoded here
+// either — Wondrous Tails wants level 60 as well as 3.0, and the level half stays yours.
+// Checked and deliberately left blank: Duty Roulette, Tank You, Treasure Hunt, Retainer
+// Ventures, Mini/Jumbo Cactpot, Fashion Report, Challenge Log, Grand Company turn-in,
+// Squadron training and missions, both Hunt rows, Masked Carnivale (Blue Mage asks only
+// for "The Ultimate Weapon"), Morbid Motivation (Zodiac, level 50), Allied Society
+// (earliest tribe is Amalj'aa, behind the 2.0 MSQ "In Pursuit of the Past"), and capping
+// tomestones — which drop from level 60+ alliance raids too, so its floor is a level.
 // Schedule mapping is best-effort where the source didn't map cleanly to a fixed reset:
 // Squadron Training and Retainer Ventures run on their own per-action timers, approximated
 // to the closest fixed daily reset — adjust the dropdown per-item if the timing bugs you.
@@ -586,45 +603,46 @@ const ACCENTS = ['gold','teal','rose'];
 // finished, hide it the same way as anything else that's stopped being relevant.
 // Third value is a stable key, separate from the editable label — the one-time backfill
 // below matches on this, not on label text, so renaming "Duty Roulette" to something else
-// doesn't make it look "missing" and spawn a duplicate on the next load.
+// doesn't make it look "missing" and spawn a duplicate on the next load. Fourth is the MSQ
+// gate described above; the quest it was read from is named beside it.
 const DEFAULT_ROUTINES = [
-  ["Allied Society Quests","daily15","allied-society"],
-  ["Duty Roulette","daily15","duty-roulette"],
-  ["Morbid Motivation (Mysterious Maps - High Level Dungeons)","daily15","morbid-motivation"],
-  ["Cut from a Different Cloth (Singing Clusters)","daily15","cut-different-cloth"],
-  ["The Will to Resist (Resistance Weapon)","daily15","will-to-resist"],
-  ["Aether, Aether, Everywhere (Phantom Weapon)","daily15","aether-everywhere"],
-  ["Tank You (Tank Roulette — any tank job)","daily15","tank-you"],
-  ["Mini Cactpot","daily15","mini-cactpot"],
-  ["The Hunt (Daily Marks)","daily15","hunt-daily"],
-  ["Grand Company Turn-in","daily20","gc-turnin"],
-  ["Treasure Hunt (map every 18h)","cooldown18h","treasure-hunt"],
-  ["Adventurer Squadron Training","daily20","squadron-training"],
-  ["Cosmic Exploration Daily Successes","daily09","cosmic-exploration"],
-  ["Retainer Ventures","cooldown18h","retainer-ventures"],
-  ["Dancing Mad (Ultimate)","weeklyTue","dancing-mad"],
-  ["AAC Heavyweight M4","weeklyTue","aac-m4"],
-  ["Windurst: The Third Walk","weeklyTue","windurst"],
-  ["YoRHa Epilogue Quest Chain (one-time unlock)","weeklyTue","yorha-epilogue"],
-  ["Cap Allagan Tomestone of Mnemonics","weeklyTue","tomestone-cap"],
-  ["AAC Heavyweight (Savage)","weeklyTue","aac-savage"],
-  ["Challenge Log","weeklyTue","challenge-log"],
-  ["Seeking Inspiration (Anima Weapon)","weeklyTue","seeking-inspiration"],
-  ["Wondrous Tails","weeklyTue","wondrous-tails"],
-  ["Jumbo Cactpot","weeklySat","jumbo-cactpot"],
-  ["Hunt — B-Rank Elite Marks","weeklyTue","hunt-brank"],
-  ["Masked Carnivale / Blue Mage Log","weeklyTue","masked-carnivale"],
-  ["Fashion Report","weeklyTue","fashion-report"],
-  ["Custom Deliveries","weeklyTue","custom-deliveries"],
-  ["Doman Enclave Reconstruction","weeklyTue","doman-enclave"],
-  ["Squadron Missions","weeklyTue","squadron-missions"],
-  ["Faux Hollows","weeklyTue","faux-hollows"],
-  ["Island Sanctuary Weekly","weeklyTue","island-sanctuary"],
-  ["Bozjan Frontier (Delubrum Reginae)","weeklyTue","bozjan-frontier"]
+  ["Allied Society Quests","daily15","allied-society",""],
+  ["Duty Roulette","daily15","duty-roulette",""],
+  ["Morbid Motivation (Mysterious Maps - High Level Dungeons)","daily15","morbid-motivation",""],
+  ["Cut from a Different Cloth (Singing Clusters)","daily15","cut-different-cloth","3.0"],   // Anima line, Idyllshire
+  ["The Will to Resist (Resistance Weapon)","daily15","will-to-resist","5.0"],               // Hail to the Queen → Shadowbringers
+  ["Aether, Aether, Everywhere (Phantom Weapon)","daily15","aether-everywhere","7.0"],       // One Last Hurrah → Dawntrail
+  ["Tank You (Tank Roulette — any tank job)","daily15","tank-you",""],
+  ["Mini Cactpot","daily15","mini-cactpot",""],
+  ["The Hunt (Daily Marks)","daily15","hunt-daily",""],
+  ["Grand Company Turn-in","daily20","gc-turnin",""],
+  ["Treasure Hunt (map every 18h)","cooldown18h","treasure-hunt",""],
+  ["Adventurer Squadron Training","daily20","squadron-training",""],
+  ["Cosmic Exploration Daily Successes","daily09","cosmic-exploration","6.0"],               // A Cosmic Homecoming → Endwalker
+  ["Retainer Ventures","cooldown18h","retainer-ventures",""],
+  ["Dancing Mad (Ultimate)","weeklyTue","dancing-mad","7.0"],                                // level 100, so Dawntrail
+  ["AAC Heavyweight M4","weeklyTue","aac-m4","7.0"],                                         // Dawntrail raid tier
+  ["Windurst: The Third Walk","weeklyTue","windurst","7.0"],                                 // An Otherworldly Encounter → Dawntrail
+  ["YoRHa Epilogue Quest Chain (one-time unlock)","weeklyTue","yorha-epilogue","5.0"],       // YoRHa series → Shadowbringers
+  ["Cap Allagan Tomestone of Mnemonics","weeklyTue","tomestone-cap",""],
+  ["AAC Heavyweight (Savage)","weeklyTue","aac-savage","7.0"],                               // Dawntrail raid tier
+  ["Challenge Log","weeklyTue","challenge-log",""],
+  ["Seeking Inspiration (Anima Weapon)","weeklyTue","seeking-inspiration","3.0"],            // Anima line, Idyllshire
+  ["Wondrous Tails","weeklyTue","wondrous-tails","3.0"],                                     // Keeping Up with the Aliapohs, Idyllshire
+  ["Jumbo Cactpot","weeklySat","jumbo-cactpot",""],
+  ["Hunt — B-Rank Elite Marks","weeklyTue","hunt-brank",""],
+  ["Masked Carnivale / Blue Mage Log","weeklyTue","masked-carnivale",""],
+  ["Fashion Report","weeklyTue","fashion-report",""],
+  ["Custom Deliveries","weeklyTue","custom-deliveries","3.0"],                               // earliest client is Zhloe, Idyllshire
+  ["Doman Enclave Reconstruction","weeklyTue","doman-enclave","4.2"],                        // Elation and Trepidation
+  ["Squadron Missions","weeklyTue","squadron-missions",""],
+  ["Faux Hollows","weeklyTue","faux-hollows","5.0"],                                         // Fantastic Mr. Faux → Shadowbringers
+  ["Island Sanctuary Weekly","weeklyTue","island-sanctuary","6.0"],                          // Seeking Sanctuary → Endwalker
+  ["Bozjan Frontier (Delubrum Reginae)","weeklyTue","bozjan-frontier","5.0"]                 // Hail to the Queen → Shadowbringers
 ];
 function seedRoutines(){
-  return DEFAULT_ROUTINES.map(([label,schedId,seedKey])=>(
-    { id:newId(), label, schedId, lastDone:null, requires:'', hidden:false, seedKey }
+  return DEFAULT_ROUTINES.map(([label,schedId,seedKey,requires])=>(
+    { id:newId(), label, schedId, lastDone:null, requires:requires||'', hidden:false, seedKey }
   ));
 }
 // One-time backfill for characters that existed before this seed list did (or before an
@@ -633,9 +651,9 @@ function seedRoutines(){
 // the user deleted that routine on purpose. Runs once per character via routinesSeeded.
 function backfillSeedRoutines(c){
   const have = new Set(c.routines.map(r=>r.seedKey).filter(Boolean));
-  DEFAULT_ROUTINES.forEach(([label,schedId,seedKey])=>{
+  DEFAULT_ROUTINES.forEach(([label,schedId,seedKey,requires])=>{
     if(!have.has(seedKey)){
-      c.routines.push({ id:newId(), label, schedId, lastDone:null, requires:'', hidden:false, seedKey });
+      c.routines.push({ id:newId(), label, schedId, lastDone:null, requires:requires||'', hidden:false, seedKey });
     }
   });
   c.routinesSeeded = true;
@@ -674,6 +692,19 @@ function applySeedLabelFixes(c){
     if(r && r.label===from) r.label = to;
   });
   c.seedLabelFixesApplied = true;
+}
+// Seeded routines predating the MSQ gates above carry requires:'' — the only value they
+// could ever have had, since nothing pre-filled the field. So an empty one is untouched
+// default, never a considered choice, and filling it in can't clobber anything: same
+// only-if-still-default reasoning as the two fixes above. A gate you then clear yourself
+// stays cleared, because this runs once per character.
+function applySeedRequires(c){
+  DEFAULT_ROUTINES.forEach(([,,seedKey,requires])=>{
+    if(!requires) return;
+    const r = c.routines.find(r=>r.seedKey===seedKey);
+    if(r && !r.requires) r.requires = requires;
+  });
+  c.seedRequiresApplied = true;
 }
 
 function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHEDULES[0]; }
@@ -870,6 +901,72 @@ function isGated(item, patchStr){
   if(have === null) return false;
   return need > have;
 }
+// Two MSQ figures, and picking the wrong one is wrong in both directions.
+// `patch` is msqPatch.reached — the last patch whose OPENING quest is done. `patchCleared`
+// is msqPatch.cleared — the last patch whose CLOSING quest is done.
+// Most of these gates name an expansion finale (verified against Time Memoria's toc.json:
+// Shadowbringers, Endwalker and Dawntrail are each their patch's Final quest), so what they
+// really ask is "have you FINISHED that expansion" — a cleared question. Measuring those
+// against reached shows Cosmic Exploration to someone twenty quests into Endwalker; nudging
+// the number to 6.1 instead hides it from someone who finished Endwalker and then paused,
+// which is worse, because pausing after an expansion is an ordinary way to play. Neither
+// dodge is needed: the plugin sends both figures, so ask the right one.
+// Gates naming a quest INSIDE a patch stay on reached — Doman Enclave asks for Elation and
+// Trepidation, which is not 4.2's Final (Rise of a New Sun is), and the four Idyllshire rows
+// sit partway through 3.0. Those can't be expressed exactly either way, and reached errs
+// toward showing slightly early, which is the right way round.
+const SEED_CLEARED_GATES = new Set([
+  'will-to-resist','bozjan-frontier','faux-hollows','yorha-epilogue',  // Shadowbringers
+  'cosmic-exploration','island-sanctuary',                             // Endwalker
+  'aether-everywhere','windurst','dancing-mad','aac-m4','aac-savage'   // Dawntrail
+]);
+// A patch typed by hand is a reached figure — that's the natural reading of "where am I in
+// the story", and it's the only box the UI offers. So when cleared is absent, fall back to
+// reached: it can only show something slightly early, never hide something you can do.
+function gatePatchFor(item, c){
+  return (SEED_CLEARED_GATES.has(item.seedKey) && c.patchCleared) ? c.patchCleared : c.patch;
+}
+
+/* ---------- job-unlock gating ---------- */
+// The second reason a routine can't apply: the job it needs isn't unlocked at all. Blue
+// Mage is the obvious one — the Masked Carnivale row is meaningless to a character who
+// has never picked the job up.
+// This lives in code keyed by seedKey rather than in the row, because "any tank" or "any
+// crafter" isn't something you can write in a patch-number box. A routine you add by hand
+// has no seedKey and so is never job-gated — the hide button is still yours.
+// UNLOCK ONLY, never a level threshold. The Carnivale really wants Blue Mage 50 and Custom
+// Deliveries a level 60 crafter, but hiding a routine from someone levelling toward it is
+// worse than showing one they can't quite do yet. Level 0 is the only state that means
+// "this cannot apply as things stand".
+const TANK_JOBS = COMBAT_JOBS.filter(([,role])=>role==='Tank').map(([name])=>name);
+const LAND_AND_HAND = CRAFT_JOBS.concat(GATHER_JOBS);
+const SEED_JOB_GATES = {
+  'masked-carnivale':   { need:'Blue Mage',             jobs:['Blue Mage'] },
+  'tank-you':           { need:'a tank job',            jobs:TANK_JOBS },
+  'gc-turnin':          { need:'a crafter or gatherer', jobs:LAND_AND_HAND },
+  'custom-deliveries':  { need:'a crafter or gatherer', jobs:LAND_AND_HAND },
+  'cosmic-exploration': { need:'a crafter or gatherer', jobs:LAND_AND_HAND }
+};
+// Absent means "no data", never "zero" — the same rule the plugin's export contract states.
+// A character whose job table is entirely untouched hasn't told us they lack Blue Mage,
+// only that they haven't typed anything, so job gating stays off until some level exists.
+function hasJobData(c){
+  return [c.combat, c.craft, c.gather].some(t => Object.values(t||{}).some(v => v > 0));
+}
+// One answer for both reasons a routine is locked, so callers don't have to ask twice and
+// can't get the two out of step. Patch is checked first: it's the one the player can see
+// and edit on the row itself.
+function routineLock(item, c){
+  if(isGated(item, gatePatchFor(item, c))){
+    const done = SEED_CLEARED_GATES.has(item.seedKey) && c.patchCleared;
+    return { reason:'patch', need:'patch ' + item.requires + (done ? ' finished' : '') };
+  }
+  const gate = SEED_JOB_GATES[item.seedKey];
+  if(!gate || !hasJobData(c)) return null;
+  if(gate.jobs.some(job => jobLevelOf(c, job) >= 1)) return null;
+  return { reason:'job', need: gate.need };
+}
+function isLocked(item, c){ return routineLock(item, c) !== null; }
 
 /* ---------- job-level ranking ---------- */
 // Which job to level next: lowest among those started (level>=1, so unstarted jobs at 0
@@ -929,7 +1026,7 @@ function newCharacter(name){
     id: newId(),
     name: name || '',
     duty:0, comm:0, roleTank:false, roleHealer:false, roleDps:false,
-    playtime:{days:0,hours:0}, patch:'', showGated:false, showHidden:false,
+    playtime:{days:0,hours:0}, patch:'', patchCleared:'', showGated:false, showHidden:false,
     noPlugin:false,
     quests: Object.fromEntries(QUEST_CATS.map(([k])=>[k,0])),
     questTotals: Object.fromEntries(QUEST_CATS.map(([k,l,t])=>[k,t])),
@@ -965,6 +1062,7 @@ function normalizeCharacter(c){
   ['tradeCollectedExact','tradeMadeExact','dutyExact'].forEach(k=>{ if(typeof c[k] !== 'boolean') c[k] = true; });
   ['roleTank','roleHealer','roleDps','showGated','showHidden','noPlugin','societiesSynced'].forEach(k=>{ c[k] = !!c[k]; });
   if(typeof c.patch !== 'string') c.patch = '';
+  if(typeof c.patchCleared !== 'string') c.patchCleared = '';
   if(typeof c.notes !== 'string') c.notes = '';
   if(!c.quests) c.quests = {};
   if(!c.combat) c.combat = {};
@@ -1007,6 +1105,7 @@ function normalizeCharacter(c){
   if(!c.routinesSeeded) backfillSeedRoutines(c);
   if(!c.seedScheduleFixesApplied) applySeedScheduleFixes(c);
   if(!c.seedLabelFixesApplied) applySeedLabelFixes(c);
+  if(!c.seedRequiresApplied) applySeedRequires(c);
   if(!c.societies || typeof c.societies !== 'object') c.societies = {};
   ALLIED_SOCIETIES.forEach(([name,exp,startRank])=>{
     const s = c.societies[name];
@@ -2010,7 +2109,8 @@ function routineHTML(cid, item){
   const now = new Date();
   const sched = schedById(item.schedId);
   const done = isRoutineDone(item, now);
-  const gated = isGated(item, getChar(cid).patch);
+  const lock = routineLock(item, getChar(cid));
+  const gated = lock !== null;
   const dueMs = nextResetInstant(sched, now, item.lastDone) - now.getTime();
   const opts = RESET_SCHEDULES.map(s=>`<option value="${s.id}"${s.id===item.schedId?' selected':''}>${esc(s.label)}</option>`).join('');
   return `
@@ -2019,7 +2119,7 @@ function routineHTML(cid, item){
       <input type="text" class="routine-label" id="${cid}-rt-label-${item.id}" value="${esc(item.label)}" placeholder="e.g. Ixali dailies" oninput="onRoutineInput('${cid}','${item.id}')">
       <select id="${cid}-rt-sched-${item.id}" onchange="onRoutineSchedChange('${cid}','${item.id}')">${opts}</select>
       <input type="text" class="routine-req" id="${cid}-rt-req-${item.id}" value="${esc(item.requires||'')}" placeholder="any" title="Patch this unlocks in — blank means always available" oninput="onRoutineInput('${cid}','${item.id}')">
-      <span class="routine-due" id="${cid}-rt-due-${item.id}">${gated?'locked':fmtDue(dueMs)}</span>
+      <span class="routine-due" id="${cid}-rt-due-${item.id}"${lock?` title="needs ${esc(lock.need)}"`:''}>${gated?'locked':fmtDue(dueMs)}</span>
       <button class="hide-btn${item.hidden?' is-hidden':''}" id="${cid}-rt-hidebtn-${item.id}" title="${item.hidden?'Unhide this routine':"Hide — doesn't apply to this character"}" onclick="toggleRoutineHidden('${cid}','${item.id}')">${item.hidden?'◉':'○'}</button>
       <button class="remove-btn" title="Remove this routine" onclick="removeRoutine('${cid}','${item.id}')">&times;</button>
     </div>`;
@@ -2032,7 +2132,7 @@ function renderRoutines(cid){
   if(patchEl && patchEl.value !== (c.patch||'')) patchEl.value = c.patch || '';
   const all = c.routines;
   const visible = all.filter(r =>
-    (c.showGated || !isGated(r, c.patch)) && (c.showHidden || !r.hidden)
+    (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden)
   );
   if(!visible.length){
     box.innerHTML = `<div class="empty-hint">${all.length ? 'Everything here is hidden or needs a later patch.' : 'Nothing yet &mdash; add the things you repeat, like Ixali dailies or GC supply missions.'}</div>`;
@@ -2051,12 +2151,25 @@ function renderGatedNote(cid){
   const el = document.getElementById(cid+'-gated');
   if(!el) return;
   const c = getChar(cid);
-  const hidden = c.routines.filter(r=>isGated(r, c.patch));
-  if(!hidden.length && !c.showGated){ el.innerHTML=''; return; }
-  const lowest = hidden.map(r=>patchValue(r.requires)).filter(v=>v!==null).sort((a,b)=>a-b)[0];
-  const label = hidden.length
-    ? `${hidden.length} hidden &mdash; ${hidden.length===1?'needs':'need'} a later patch${lowest!==undefined?` (next at ${lowest})`:''}`
-    : 'showing patch-locked routines';
+  const locks = c.routines.map(r=>routineLock(r, c)).filter(Boolean);
+  if(!locks.length && !c.showGated){ el.innerHTML=''; return; }
+  // Both reasons share one note and one toggle, unlike the user-hidden note below: "you
+  // can't do this yet" is a single idea to the reader, whichever half of the data says so.
+  // The reasons are still named, because "reach 7.0" and "level a crafter" are different
+  // things to go and do.
+  const byPatch = locks.filter(l=>l.reason==='patch').length;
+  const byJob   = locks.length - byPatch;
+  // Sort on the parsed number, display the string the player typed — patchValue('6.0') is
+  // the float 6, which renders as "next at 6" and reads like a different patch entirely.
+  const next = c.routines.filter(r=>isGated(r, gatePatchFor(r, c)))
+    .map(r=>({ n:patchValue(r.requires), s:r.requires }))
+    .filter(x=>x.n!==null).sort((a,b)=>a.n-b.n)[0];
+  const reasons = [];
+  if(byPatch) reasons.push(`a later patch${next?` (next at ${esc(next.s)})`:''}`);
+  if(byJob) reasons.push(`a job you haven't unlocked`);
+  const label = locks.length
+    ? `${locks.length} hidden &mdash; ${locks.length===1?'needs':'need'} ${reasons.join(' or ')}`
+    : 'showing locked routines';
   el.innerHTML = `<span>${label}</span><button class="link-btn" onclick="toggleShowGated('${cid}')">${c.showGated?'hide them':'show them'}</button>`;
 }
 // Separate from the patch-gated note on purpose — "locked until a patch" and "hidden
@@ -2171,13 +2284,17 @@ function onRoutineInput(cid, id){
   const c = getChar(cid);
   const item = c.routines.find(i=>i.id===id);
   if(item){
-    const gated = isGated(item, c.patch);
+    const lock = routineLock(item, c);
+    const gated = lock !== null;
     const wrap = document.getElementById(`${cid}-rt-item-${id}`);
     const chk  = document.getElementById(`${cid}-rt-chk-${id}`);
     const due  = document.getElementById(`${cid}-rt-due-${id}`);
     if(wrap) wrap.classList.toggle('gated', gated);
     if(chk) chk.disabled = gated;
-    if(due && gated) due.textContent = 'locked';
+    if(due){
+      if(gated){ due.textContent = 'locked'; due.title = 'needs ' + lock.need; }
+      else due.removeAttribute('title');
+    }
   }
   refreshRoutines(cid);
   renderGatedNote(cid);
@@ -2188,7 +2305,8 @@ function refreshRoutines(cid){
   const c = getChar(cid);
   c.routines.forEach(item=>{
     const sched = schedById(item.schedId);
-    const gated = isGated(item, c.patch);
+    const lock = routineLock(item, c);
+    const gated = lock !== null;
     const done = !gated && isRoutineDone(item, now);
     const chk  = document.getElementById(`${cid}-rt-chk-${item.id}`);
     const wrap = document.getElementById(`${cid}-rt-item-${item.id}`);
@@ -2196,10 +2314,11 @@ function refreshRoutines(cid){
     if(chk){ chk.checked = done; chk.disabled = gated; }
     if(wrap){ wrap.classList.toggle('done', done); wrap.classList.toggle('gated', gated); }
     if(due){
-      if(gated){ due.textContent='locked'; due.classList.remove('soon'); }
+      if(gated){ due.textContent='locked'; due.title = 'needs ' + lock.need; due.classList.remove('soon'); }
       else{
         const ms = nextResetInstant(sched, now, item.lastDone) - now.getTime();
         due.textContent = fmtDue(ms);
+        due.removeAttribute('title');
         due.classList.toggle('soon', ms < 3600000);
       }
     }
@@ -2574,6 +2693,13 @@ function computeTmDiffHTML(p, c){
       rows.push(['MSQ progress', c.patch || '(none)', p.msqPatch.reached]);
     }
   }
+  if(p.msqPatch && typeof p.msqPatch.cleared === 'string'){
+    const imported = patchValue(p.msqPatch.cleared);
+    const stored = patchValue(c.patchCleared);
+    if(imported !== null && (stored === null || imported > stored)){
+      rows.push(['MSQ finished through', c.patchCleared || '(none)', p.msqPatch.cleared]);
+    }
+  }
   ['combat','craft','gather'].forEach(group=>{
     if(!p[group]) return;
     Object.keys(p[group]).forEach(job=>{
@@ -2640,6 +2766,13 @@ function applyTmImport(){
     const imported = patchValue(p.msqPatch.reached);
     const stored = patchValue(c.patch);
     if(imported !== null && (stored === null || imported > stored)) c.patch = p.msqPatch.reached;
+  }
+  // Same greater-of rule, same reason: cleared is a floor too — until a new patch's
+  // bookends are recorded, a character who finished it still reports the previous one.
+  if(p.msqPatch && typeof p.msqPatch.cleared === 'string'){
+    const imported = patchValue(p.msqPatch.cleared);
+    const stored = patchValue(c.patchCleared);
+    if(imported !== null && (stored === null || imported > stored)) c.patchCleared = p.msqPatch.cleared;
   }
   if(p.playtime && typeof p.playtime === 'object'){
     if(typeof p.playtime.days === 'number') c.playtime.days = p.playtime.days;
