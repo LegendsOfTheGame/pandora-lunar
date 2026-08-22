@@ -612,7 +612,7 @@ const DEFAULT_ROUTINES = [
   ["Cut from a Different Cloth (Singing Clusters)","daily15","cut-different-cloth","3.0"],   // Anima line, Idyllshire
   ["The Will to Resist (Resistance Weapon)","daily15","will-to-resist","5.0"],               // Hail to the Queen → Shadowbringers
   ["Aether, Aether, Everywhere (Phantom Weapon)","daily15","aether-everywhere","7.0"],       // One Last Hurrah → Dawntrail
-  ["Tank You (Tank Roulette — any tank job)","daily15","tank-you",""],
+  ["Tank You (Leveling or High-level roulette, as a tank)","daily15","tank-you",""],
   ["Mini Cactpot","daily15","mini-cactpot",""],
   ["The Hunt (Daily Marks)","daily15","hunt-daily",""],
   ["Grand Company Turn-in","daily20","gc-turnin",""],
@@ -677,21 +677,35 @@ function applySeedScheduleFixes(c){
   });
   c.seedScheduleFixesApplied = true;
 }
-// Same one-time, only-if-still-default safety as SEED_SCHEDULE_FIXES, but for wording
-// corrections instead of schedule corrections — a user's own rename is never touched.
+// Same only-if-still-default safety as SEED_SCHEDULE_FIXES, but for wording corrections —
+// a user's own rename is never touched, because nothing matches `from` any more.
+// Unlike the schedule fixes this list runs on EVERY load, not once per character. A label
+// can be wrong twice: "Tank You" below has been corrected two ways, and a one-time flag
+// meant anyone who took the first correction could never receive the second. Re-running is
+// free and idempotent — the `from` guard is what protects a rename, not the flag ever was.
+// So a fix added here reaches existing characters. Chain both old spellings to the new one.
 const SEED_LABEL_FIXES = [
   { seedKey:'morbid-motivation', from:'Morbid Motivation (Mysterious Maps)', to:'Morbid Motivation (Mysterious Maps - High Level Dungeons)' },
-  // "Tank You" is a per-job achievement family (Tank You, Warrior IV; Tank You, Paladin IV;
-  // etc.) but the underlying activity — Tank Roulette — counts toward whichever tank job
-  // you're queuing as, not one specific job. Clarified so it doesn't read as Warrior-only.
-  { seedKey:'tank-you', from:'Tank You (Tank Roulette)', to:'Tank You (Tank Roulette — any tank job)' }
+  // "Tank You" had two wrong labels. There is no roulette called "Tank Roulette" — the two
+  // that qualify are Duty Roulette: Leveling and Duty Roulette: High-level Dungeons, run as
+  // a tank. And "any tank job" was wrong the other way: this is a per-job chain (Tank You,
+  // Paladin I; Tank You, Warrior I; …) and credit goes to the job you actually played, so a
+  // Paladin run does nothing for the Warrior chain.
+  // The achievement also counts far more than roulettes — dungeons lv 61+, extreme and
+  // unreal trials, and normal, savage and alliance raids lv 70+, none of them daily-capped.
+  // Only the roulettes are capped, and only with the daily award bonus, once each per day.
+  // This row is a DAILY, so it names the daily-resetting half. The rest is grind at your own
+  // pace, which a reset tracker has nothing useful to say about.
+  // (The wiki contradicts itself on extreme trials: the achievement text says lv 61+, its
+  // own Notes list says lv 70+. Unresolved, so deliberately encoded nowhere.)
+  { seedKey:'tank-you', from:'Tank You (Tank Roulette)',                to:'Tank You (Leveling or High-level roulette, as a tank)' },
+  { seedKey:'tank-you', from:'Tank You (Tank Roulette — any tank job)', to:'Tank You (Leveling or High-level roulette, as a tank)' }
 ];
 function applySeedLabelFixes(c){
   SEED_LABEL_FIXES.forEach(({seedKey,from,to})=>{
     const r = c.routines.find(r=>r.seedKey===seedKey);
     if(r && r.label===from) r.label = to;
   });
-  c.seedLabelFixesApplied = true;
 }
 // Seeded routines predating the MSQ gates above carry requires:'' — the only value they
 // could ever have had, since nothing pre-filled the field. So an empty one is untouched
@@ -1104,7 +1118,7 @@ function normalizeCharacter(c){
   });
   if(!c.routinesSeeded) backfillSeedRoutines(c);
   if(!c.seedScheduleFixesApplied) applySeedScheduleFixes(c);
-  if(!c.seedLabelFixesApplied) applySeedLabelFixes(c);
+  applySeedLabelFixes(c);
   if(!c.seedRequiresApplied) applySeedRequires(c);
   if(!c.societies || typeof c.societies !== 'object') c.societies = {};
   ALLIED_SOCIETIES.forEach(([name,exp,startRank])=>{
