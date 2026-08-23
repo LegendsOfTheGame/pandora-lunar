@@ -1,0 +1,69 @@
+# Keeps the footer's "Last updated" line honest, from GitHub's side.
+#
+# There is a pre-commit hook in .githooks that does the same job locally, and it
+# worked until the clone it was configured in was replaced. core.hooksPath lives
+# in .git/config, which is per-clone and never travels with the repository, so the
+# hook went quiet on 07/08/2026 and the site advertised 05/08 through seven pushes
+# before anyone noticed. This workflow cannot be half-installed: it is in the repo,
+# it runs on GitHub, and no clone can be missing it.
+#
+# The hook stays. When it has already stamped the commit there is nothing left to
+# change here and this run does no work, which is the intended steady state — the
+# workflow is the backstop, not the primary.
+name: Build stamp
+
+on:
+  push:
+    branches: [main]
+
+# Pushes made with GITHUB_TOKEN do not trigger workflows, so the commit below
+# cannot re-enter this workflow. No skip-ci guard is needed.
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rewrite the stamp to the commit's own time
+        id: stamp
+        run: |
+          # The commit's timestamp, not "now". "Now" is minutes later than the hook's
+          # stamp by the time a runner picks the job up, so every push would look stale
+          # and earn a bot commit. Pinning to the commit makes the two mechanisms agree
+          # on the same value, and the backstop stays silent when the hook has worked.
+          #
+          # format-local, not format. Plain `format:` renders a commit in the timezone
+          # it was authored in — for these commits -0400 — which would write 19:20 into
+          # a line that ends in the word UTC. Only format-local honours TZ.
+          STAMP=$(TZ=UTC git log -1 --format=%cd --date=format-local:'%d/%m/%Y @ %H:%M')
+          # Checked before the rewrite, and against the shape rather than the value. A
+          # check that only asks "does the file now hold the right time" passes by
+          # accident whenever the time was already right, so a renamed div or a changed
+          # format would go unnoticed until some later push happened to land on a
+          # different minute. Silently doing nothing is the exact failure this workflow
+          # exists to prevent, so it is worth catching on the push that causes it.
+          grep -qE '<div class="build-stamp">Last updated [0-9]{2}/[0-9]{2}/[0-9]{4} @ [0-9]{2}:[0-9]{2} UTC</div>' index.html || {
+            echo "::error file=index.html::no build-stamp line in the expected format; the stamp cannot be maintained"
+            exit 1
+          }
+
+          sed -E -i "s#(<div class=\"build-stamp\">Last updated )[0-9]{2}/[0-9]{2}/[0-9]{4} @ [0-9]{2}:[0-9]{2}( UTC</div>)#\1${STAMP}\2#" index.html
+          grep -q "Last updated ${STAMP} UTC" index.html || {
+            echo "::error file=index.html::stamp did not apply"
+            exit 1
+          }
+
+      - name: Commit if the hook had not already done it
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- index.html; then
+            echo "Stamp already current for this commit; nothing to push."
+            exit 0
+          fi
+          git add index.html
+          git commit -m "chore: build stamp"
+          git push
