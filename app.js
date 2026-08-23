@@ -1131,6 +1131,65 @@ function gatePatchFor(item, c){
   return (SEED_CLEARED_GATES.has(item.seedKey) && c.patchCleared) ? c.patchCleared : c.patch;
 }
 
+/* ---------- feature-unlock gating ---------- */
+// What the patch gates were always approximating. Time Memoria 3.2+ sends an `unlocks`
+// block built from QuestManager.IsQuestComplete, so "has completed Fantastic Mr. Faux" no
+// longer has to be expressed as "has reached patch 5.0" — which was wrong both ways, since
+// it showed Faux Hollows to someone twenty quests into Shadowbringers and could not express
+// "owns a Gold Saucer pass" at any patch number at all.
+// An exact answer beats an approximation, so when a key is present it decides outright and
+// the row's own `requires` is not consulted. Absent means the payload predates that key (or
+// there is no payload), and the patch gate takes over untouched.
+// Several rows map to more than one key, tested any-of: Field Operations covers Eureka,
+// Bozja and Occult Crescent, and having any one of them is enough to have challenges there.
+const SEED_UNLOCKS = {
+  'mini-cactpot':        ['miniCactpot'],
+  'jumbo-cactpot':       ['jumboCactpot'],
+  'fashion-report':      ['fashionReport'],
+  'treasure-hunt':       ['treasureHunt'],
+  'retainer-ventures':   ['retainerVenture'],
+  'gc-turnin':           ['grandCompany'],
+  'squadron-training':   ['squadron'],
+  'squadron-missions':   ['squadron'],
+  'hunt-daily':          ['huntDaily'],
+  'hunt-brank':          ['eliteHunt'],
+  'wondrous-tails':      ['wondrousTails'],
+  'faux-hollows':        ['fauxHollows'],
+  'custom-deliveries':   ['customDelivery'],
+  'doman-enclave':       ['domanEnclave'],
+  'cosmic-exploration':  ['cosmicExploration'],
+  'island-sanctuary':    ['islandSanctuary'],
+  'bozjan-frontier':     ['bozja'],
+  'will-to-resist':      ['bozja'],
+  'aether-everywhere':   ['occultCrescent'],
+  'cut-different-cloth': ['anima'],
+  'seeking-inspiration': ['anima'],
+  'masked-carnivale':    ['maskedCarnivale'],
+  'yorha-epilogue':      ['yorha'],
+  'challenge-battles':   ['challengeLog'],
+  'challenge-pvp':       ['pvp'],
+  'challenge-fate':      ['challengeLog'],
+  'challenge-leves':     ['leves'],
+  'challenge-treasure':  ['treasureHunt'],
+  'challenge-gc':        ['grandCompany'],
+  'challenge-ventures':  ['retainerVenture'],
+  'challenge-goldsaucer':['goldSaucer'],
+  'challenge-fieldops':  ['eureka','bozja','occultCrescent'],
+  'challenge-deep':      ['deepDungeon'],
+  'challenge-island':    ['islandSanctuary']
+};
+// true / false when the payload can answer, null when it cannot and the patch gate should.
+// Keys the payload does not carry are ignored rather than read as false — a build that
+// predates a key knows nothing about it, and treating silence as "locked" would hide
+// content from everyone on an older plugin.
+function unlockState(item, c){
+  const keys = SEED_UNLOCKS[item.seedKey];
+  if(!keys || !c.unlocks) return null;
+  const known = keys.filter(k => k in c.unlocks);
+  if(!known.length) return null;
+  return known.some(k => c.unlocks[k] === true);
+}
+
 /* ---------- job-unlock gating ---------- */
 // The second reason a routine can't apply: the job it needs isn't unlocked at all. Blue
 // Mage is the obvious one — the Masked Carnivale row is meaningless to a character who
@@ -1162,10 +1221,24 @@ function hasJobData(c){
 // can't get the two out of step. Patch is checked first: it's the one the player can see
 // and edit on the row itself.
 function routineLock(item, c){
+  // Asked first, and it settles the row on its own when the plugin can answer. A patch
+  // number is a proxy for this question, so once the real answer is in hand the proxy has
+  // nothing left to add — including when it disagrees, which it will: Kaye finished
+  // Stormblood years ago and still has never set foot in Eureka.
+  const unlocked = unlockState(item, c);
+  if(unlocked === false) return { reason:'unlock', need:'unlocking in game' };
+  if(unlocked === true) return jobLock(item, c);
+
   if(isGated(item, gatePatchFor(item, c))){
     const done = SEED_CLEARED_GATES.has(item.seedKey) && c.patchCleared;
     return { reason:'patch', need:'patch ' + item.requires + (done ? ' finished' : '') };
   }
+  return jobLock(item, c);
+}
+// Separate because it survives an unlock answer. Knowing you have unlocked the Masked
+// Carnivale says nothing about whether you have a Blue Mage to do it on, and the two rows
+// that need a crafter aren't quest-gated at all.
+function jobLock(item, c){
   const gate = SEED_JOB_GATES[item.seedKey];
   if(!gate || !hasJobData(c)) return null;
   if(gate.jobs.some(job => jobLevelOf(c, job) >= 1)) return null;
@@ -1299,6 +1372,9 @@ function normalizeCharacter(c){
   else if(c.server.ldc && !(SERVER_DATA[c.server.pdc]||{})[c.server.ldc]){ c.server.ldc=''; c.server.world=''; }
   else if(c.server.world && !((SERVER_DATA[c.server.pdc]||{})[c.server.ldc]||[]).includes(c.server.world)) c.server.world='';
   if(!Array.isArray(c.custom)) c.custom = [];
+  // Left absent rather than defaulted to {} when never imported, so "no plugin data" and
+  // "plugin says nothing is unlocked" stay distinguishable in storage.
+  if(c.unlocks && typeof c.unlocks !== 'object') delete c.unlocks;
   if(!Array.isArray(c.routines)) c.routines = [];
   c.routines.forEach(r=>{
     if(!r.schedId || !RESET_SCHEDULES.some(s=>s.id===r.schedId)) r.schedId = 'daily15';
@@ -2415,16 +2491,18 @@ function renderGatedNote(cid){
   // can't do this yet" is a single idea to the reader, whichever half of the data says so.
   // The reasons are still named, because "reach 7.0" and "level a crafter" are different
   // things to go and do.
-  const byPatch = locks.filter(l=>l.reason==='patch').length;
-  const byJob   = locks.length - byPatch;
+  const byPatch  = locks.filter(l=>l.reason==='patch').length;
+  const byJob    = locks.filter(l=>l.reason==='job').length;
+  const byUnlock = locks.filter(l=>l.reason==='unlock').length;
   // Sort on the parsed number, display the string the player typed — patchValue('6.0') is
   // the float 6, which renders as "next at 6" and reads like a different patch entirely.
   const next = c.routines.filter(r=>isGated(r, gatePatchFor(r, c)))
     .map(r=>({ n:patchValue(r.requires), s:r.requires }))
     .filter(x=>x.n!==null).sort((a,b)=>a.n-b.n)[0];
   const reasons = [];
+  if(byUnlock) reasons.push('unlocking in game');
   if(byPatch) reasons.push(`a later patch${next?` (next at ${esc(next.s)})`:''}`);
-  if(byJob) reasons.push(`a job you haven't unlocked`);
+  if(byJob) reasons.push(`a job you don't have`);
   const label = locks.length
     ? `${locks.length} hidden &mdash; ${locks.length===1?'needs':'need'} ${reasons.join(' or ')}`
     : 'showing locked routines';
@@ -2958,6 +3036,19 @@ function computeTmDiffHTML(p, c){
       rows.push(['MSQ finished through', c.patchCleared || '(none)', p.msqPatch.cleared]);
     }
   }
+  // Summarised rather than listed. A first import changes all 27 at once, and 27 rows of
+  // "false -> true" would bury the handful of figures someone actually wants to check.
+  if(p.unlocks && typeof p.unlocks === 'object'){
+    const held = c.unlocks || {};
+    const changed = Object.keys(p.unlocks)
+      .filter(k => typeof p.unlocks[k] === 'boolean' && p.unlocks[k] !== held[k]);
+    if(changed.length){
+      const have = Object.values(p.unlocks).filter(Boolean).length;
+      rows.push(['Unlocked features',
+        Object.keys(held).length ? `${Object.values(held).filter(Boolean).length} known` : '(none)',
+        `${have} of ${Object.keys(p.unlocks).length}`]);
+    }
+  }
   ['combat','craft','gather'].forEach(group=>{
     if(!p[group]) return;
     Object.keys(p[group]).forEach(job=>{
@@ -3024,6 +3115,15 @@ function applyTmImport(){
     const imported = patchValue(p.msqPatch.reached);
     const stored = patchValue(c.patch);
     if(imported !== null && (stored === null || imported > stored)) c.patch = p.msqPatch.reached;
+  }
+  // Merged key by key, not replaced. A key the payload doesn't carry is one this plugin
+  // build knows nothing about, so a stored answer for it stays — dropping it would silently
+  // demote an exact gate back to a patch guess on an older export.
+  if(p.unlocks && typeof p.unlocks === 'object'){
+    if(!c.unlocks) c.unlocks = {};
+    Object.keys(p.unlocks).forEach(key=>{
+      if(typeof p.unlocks[key] === 'boolean') c.unlocks[key] = p.unlocks[key];
+    });
   }
   // Same greater-of rule, same reason: cleared is a floor too — until a new patch's
   // bookends are recorded, a character who finished it still reports the previous one.
