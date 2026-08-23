@@ -1207,6 +1207,41 @@ function unlockState(item, c){
 // A hand-entered character never has `unlocks`, so their blank patch still gates nothing.
 function noPatchReached(c){ return !!c.unlocks && !c.patch && !c.patchCleared; }
 
+/* ---------- level floors ---------- */
+// This revises the earlier "unlock only, never a level" call, deliberately.
+// That rule was made about JOBS — don't hide the Masked Carnivale from someone levelling a
+// Blue Mage — and it is still right there. It was never a reason to offer a level 2
+// Gladiator with 28 minutes played the high-level roulette, which is what it did.
+// So: floors only where a row is meaningless without one, and always the LOWEST level at
+// which any qualifying activity becomes possible, never the level the content is balanced
+// for. Tank You is 15 rather than 61 because the Leveling roulette also counts and that
+// needs only a dungeon; capping tomestones is 60 because level 60+ alliance raids award
+// them, not 100. Erring low keeps the original spirit — what disappears is what nobody at
+// that level could attempt by any route, not what they are working toward.
+// Every number is from the wiki: Sastasha, the first dungeon, is 15; Highway Robbery, the
+// earliest allied society quest, is 41; Dun Scaith, the earliest level 60+ alliance raid
+// that awards capped tomestones, is 60.
+const SEED_LEVELS = {
+  'duty-roulette':      15,
+  'tank-you':           15,
+  'allied-society':     41,
+  'challenge-society':  41,
+  'morbid-motivation':  50,  // the Zodiac quest itself is level 50
+  'tomestone-cap':      60
+};
+// Measured against the character's HIGHEST job, not whichever they are on. A level 90
+// Paladin who just picked up Botanist has not lost access to the roulette.
+// Off entirely without job data — same rule as the job gates, absent means no data.
+function highestJobLevel(c){
+  return Math.max(0, ...Object.values(c.combat || {}), ...Object.values(c.craft || {}),
+                     ...Object.values(c.gather || {}));
+}
+function levelLock(item, c){
+  const need = SEED_LEVELS[item.seedKey];
+  if(!need || !hasJobData(c)) return null;
+  return highestJobLevel(c) >= need ? null : { reason:'level', need:`level ${need}` };
+}
+
 /* ---------- job-unlock gating ---------- */
 // The second reason a routine can't apply: the job it needs isn't unlocked at all. Blue
 // Mage is the obvious one — the Masked Carnivale row is meaningless to a character who
@@ -1244,7 +1279,7 @@ function routineLock(item, c){
   // Stormblood years ago and still has never set foot in Eureka.
   const unlocked = unlockState(item, c);
   if(unlocked === false) return { reason:'unlock', need:'unlocking in game' };
-  if(unlocked === true) return jobLock(item, c);
+  if(unlocked === true) return levelLock(item, c) || jobLock(item, c);
 
   if(item.requires && noPatchReached(c)) return { reason:'patch', need:'patch ' + item.requires };
 
@@ -1252,7 +1287,7 @@ function routineLock(item, c){
     const done = SEED_CLEARED_GATES.has(item.seedKey) && c.patchCleared;
     return { reason:'patch', need:'patch ' + item.requires + (done ? ' finished' : '') };
   }
-  return jobLock(item, c);
+  return levelLock(item, c) || jobLock(item, c);
 }
 // Separate because it survives an unlock answer. Knowing you have unlocked the Masked
 // Carnivale says nothing about whether you have a Blue Mage to do it on, and the two rows
@@ -2513,6 +2548,7 @@ function renderGatedNote(cid){
   const byPatch  = locks.filter(l=>l.reason==='patch').length;
   const byJob    = locks.filter(l=>l.reason==='job').length;
   const byUnlock = locks.filter(l=>l.reason==='unlock').length;
+  const byLevel  = locks.filter(l=>l.reason==='level').length;
   // Sort on the parsed number, display the string the player typed — patchValue('6.0') is
   // the float 6, which renders as "next at 6" and reads like a different patch entirely.
   const next = c.routines.filter(r=>isGated(r, gatePatchFor(r, c)))
@@ -2521,6 +2557,7 @@ function renderGatedNote(cid){
   const reasons = [];
   if(byUnlock) reasons.push('unlocking in game');
   if(byPatch) reasons.push(`a later patch${next?` (next at ${esc(next.s)})`:''}`);
+  if(byLevel) reasons.push('a higher level');
   if(byJob) reasons.push(`a job you don't have`);
   const label = locks.length
     ? `${locks.length} hidden &mdash; ${locks.length===1?'needs':'need'} ${reasons.join(' or ')}`
