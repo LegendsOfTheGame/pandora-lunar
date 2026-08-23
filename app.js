@@ -1359,7 +1359,7 @@ function newCharacter(name){
     name: name || '',
     duty:0, comm:0, roleTank:false, roleHealer:false, roleDps:false,
     playtime:{days:0,hours:0}, patch:'', patchCleared:'', showGated:false, showHidden:false,
-    noPlugin:false,
+    showZeroJobs:false, noPlugin:false,
     quests: Object.fromEntries(QUEST_CATS.map(([k])=>[k,0])),
     questTotals: Object.fromEntries(QUEST_CATS.map(([k,l,t])=>[k,t])),
     msqBreakdown: Object.fromEntries(MSQ_EXPANSIONS.map(([k])=>[k,0])),
@@ -1392,7 +1392,7 @@ function normalizeCharacter(c){
   // no age — hence the true/null defaults.
   ['tradeCollectedAsOf','tradeMadeAsOf','dutyAsOf'].forEach(k=>{ if(typeof c[k] !== 'string') c[k] = null; });
   ['tradeCollectedExact','tradeMadeExact','dutyExact'].forEach(k=>{ if(typeof c[k] !== 'boolean') c[k] = true; });
-  ['roleTank','roleHealer','roleDps','showGated','showHidden','noPlugin','societiesSynced'].forEach(k=>{ c[k] = !!c[k]; });
+  ['roleTank','roleHealer','roleDps','showGated','showHidden','showZeroJobs','noPlugin','societiesSynced'].forEach(k=>{ c[k] = !!c[k]; });
   if(typeof c.patch !== 'string') c.patch = '';
   if(typeof c.patchCleared !== 'string') c.patchCleared = '';
   if(typeof c.notes !== 'string') c.notes = '';
@@ -1686,6 +1686,7 @@ function characterPageHTML(cid){
         <table id="${cid}-gather"></table>
       </div>
     </div>
+    <div class="gated-note" id="${cid}-jobsnote"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="societies">
@@ -2088,15 +2089,72 @@ function renderJobTables(cid){
     'Limited':'Limited &middot; Blue Mage 80, Beastmaster 50'
   };
 
-  document.getElementById(cid+'-combat').innerHTML = ROLE_ORDER.map(role=>{
-    const rows = COMBAT_JOBS.filter(j=>j[1]===role)
+  const c = getChar(cid);
+  const show = job => !hidesZeroJobs(c) || jobLevelOf(c, job) > 0;
+
+  const combat = ROLE_ORDER.map(role=>{
+    const rows = COMBAT_JOBS.filter(j=>j[1]===role && show(j[0]))
       .map(([name,r,capOverride])=>combatRowHTML(cid,name,r,capOverride)).join('');
+    // A role whose every job is hidden takes its heading with it. "Physical Ranged DPS"
+    // over nothing at all is a heading describing an absence.
     if(!rows) return '';
     return `<div class="job-role"><div class="subhead">${ROLE_LABEL[role]}</div><table>${rows}</table></div>`;
   }).join('');
-  document.getElementById(cid+'-craft').innerHTML = CRAFT_JOBS.map(name=>craftGatherRowHTML(cid,'craft',name)).join('');
-  document.getElementById(cid+'-gather').innerHTML = GATHER_JOBS.map(name=>craftGatherRowHTML(cid,'gather',name)).join('');
+  document.getElementById(cid+'-combat').innerHTML =
+    combat || '<div class="empty-hint">None levelled yet.</div>';
+  // Crafting and Gathering keep their headings either way — they're the two columns of a
+  // fixed layout, and dropping one would slide the other across the page.
+  document.getElementById(cid+'-craft').innerHTML =
+    emptyJobRow(CRAFT_JOBS.filter(show).map(name=>craftGatherRowHTML(cid,'craft',name)).join(''));
+  document.getElementById(cid+'-gather').innerHTML =
+    emptyJobRow(GATHER_JOBS.filter(show).map(name=>craftGatherRowHTML(cid,'gather',name)).join(''));
   updateJobCaps(cid);
+  renderJobsNote(cid);
+}
+
+/* ---------- hiding jobs at 0 ---------- */
+// Twenty-three combat jobs, eight crafters and three gatherers, of which most characters
+// play a handful. A row at 0 is one that has never been touched, so it goes, and the note
+// under the tab says how many and offers them back.
+//
+// Level, not unlock: the page has no unlock data for jobs, and 0 is the one level that
+// cannot be a real one. A job at 1 stays, however untouched it looks.
+//
+// It applies to a character with no levels at all too, which hides the entire tab. That
+// wants the note below to be unconditional — it is the only way back in, and a section with
+// nothing in it and no way to fill it is a dead end.
+function hidesZeroJobs(c){ return !c.showZeroJobs; }
+function zeroJobCount(c){
+  return COMBAT_JOBS.filter(([n])=>!(c.combat[n] > 0)).length
+       + CRAFT_JOBS.filter(n=>!(c.craft[n] > 0)).length
+       + GATHER_JOBS.filter(n=>!(c.gather[n] > 0)).length;
+}
+// An emptied table renders as a heading over a gap otherwise, which reads as a page that
+// failed to load rather than one with nothing to show.
+function emptyJobRow(rows){
+  return rows || '<tr><td class="empty-hint">None levelled yet.</td></tr>';
+}
+function renderJobsNote(cid){
+  const el = document.getElementById(cid+'-jobsnote');
+  if(!el) return;
+  const c = getChar(cid);
+  const zeros = zeroJobCount(c);
+  // The one case with nothing to say: every job levelled, so nothing was hidden and there
+  // is nothing to offer back.
+  if(!zeros){ el.innerHTML = ''; return; }
+  const label = c.showZeroJobs
+    ? `showing ${zeros} ${zeros===1?'job':'jobs'} you haven't levelled`
+    : `${zeros} hidden &mdash; not levelled`;
+  el.innerHTML = `<span>${label}</span><button class="link-btn" onclick="toggleShowZeroJobs('${cid}')">${c.showZeroJobs?'hide them':'show them'}</button>`;
+}
+// Reads the inputs back first: the tables are about to be rebuilt from the data, so a level
+// typed and not yet collected would be rewritten with the old one.
+function toggleShowZeroJobs(cid){
+  collectAllInputs();
+  const c = getChar(cid);
+  c.showZeroJobs = !c.showZeroJobs;
+  renderJobTables(cid);
+  scheduleSave();
 }
 
 /* ---------- allied society reputation ---------- */

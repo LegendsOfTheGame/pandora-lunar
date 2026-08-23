@@ -40,6 +40,8 @@
     <p>Click <code>Download backup</code> any time to save a <code>.json</code> file with everything. <code>Restore from file</code> loads one back &mdash; useful for moving to a new device or recovering from a cleared browser. Clearing your browser's site data <em>will</em> erase your tracker, so back up before you do that.</p>
     <h3>Routines &amp; MSQ progress gating</h3>
     <p>The Routines section is for anything that repeats on the game's reset schedule (dailies, weeklies) &mdash; it clears itself automatically, on real UTC reset times. The <code>requires</code> field hides a routine until you've reached a given point in the story &mdash; set the <code>MSQ progress</code> box next to your character's name first (it takes a patch number like <code>5.3</code> as a stand-in for how far along you are, not necessarily the current live patch). The seeded routines arrive with theirs filled in, worked out from the <em>main scenario quest</em> each one actually sits behind rather than the patch it shipped in &mdash; Faux Hollows came out in 5.3, but all it asks is that you've finished Shadowbringers, so it reads 5.0. Where a routine wants an expansion <em>finished</em> rather than merely started, it's measured against how far you've completed, not how far you've reached &mdash; so pausing after a finale doesn't hide anything you can actually do. The plugin sends both figures; type only the one box and everything falls back to it. Anything left blank has no story gate worth writing down: it's open from early A Realm Reborn, or held back by a level rather than by the story. Change or clear any of them &mdash; what you type is never overwritten. If you import from Time Memoria, the patch numbers mostly stop mattering: the plugin sends what you've actually unlocked, quest by quest, and an exact answer wins over a patch standing in for one. That cuts both ways &mdash; finishing Stormblood no longer makes Eureka content appear if you've never been to Eureka. A few routines are also hidden when the job they need isn't unlocked at all &mdash; the Masked Carnivale without Blue Mage, Grand Company turn-ins without a crafter or gatherer. That's unlock only, never a level: nothing hides just because you're underlevelled for it, and none of it applies until your Jobs tab has some levels in it.</p>
+    <h3>Job levels</h3>
+    <p>Any job still sitting at <code>0</code> is hidden &mdash; most people play a handful out of thirty-four, and the rest are rows to scroll past. The note under the tab says how many went and brings them back with one click, which is what you want when you unlock something new and need somewhere to type it &mdash; including on a brand new character, where everything is at 0 and the whole tab starts out hidden behind that one click.</p>
     <h3>Ocean Fishing</h3>
     <p>The bar at the very top is global and always live &mdash; registration opens for 15 minutes every 2 hours (even UTC hours), independent of any character.</p>
   </div>
@@ -51,7 +53,7 @@
 
   <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
   <div class="copyright">&copy; Kaye Sharpedge</div>
-  <div class="build-stamp">Last updated 05/08/2026 @ 20:51 UTC</div>
+  <div class="build-stamp">Last updated 23/08/2026 @ 23:19 UTC</div>
 
   <div class="backup-bar">
     <button class="edit-btn" onclick="exportData()">Download backup</button>
