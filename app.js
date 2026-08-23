@@ -1183,12 +1183,29 @@ const SEED_UNLOCKS = {
 // predates a key knows nothing about it, and treating silence as "locked" would hide
 // content from everyone on an older plugin.
 function unlockState(item, c){
+  if(!c.unlocks) return null;
+  // Every Challenge Log category needs the log itself as well as its own feature. That is
+  // an AND, and the rest of this function is any-of, so it is checked separately rather
+  // than bent into the same list. Without it a level 2 character with challengeLog false
+  // still saw Challenge Log · Allied Society, because that category has no feature key of
+  // its own and fell through to a patch gate.
+  if(isChallengeRow(item) && c.unlocks.challengeLog === false) return false;
+
   const keys = SEED_UNLOCKS[item.seedKey];
-  if(!keys || !c.unlocks) return null;
+  if(!keys) return null;
   const known = keys.filter(k => k in c.unlocks);
   if(!known.length) return null;
   return known.some(k => c.unlocks[k] === true);
 }
+// The plugin omits msqPatch only when no patch's opening quest is complete. Alongside an
+// `unlocks` block, which proves it ran, that absence is a fact rather than a gap: this
+// character has not finished 2.0's opening quest, so they are in their first hour of A
+// Realm Reborn — the earliest position the game still has. There is nothing "before" it to
+// be: 1.0 through 1.23b were Legacy and cannot be played.
+// Reading the absence as "unknown, gate nothing" is what showed Ultimate raids and the
+// current savage tier to a level 2 character with 28 minutes played.
+// A hand-entered character never has `unlocks`, so their blank patch still gates nothing.
+function noPatchReached(c){ return !!c.unlocks && !c.patch && !c.patchCleared; }
 
 /* ---------- job-unlock gating ---------- */
 // The second reason a routine can't apply: the job it needs isn't unlocked at all. Blue
@@ -1228,6 +1245,8 @@ function routineLock(item, c){
   const unlocked = unlockState(item, c);
   if(unlocked === false) return { reason:'unlock', need:'unlocking in game' };
   if(unlocked === true) return jobLock(item, c);
+
+  if(item.requires && noPatchReached(c)) return { reason:'patch', need:'patch ' + item.requires };
 
   if(isGated(item, gatePatchFor(item, c))){
     const done = SEED_CLEARED_GATES.has(item.seedKey) && c.patchCleared;
