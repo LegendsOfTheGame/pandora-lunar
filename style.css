@@ -331,6 +331,18 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .note-area:focus{outline:none;border-color:var(--accent,var(--gold))}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .subhead{font-size:12px;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-faint);margin:0 0 10px}
+/* Only for headings that carry a control. A bare .link-btn against an uppercase heading
+   disappears into it — same size, same weight, no gap — so the switch needs a border, a
+   shape and space of its own before it reads as something you can press. Opt-in modifier,
+   because .subhead is used all over (societies, job groups) and none of those want flex. */
+.subhead.with-toggle{display:flex;align-items:center;gap:10px}
+.section-toggle{
+  margin-left:auto;background:transparent;border:1px solid var(--line-soft);
+  color:var(--text-dim);cursor:pointer;font-size:11px;letter-spacing:0.4px;
+  padding:3px 11px;border-radius:999px;font-family:var(--font-body);text-transform:none;
+}
+.section-toggle:hover{border-color:var(--accent,var(--gold));color:var(--text)}
+.section-toggle.is-off{color:var(--text-faint);border-style:dashed}
 .society-group{margin-bottom:18px}
 .society-group:last-child{margin-bottom:0}
 /* Three short columns do not need a 1360px row. Left to fill the container the

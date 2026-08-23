@@ -567,6 +567,122 @@ const RESET_SCHEDULES = [
 const DAY_MS = 86400000;
 const ACCENTS = ['gold','teal','rose'];
 
+// The 80 weekly challenges by category, from ffxiv.consolegameswiki.com's Challenge Log
+// page (patch 7.51). Surfaced through the info button on each category row: "Battles"
+// means nothing on its own, but "the two guildhest ones" is what people actually look for.
+// Not individually tickable. Eighty checkboxes is a spreadsheet, not a reset tracker, and
+// the weekly tick on the row is the unit this list is for.
+// The 18 cumulative "Up for a Challenge" milestones are deliberately absent: they never
+// reset, so they are not weekly challenges at all.
+const CHALLENGE_LOG = {
+  'challenge-battles': [
+    ['Feeling Lucky', 'Complete 3 dungeons (or Alliance Raids) via the Duty Roulette.'],
+    ['Dungeon Master', 'Complete 5 dungeons.'],
+    ['You\'re the Hest Around I', 'Complete 3 guildhests.'],
+    ['You\'re the Hest Around II', 'Complete 10 guildhests'],
+    ['Exercising the Right', 'Vote 5 times in player commendation.'],
+    ['Bosom Buddies I', 'Defeat 20 enemies of comparable level to your own with your companion.'],
+    ['Bosom Buddies II', 'Defeat 100 enemies of comparable level to your own with your companion.'],
+    ['Tails of Derring-do Bad and Good Luck', 'Complete and mark off 3 Wondrous Tails.'],
+  ],
+  'challenge-pvp': [
+    ['A Wolf in Your Belly', 'Participate in 10 Crystalline Conflict matches.'],
+    ['Thrown to the Wolves', 'Triumph in 3 Crystalline Conflict matches.'],
+    ['Line Up', 'Participate in 7 Frontline campaigns.'],
+    ['In the Line of Fire', 'Lead your company to victory in 3 Frontline campaigns.'],
+    ['Prepare to Dice', 'Participate in 10 Rival Wings campaigns.'],
+    ['Luck Be a Lady Tonight', 'Lead your alliance to victory in 5 Rival Wings campaigns.'],
+  ],
+  'challenge-fate': [
+    ['In Your FATE I', 'Complete 5 FATEs with the highest rating possible.'],
+    ['In Your FATE II', 'Complete 10 FATEs with the highest rating possible.'],
+  ],
+  'challenge-leves': [
+    ['Just Leve It to Me', 'Complete 5 Levequests with different leve plates.'],
+    ['Making Like a Tree', 'Complete 20 levequests.'],
+  ],
+  'challenge-crafting': [
+    ['Craft Up a Storm', 'Craft 30 Items.'],
+    ['Craft Up a Storm', 'Craft 20 high-quality Items.'],
+    ['My Big Break', 'Successfully desynthesize 5 items.'],
+    ['The Gathering Storm', 'Successfully gather items of comparable level to your own 100 times.'],
+    ['A Boon from Nature', 'Successfully trigger the Gatherer\'s Boon effect while gathering items of comparable level to your own 30 times.'],
+    ['Hooked on the Reeling', 'Catch 30 fish.'],
+    ['Catch of the Day', 'Catch 10 large-sized fish'],
+    ['Spear Me', 'Spear 50 fish.'],
+    ['Spear No Effort', 'Spear 20 large-sized fish.'],
+    ['The Customer Is Always Right', 'Complete 6 custom deliveries.'],
+  ],
+  'challenge-treasure': [
+    ['X Marks the Spot', 'Gather 3 timeworn maps.'],
+    ['Find Your Treasure and Have It Too', 'Open 5 treasure coffers and obtain their contents while treasure hunting.'],
+    ['Aqua Gleam Hunter Force I', 'Open 5 treasure coffers in treasure dungeon vaults.'],
+  ],
+  'challenge-society': [
+    ['Improving Society Somewhat I', 'Complete 5 Allied Society quests.'],
+    ['Improving Society Somewhat II', 'Complete 15 Allied Society quests.'],
+  ],
+  'challenge-gc': [
+    ['Give \'Em What They Want', 'Complete 5 supply and provisioning missions.'],
+    ['Give \'Em What They Want II', 'Complete 10 supply and provisioning missions.'],
+    ['Master and Commander', 'Successfully complete 3 command missions.'],
+  ],
+  'challenge-ventures': [
+    ['Venture Capital', 'Have a retainer complete 10 ventures.'],
+    ['Venture Bothers', 'Have a retainer complete 15 exploration ventures (not Quick Exploration).'],
+  ],
+  'challenge-goldsaucer': [
+    ['Size Doesn\'t Matter', 'Complete 3 mini-games.'],
+    ['From Small Things', 'Earn 100 MGP from mini-games.'],
+    ['Open the Gates', 'Participate in 5 GATEs.'],
+    ['Close the Gates', 'Successfully complete 3 GATEs.'],
+    ['To the Races I', 'Enter 3 chocobo races.'],
+    ['To the Races II', 'Enter 20 chocobo races.'],
+    ['Victory Lap I', 'Win a chocobo race.'],
+    ['Victory Lap II', 'Win 10 chocobo races.'],
+    ['Always in Threes', 'Play Triple Triad 10 times.'],
+    ['A Winner Is You', 'Win 10 Triple Triad matches.'],
+    ['Cards in the Hall', 'Play 5 Triple Triad matches in the Battlehall.'],
+    ['Triple Tumble', 'Win 3 Triple Triad matches in the Battlehall.'],
+    ['Come on in, It\'s Open', 'Participate in an Open tournament and receive your reward.'],
+    ['Come Play Lord I', 'Play Lord of Verminion 1 time.'],
+    ['Come Play Lord II', 'Play Lord of Verminion 3 times.'],
+    ['Come Play Lord III', 'Play Lord of Verminion 5 times.'],
+    ['Kiwami', 'Participate in 2 Doman Mahjong player battle matches.'],
+  ],
+  'challenge-fieldops': [
+    ['Occult Interloping I', 'Defeat 30 monsters with a knowledge level equal to or higher than your own.'],
+    ['Occult Interloping II', 'Defeat 60 monsters with a knowledge level equal to or higher than your own.'],
+    ['Critically Endangered I', 'Complete 8 encounters on the Occult Crescent.'],
+    ['Critically Endangered II', 'Complete 15 encounters on the Occult Crescent.'],
+    ['Fateful Contention I', 'Complete 10 FATEs on the Occult Crescent.'],
+    ['Fateful Contention II', 'Complete 20 FATEs on the Occult Crescent.'],
+    ['Make It Chain I', 'Achieve an EXP chain of 20 on the Occult Crescent.'],
+    ['Make It Chain II', 'Achieve an EXP chain of 40 on the Occult Crescent.'],
+    ['Forbidden Ice, Forbidden Lightning I', 'Defeat 30 ice- or lightning-aspected enemies no more than two elemental levels below your own.'],
+    ['Forbidden Ice, Forbidden Lightning II', 'Defeat 60 ice- or lightning-aspected enemies no more than two elemental levels below your own.'],
+    ['Forbidden Fire, Forbidden Earth I', 'Defeat 30 fire- or earth-aspected enemies no more than two elemental levels below your own.'],
+    ['Forbidden Fire, Forbidden Earth II', 'Defeat 60 fire- or earth-aspected enemies no more than two elemental levels below your own.'],
+    ['Forbidden Water, Forbidden Wind I', 'Defeat 30 water- or wind-aspected enemies no more than two elemental levels below your own.'],
+    ['Forbidden Water, Forbidden Wind II', 'Defeat 60 water- or wind-aspected enemies no more than two elemental levels below your own.'],
+    ['Forbidden Bone, Forbidden Ash I', 'Defeat 20 ashkin in Eureka with an elemental level equal to, or higher than your own.'],
+    ['Forbidden Bone, Forbidden Ash II', 'Defeat 40 ashkin in Eureka with an elemental level equal to, or higher than your own.'],
+    ['Forbidden Elements I', 'Defeat 10 elementals in Eureka with an elemental level equal to, or higher than your own.'],
+    ['Forbidden Elements II', 'Defeat 20 elementals in Eureka with an elemental level equal to, or higher than your own.'],
+  ],
+  'challenge-deep': [
+    ['Take Me to Church I', 'Clear the area marked by stone 20 in Pilgrim\'s Traverse.'],
+    ['Take Me to Church II', 'Clear the area marked by stone 30 in Pilgrim\'s Traverse.'],
+    ['Take Me to Church III', 'Clear the area marked by stone 50 in Pilgrim\'s Traverse.'],
+    ['Take Me to Church IV', 'Clear the area marked by stone 70 in Pilgrim\'s Traverse.'],
+    ['Take Me to Church V', 'Clear the area marked by stone 100 in Pilgrim\'s Traverse.'],
+  ],
+  'challenge-island': [
+    ['Living off the Land', 'Collect 100 materials in your island sanctuary.'],
+    ['Making a Living off the Land', 'Ship 20 isleworks handicrafts.'],
+  ],
+};
+
 // Sourced from ffxiv.consolegameswiki.com's Daily and Weekly Checklist page. Seeded onto
 // every new character so the known list is there from the start — hide (not delete)
 // whatever doesn't apply to you, same idea as Haven's "I'd never do Faux Hollows as Grey."
@@ -626,7 +742,28 @@ const DEFAULT_ROUTINES = [
   ["YoRHa Epilogue Quest Chain (one-time unlock)","weeklyTue","yorha-epilogue","5.0"],       // YoRHa series → Shadowbringers
   ["Cap Allagan Tomestone of Mnemonics","weeklyTue","tomestone-cap",""],
   ["AAC Heavyweight (Savage)","weeklyTue","aac-savage","7.0"],                               // Dawntrail raid tier
-  ["Challenge Log","weeklyTue","challenge-log",""],
+  // The Challenge Log is 13 categories of weekly challenges, not one tick — 80 of them, and
+  // a category is dead weight until you've unlocked the feature it's about. Counts as of
+  // patch 7.51: Field Operations 18, Gold Saucer 17, Crafting & Gathering 10, Battles 8,
+  // PvP 6, Deep Dungeons 5, Treasure Hunt 3, Grand Company 3, and 2 each for FATEs,
+  // Levequests, Allied Society, Retainer Ventures and Island Sanctuary.
+  // Only three can be gated honestly. The rest unlock behind a level, a single sidequest or
+  // a purchase the ledger holds no data about — Treasure Hunt maps can simply be bought —
+  // and a gate you can't evidence is worse than none. The wiki lists this category as
+  // "Other"; it is Island Sanctuary and nothing else, so it says so.
+  ["Challenge Log · Battles","weeklyTue","challenge-battles",""],
+  ["Challenge Log · PvP","weeklyTue","challenge-pvp",""],
+  ["Challenge Log · FATEs","weeklyTue","challenge-fate",""],
+  ["Challenge Log · Levequests","weeklyTue","challenge-leves",""],
+  ["Challenge Log · Crafting & Gathering","weeklyTue","challenge-crafting",""],
+  ["Challenge Log · Treasure Hunt","weeklyTue","challenge-treasure",""],
+  ["Challenge Log · Allied Society","weeklyTue","challenge-society",""],
+  ["Challenge Log · Grand Company","weeklyTue","challenge-gc",""],
+  ["Challenge Log · Retainer Ventures","weeklyTue","challenge-ventures",""],
+  ["Challenge Log · Gold Saucer","weeklyTue","challenge-goldsaucer",""],
+  ["Challenge Log · Field Operations","weeklyTue","challenge-fieldops","4.0"],  // Eureka → Stormblood
+  ["Challenge Log · Deep Dungeons","weeklyTue","challenge-deep",""],
+  ["Challenge Log · Island Sanctuary","weeklyTue","challenge-island","6.0"],    // Seeking Sanctuary → Endwalker
   ["Seeking Inspiration (Anima Weapon)","weeklyTue","seeking-inspiration","3.0"],            // Anima line, Idyllshire
   ["Wondrous Tails","weeklyTue","wondrous-tails","3.0"],                                     // Keeping Up with the Aliapohs, Idyllshire
   ["Jumbo Cactpot","weeklySat","jumbo-cactpot",""],
@@ -644,6 +781,51 @@ function seedRoutines(){
   return DEFAULT_ROUTINES.map(([label,schedId,seedKey,requires])=>(
     { id:newId(), label, schedId, lastDone:null, requires:requires||'', hidden:false, seedKey }
   ));
+}
+function seededRoutine(seedKey){
+  const row = DEFAULT_ROUTINES.find(([,,key])=>key===seedKey);
+  if(!row) return null;
+  const [label,schedId,,requires] = row;
+  return { id:newId(), label, schedId, lastDone:null, requires:requires||'', hidden:false, seedKey };
+}
+// Rows added to DEFAULT_ROUTINES *after* a character was seeded need their own pass.
+// backfillSeedRoutines can't do it: its guard is "is this seedKey present", which cannot
+// tell "never had it" from "deleted it on purpose", so re-running would resurrect rows
+// people deliberately threw away. That's exactly why it hides behind routinesSeeded.
+// A generation counter fixes it without giving up that protection — each step names the
+// keys it introduces, so nothing outside the new set is ever touched. To add rows later:
+// bump SEED_GENERATION and add a step listing them.
+const SEED_GENERATION = 2;
+const SEED_GENERATIONS = {
+  // Challenge Log split from one weekly tick into its 13 real categories.
+  2: {
+    add: ['challenge-battles','challenge-pvp','challenge-fate','challenge-leves',
+          'challenge-crafting','challenge-treasure','challenge-society','challenge-gc',
+          'challenge-ventures','challenge-goldsaucer','challenge-fieldops','challenge-deep',
+          'challenge-island'],
+    // The single row the 13 replace. Removed only if still word-for-word the default —
+    // rename it and you keep it, same rule as every other fix here. A pristine row carries
+    // no intent worth preserving, and leaving it would double-count the whole log.
+    retire: [{ seedKey:'challenge-log', label:'Challenge Log' }]
+  }
+};
+function applySeedGenerations(c){
+  let gen = typeof c.seedGeneration === 'number' ? c.seedGeneration : 1;
+  while(gen < SEED_GENERATION){
+    const step = SEED_GENERATIONS[++gen];
+    if(!step) continue;
+    const have = new Set(c.routines.map(r=>r.seedKey).filter(Boolean));
+    (step.add || []).forEach(key=>{
+      if(have.has(key)) return;
+      const row = seededRoutine(key);
+      if(row) c.routines.push(row);
+    });
+    (step.retire || []).forEach(({seedKey,label})=>{
+      const i = c.routines.findIndex(r=>r.seedKey===seedKey);
+      if(i >= 0 && c.routines[i].label === label) c.routines.splice(i,1);
+    });
+  }
+  c.seedGeneration = SEED_GENERATION;
 }
 // One-time backfill for characters that existed before this seed list did (or before an
 // item was added to it) — adds only what's missing, matched by seedKey so a renamed label
@@ -723,12 +905,19 @@ function applySeedRequires(c){
 
 function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHEDULES[0]; }
 
-const ROUTINE_SECTIONS = ['Daily','Weekly','Monthly','Other'];
+// Challenge Log sits between Weekly and Monthly rather than inside Weekly. It resets on the
+// same Tuesday clock, but thirteen category rows would swamp a list where every other entry
+// is a single activity — and unlike the rest, the whole feature is one you either work or
+// ignore, so it gets one switch instead of thirteen hide buttons.
+const CHALLENGE_SECTION = 'Challenge Log';
+const ROUTINE_SECTIONS = ['Daily','Weekly',CHALLENGE_SECTION,'Monthly','Other'];
+function isChallengeRow(item){ return (item.seedKey || '').startsWith('challenge-'); }
 // No monthly-reset content has ever existed in FFXIV — Monthly stays folded into Other
 // (so nothing a user adds goes missing) until patch 8.0 actually ships. Flip this to true
 // once it does; the Monthly heading then appears on its own automatically.
 const PATCH_8_0_RELEASED = false;
 function routineSection(item){
+  if(isChallengeRow(item)) return CHALLENGE_SECTION;
   const kind = schedById(item.schedId).kind;
   if(kind === 'monthly') return PATCH_8_0_RELEASED ? 'Monthly' : 'Other';
   if(kind === 'weekly') return 'Weekly';
@@ -931,8 +1120,9 @@ function isGated(item, patchStr){
 // toward showing slightly early, which is the right way round.
 const SEED_CLEARED_GATES = new Set([
   'will-to-resist','bozjan-frontier','faux-hollows','yorha-epilogue',  // Shadowbringers
-  'cosmic-exploration','island-sanctuary',                             // Endwalker
-  'aether-everywhere','windurst','dancing-mad','aac-m4','aac-savage'   // Dawntrail
+  'cosmic-exploration','island-sanctuary','challenge-island',          // Endwalker
+  'aether-everywhere','windurst','dancing-mad','aac-m4','aac-savage',  // Dawntrail
+  'challenge-fieldops'                                                 // Stormblood (Eureka)
 ]);
 // A patch typed by hand is a reached figure — that's the natural reading of "where am I in
 // the story", and it's the only box the UI offers. So when cleared is absent, fall back to
@@ -959,7 +1149,8 @@ const SEED_JOB_GATES = {
   'tank-you':           { need:'a tank job',            jobs:TANK_JOBS },
   'gc-turnin':          { need:'a crafter or gatherer', jobs:LAND_AND_HAND },
   'custom-deliveries':  { need:'a crafter or gatherer', jobs:LAND_AND_HAND },
-  'cosmic-exploration': { need:'a crafter or gatherer', jobs:LAND_AND_HAND }
+  'cosmic-exploration': { need:'a crafter or gatherer', jobs:LAND_AND_HAND },
+  'challenge-crafting': { need:'a crafter or gatherer', jobs:LAND_AND_HAND }
 };
 // Absent means "no data", never "zero" — the same rule the plugin's export contract states.
 // A character whose job table is entirely untouched hasn't told us they lack Blue Mage,
@@ -1054,7 +1245,7 @@ function newCharacter(name){
     tradeCollectedAsOf:null, tradeCollectedExact:true,
     tradeMadeAsOf:null, tradeMadeExact:true,
     dutyAsOf:null, dutyExact:true,
-    custom: [], routines: seedRoutines(), routinesSeeded: true, notes: '',
+    custom: [], routines: seedRoutines(), routinesSeeded: true, seedGeneration: SEED_GENERATION, notes: '',
     jobQuestsDone: {}, jobQuestsOpen: {},
     server: {pdc:'', ldc:'', world:''},
     societies: Object.fromEntries(ALLIED_SOCIETIES.map(([name,exp,startRank])=>[name,{rank:startRank,points:0}])),
@@ -1117,6 +1308,7 @@ function normalizeCharacter(c){
     if(typeof r.seedKey !== 'string') r.seedKey = null;
   });
   if(!c.routinesSeeded) backfillSeedRoutines(c);
+  applySeedGenerations(c);
   if(!c.seedScheduleFixesApplied) applySeedScheduleFixes(c);
   applySeedLabelFixes(c);
   if(!c.seedRequiresApplied) applySeedRequires(c);
@@ -2134,9 +2326,52 @@ function routineHTML(cid, item){
       <select id="${cid}-rt-sched-${item.id}" onchange="onRoutineSchedChange('${cid}','${item.id}')">${opts}</select>
       <input type="text" class="routine-req" id="${cid}-rt-req-${item.id}" value="${esc(item.requires||'')}" placeholder="any" title="Patch this unlocks in — blank means always available" oninput="onRoutineInput('${cid}','${item.id}')">
       <span class="routine-due" id="${cid}-rt-due-${item.id}"${lock?` title="needs ${esc(lock.need)}"`:''}>${gated?'locked':fmtDue(dueMs)}</span>
+      ${challengeInfoHTML(cid, item)}
       <button class="hide-btn${item.hidden?' is-hidden':''}" id="${cid}-rt-hidebtn-${item.id}" title="${item.hidden?'Unhide this routine':"Hide — doesn't apply to this character"}" onclick="toggleRoutineHidden('${cid}','${item.id}')">${item.hidden?'◉':'○'}</button>
       <button class="remove-btn" title="Remove this routine" onclick="removeRoutine('${cid}','${item.id}')">&times;</button>
-    </div>`;
+    </div>${challengeInfoPanelHTML(cid, item)}`;
+}
+// The info button, on Challenge Log rows only. A category name is not self-explanatory —
+// "Battles" gives no hint that the guildhest challenges live there — so the button carries
+// the list. Two ways in on purpose: the native tooltip is instant on a mouse, and the click
+// panel is the only one that works on a touchscreen, where `title` never fires.
+function challengeList(item){ return CHALLENGE_LOG[item.seedKey] || []; }
+function challengeInfoHTML(cid, item){
+  const list = challengeList(item);
+  if(!list.length) return '';
+  const tip = list.map(([name,desc])=>`${name} — ${desc}`).join('\n');
+  const open = !!(item.infoOpen);
+  return `<button class="hide-btn" title="${esc(tip)}" onclick="toggleChallengeInfo('${cid}','${item.id}')">${open?'▾':'ⓘ'}</button>`;
+}
+function challengeInfoPanelHTML(cid, item){
+  const list = challengeList(item);
+  if(!list.length || !item.infoOpen) return '';
+  const rows = list.map(([name,desc])=>
+    `<div class="jq-row"><span class="qname">${esc(name)}</span> <span class="hint">${esc(desc)}</span></div>`).join('');
+  return `<div class="jq-panel">${rows}</div>`;
+}
+function toggleChallengeInfo(cid, id){
+  const c = getChar(cid);
+  const item = c.routines.find(r=>r.id===id);
+  if(!item) return;
+  item.infoOpen = !item.infoOpen;
+  renderRoutines(cid);
+  scheduleSave();
+}
+function challengeRowsExist(c){ return c.routines.some(isChallengeRow); }
+// Switched off, the whole section collapses to its heading. This is deliberately NOT the
+// per-row hide button: hiding thirteen rows one at a time and then unhiding them again is
+// the tedium this switch exists to remove, and it leaves `hidden` free to still mean "this
+// row in particular doesn't apply to me".
+// It lives on DATA.ui, not on the character. "I don't do the Challenge Log" is a fact about
+// the person, not about one alt — per-character meant flipping the same switch three times
+// and getting it wrong on the fourth. Absent means shown, so nobody has to be migrated.
+function challengeLogOn(){ return !(DATA.ui && DATA.ui.challengeLogOff); }
+function toggleChallengeLog(cid){
+  if(!DATA.ui) DATA.ui = {};
+  DATA.ui.challengeLogOff = challengeLogOn();
+  renderRoutines(cid);
+  scheduleSave();
 }
 function renderRoutines(cid){
   const box = document.getElementById(cid+'-routines');
@@ -2153,9 +2388,18 @@ function renderRoutines(cid){
   }else{
     box.innerHTML = ROUTINE_SECTIONS.map(sec=>{
       const items = visible.filter(r => routineSection(r) === sec);
-      if(!items.length) return '';
+      // The Challenge Log heading stays put when switched off, or the switch would vanish
+      // with the thing it controls and there'd be no way back. Every other section is only
+      // drawn when it has rows.
+      const challenge = sec === CHALLENGE_SECTION;
+      if(!items.length && !(challenge && challengeRowsExist(c))) return '';
+      const on = challengeLogOn();
+      const head = challenge
+        ? `<div class="subhead with-toggle">${esc(sec)}<button class="section-toggle${on?'':' is-off'}" title="${on?'Hide the Challenge Log for every character':'Show the Challenge Log again'}" onclick="toggleChallengeLog('${cid}')">${on?'● on':'○ off'}</button></div>`
+        : `<div class="subhead">${esc(sec)}</div>`;
+      if(challenge && !on) return `<div class="routine-section">${head}</div>`;
       const body = sec === 'Daily' ? dailySubgroupHTML(cid, items) : items.map(item=>routineHTML(cid,item)).join('');
-      return `<div class="routine-section"><div class="subhead">${esc(sec)}</div>${body}</div>`;
+      return `<div class="routine-section">${head}${body}</div>`;
     }).join('');
   }
   renderGatedNote(cid);
