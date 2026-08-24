@@ -1189,8 +1189,32 @@ const SEED_UNLOCKS = {
   'gc-turnin':           ['grandCompany'],
   'squadron-training':   ['squadron'],
   'squadron-missions':   ['squadron'],
+  // Both A Realm Reborn rows read huntDaily. "Let the Hunt Begin" opens the daily
+  // bills and the weekly B-rank bill in one go — its own walkthrough lists the
+  // weekly Rank B hunt alongside the dailies. hunt-brank used to read eliteHunt,
+  // which is "Elite and Dangerous": level 60, patch 3.0, and its page says it
+  // unlocks *Heavensward* elite marks. So the ARR B-rank row was gated on an
+  // Ishgard quest, and anyone who had done the ARR hunt and stopped there was
+  // told a row they could actually do was locked. eliteHunt now serves the
+  // Heavensward row it always described.
   'hunt-daily':          ['huntDaily'],
-  'hunt-brank':          ['eliteHunt'],
+  'hunt-brank':          ['huntDaily'],
+  'hunt-clan-daily':     ['clanHunt'],
+  'hunt-clan-brank':     ['eliteHunt'],
+  'hunt-veteran-daily':  ['veteranHunt'],
+  'hunt-veteran-brank':  ['veteranHuntElite'],
+  'hunt-nutsy-daily':    ['nutsyHunt'],
+  'hunt-nutsy-brank':    ['nutsyHuntElite'],
+  'hunt-guildship-daily':['guildshipHunt'],
+  'hunt-guildship-brank':['guildshipHuntElite'],
+  'hunt-dawn-daily':     ['dawnHunt'],
+  'hunt-dawn-brank':     ['dawnHuntElite'],
+  'allied-society':      ['alliedSociety'],
+  'challenge-society':   ['alliedSociety'],
+  'morbid-motivation':   ['zodiacMaps'],
+  'aac-m4':              ['arcadion'],
+  'aac-savage':          ['arcadion'],
+  'windurst':            ['windurst'],
   'wondrous-tails':      ['wondrousTails'],
   'faux-hollows':        ['fauxHollows'],
   'custom-deliveries':   ['customDelivery'],
@@ -1216,6 +1240,38 @@ const SEED_UNLOCKS = {
   'challenge-deep':      ['deepDungeon'],
   'challenge-island':    ['islandSanctuary']
 };
+// The other half of an unlock answer: a key that is NECESSARY but not SUFFICIENT.
+// SEED_UNLOCKS is any-of, so everything in it can unlock a row — which is the wrong shape
+// for a prerequisite. Elite and Dangerous being done does not mean you ever walked into
+// Kugane, but it not being done means the Stormblood clan hunt is unreachable, because its
+// own quest cannot be started until Elite and Dangerous is complete. Putting eliteHunt in
+// the any-of list would have shown every later hunt to anyone who finished Heavensward's.
+// So: false locks the row outright. True says nothing at all and hands the row back to
+// whatever gate it already had.
+//
+// This is worth having on its own because it needs no new plugin key. huntDaily and
+// eliteHunt are both already sent, and between them they gate all ten expansion hunt rows
+// honestly today — the exact per-expansion keys only sharpen the answer later.
+// One key per row, since one is all any row needs; an all-of list can come the day it does.
+const SEED_PREREQS = {
+  // Heavensward's set: "Players must finish the original Let the Hunt Begin to unlock
+  // these quests."
+  'hunt-clan-daily':      'huntDaily',
+  'hunt-clan-brank':      'huntDaily',
+  // Stormblood onward: "Cannot be started until Elite and Dangerous is completed."
+  // Which subsumes huntDaily, since Elite and Dangerous sits at the end of the Heavensward
+  // chain that Let the Hunt Begin opens.
+  'hunt-veteran-daily':   'eliteHunt',
+  'hunt-veteran-brank':   'eliteHunt',
+  'hunt-nutsy-daily':     'eliteHunt',
+  'hunt-nutsy-brank':     'eliteHunt',
+  'hunt-guildship-daily': 'eliteHunt',
+  'hunt-guildship-brank': 'eliteHunt',
+  // Dawntrail also wants The Rite of Succession, which no key expresses. Its 7.0 patch
+  // gate is the nearest thing and stays in place underneath.
+  'hunt-dawn-daily':      'eliteHunt',
+  'hunt-dawn-brank':      'eliteHunt'
+};
 // true / false when the payload can answer, null when it cannot and the patch gate should.
 // Keys the payload does not carry are ignored rather than read as false — a build that
 // predates a key knows nothing about it, and treating silence as "locked" would hide
@@ -1228,6 +1284,12 @@ function unlockState(item, c){
   // still saw Challenge Log · Allied Society, because that category has no feature key of
   // its own and fell through to a patch gate.
   if(isChallengeRow(item) && c.unlocks.challengeLog === false) return false;
+
+  // Checked before the any-of list, and only ever able to answer false. Absent is silence
+  // here too: a payload that does not carry the prerequisite key has not said the row is
+  // locked, so the row carries on to its own keys and then to its patch gate.
+  const prereq = SEED_PREREQS[item.seedKey];
+  if(prereq && c.unlocks[prereq] === false) return false;
 
   const keys = SEED_UNLOCKS[item.seedKey];
   if(!keys) return null;
@@ -1253,19 +1315,27 @@ function noPatchReached(c){ return !!c.unlocks && !c.patch && !c.patchCleared; }
 // So: floors only where a row is meaningless without one, and always the LOWEST level at
 // which any qualifying activity becomes possible, never the level the content is balanced
 // for. Tank You is 15 rather than 61 because the Leveling roulette also counts and that
-// needs only a dungeon; capping tomestones is 60 because level 60+ alliance raids award
-// them, not 100. Erring low keeps the original spirit — what disappears is what nobody at
-// that level could attempt by any route, not what they are working toward.
+// needs only a dungeon. Erring low keeps the original spirit — what disappears is what
+// nobody at that level could attempt by any route, not what they are working toward.
 // Every number is from the wiki: Sastasha, the first dungeon, is 15; Highway Robbery, the
-// earliest allied society quest, is 41; Dun Scaith, the earliest level 60+ alliance raid
-// that awards capped tomestones, is 60.
+// earliest allied society quest, is 41.
+// Capping tomestones is the exception, and it is not an erring-low floor at all: it is 100
+// because the wiki says outright that Mnemonics "cannot drop before the player's class is
+// at level 100". It read 60 here on the strength of the sources list naming "Level 60+
+// Alliance Raids" — but that names the DUTY, not the player, and the same section closes
+// with "all activities must be done on a level-capped class to receive level-capped tomes".
+// Dun Scaith is a source at level 100, synced down. So a level 60 character was being told
+// to cap a currency they cannot receive by any route.
+// The other half of that page — you cannot SPEND them before finishing the Dawntrail main
+// scenario — is deliberately not a gate. Banking a capped currency you cannot spend yet is
+// still worth doing, and the row is about capping.
 const SEED_LEVELS = {
   'duty-roulette':      15,
   'tank-you':           15,
   'allied-society':     41,
   'challenge-society':  41,
   'morbid-motivation':  50,  // the Zodiac quest itself is level 50
-  'tomestone-cap':      60
+  'tomestone-cap':     100
 };
 // Measured against the character's HIGHEST job, not whichever they are on. A level 90
 // Paladin who just picked up Botanist has not lost access to the roulette.
