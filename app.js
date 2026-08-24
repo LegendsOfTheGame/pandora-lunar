@@ -730,12 +730,12 @@ const DEFAULT_ROUTINES = [
   ["Aether, Aether, Everywhere (Phantom Weapon)","daily15","aether-everywhere","7.0"],       // One Last Hurrah → Dawntrail
   ["Tank You (Leveling or High-level roulette, as a tank)","daily15","tank-you",""],
   ["Mini Cactpot","daily15","mini-cactpot",""],
-  ["The Hunt (Daily Marks)","daily15","hunt-daily",""],
-  ["Clan Hunt (Daily Marks)","daily15","hunt-clan-daily","3.0"],           // Let the Clan Hunt Begin, Foundation → Heavensward
-  ["Veteran Clan Hunt (Daily Marks)","daily15","hunt-veteran-daily","4.0"], // One-star Veteran Clan Hunt, Kugane → Stormblood
-  ["Nutsy Clan Hunt (Daily Marks)","daily15","hunt-nutsy-daily","5.0"],    // Nuts to You, the Crystarium → Shadowbringers
-  ["Guildship Hunt (Daily Marks)","daily15","hunt-guildship-daily","6.0"], // The Hunt for Specimens, Old Sharlayan → Endwalker
-  ["Dawn Hunt (Daily Marks)","daily15","hunt-dawn-daily","7.0"],           // A New Dawn a New Hunt, Tuliyollal → Dawntrail
+  ["The Hunt — A Realm Reborn (Daily Marks)","daily15","hunt-daily",""],
+  ["Clan Hunt — Heavensward (Daily Marks)","daily15","hunt-clan-daily","3.0"],
+  ["Veteran Clan Hunt — Stormblood (Daily Marks)","daily15","hunt-veteran-daily","4.0"],
+  ["Nutsy Clan Hunt — Shadowbringers (Daily Marks)","daily15","hunt-nutsy-daily","5.0"],
+  ["Guildship Hunt — Endwalker (Daily Marks)","daily15","hunt-guildship-daily","6.0"],
+  ["Dawn Hunt — Dawntrail (Daily Marks)","daily15","hunt-dawn-daily","7.0"],
   ["Grand Company Turn-in","daily20","gc-turnin",""],
   ["Treasure Hunt (map every 18h)","cooldown18h","treasure-hunt",""],
   ["Adventurer Squadron Training","daily20","squadron-training",""],
@@ -772,12 +772,12 @@ const DEFAULT_ROUTINES = [
   ["Seeking Inspiration (Anima Weapon)","weeklyTue","seeking-inspiration","3.0"],            // Anima line, Idyllshire
   ["Wondrous Tails","weeklyTue","wondrous-tails","3.0"],                                     // Keeping Up with the Aliapohs, Idyllshire
   ["Jumbo Cactpot","weeklySat","jumbo-cactpot",""],
-  ["Hunt — B-Rank Elite Marks","weeklyTue","hunt-brank",""],
-  ["Clan Hunt — B-Rank Elite Marks","weeklyTue","hunt-clan-brank","3.0"],
-  ["Veteran Clan Hunt — B-Rank Elite Marks","weeklyTue","hunt-veteran-brank","4.0"],
-  ["Nutsy Clan Hunt — B-Rank Elite Marks","weeklyTue","hunt-nutsy-brank","5.0"],
-  ["Guildship Hunt — B-Rank Elite Marks","weeklyTue","hunt-guildship-brank","6.0"],
-  ["Dawn Hunt — B-Rank Elite Marks","weeklyTue","hunt-dawn-brank","7.0"],
+  ["The Hunt — A Realm Reborn (B-Rank Elite Marks)","weeklyTue","hunt-brank",""],
+  ["Clan Hunt — Heavensward (B-Rank Elite Marks)","weeklyTue","hunt-clan-brank","3.0"],
+  ["Veteran Clan Hunt — Stormblood (B-Rank Elite Marks)","weeklyTue","hunt-veteran-brank","4.0"],
+  ["Nutsy Clan Hunt — Shadowbringers (B-Rank Elite Marks)","weeklyTue","hunt-nutsy-brank","5.0"],
+  ["Guildship Hunt — Endwalker (B-Rank Elite Marks)","weeklyTue","hunt-guildship-brank","6.0"],
+  ["Dawn Hunt — Dawntrail (B-Rank Elite Marks)","weeklyTue","hunt-dawn-brank","7.0"],
   ["Masked Carnivale / Blue Mage Log","weeklyTue","masked-carnivale",""],
   ["Fashion Report","weeklyTue","fashion-report",""],
   ["Custom Deliveries","weeklyTue","custom-deliveries","3.0"],                               // earliest client is Zhloe, Idyllshire
@@ -900,7 +900,12 @@ const SEED_LABEL_FIXES = [
   // (The wiki contradicts itself on extreme trials: the achievement text says lv 61+, its
   // own Notes list says lv 70+. Unresolved, so deliberately encoded nowhere.)
   { seedKey:'tank-you', from:'Tank You (Tank Roulette)',                to:'Tank You (Leveling or High-level roulette, as a tank)' },
-  { seedKey:'tank-you', from:'Tank You (Tank Roulette — any tank job)', to:'Tank You (Leveling or High-level roulette, as a tank)' }
+  { seedKey:'tank-you', from:'Tank You (Tank Roulette — any tank job)', to:'Tank You (Leveling or High-level roulette, as a tank)' },
+  // Naming the expansion once the Hunt split into per-expansion rows — otherwise the ARR
+  // pair looked identical to how they read before the split, the one thing that was actually
+  // supposed to change everywhere.
+  { seedKey:'hunt-daily', from:'The Hunt (Daily Marks)',        to:'The Hunt — A Realm Reborn (Daily Marks)' },
+  { seedKey:'hunt-brank', from:'Hunt — B-Rank Elite Marks',     to:'The Hunt — A Realm Reborn (B-Rank Elite Marks)' }
 ];
 function applySeedLabelFixes(c){
   SEED_LABEL_FIXES.forEach(({seedKey,from,to})=>{
