@@ -954,7 +954,8 @@ function routineSection(item){
 // Retainer Ventures isn't in this list at all — it's an 18h personal cooldown (same
 // mechanism as Treasure Hunt), so it lives in the top-level Other section, not Daily.
 const DAILY_SUBGROUPS = [
-  ['Continuous', ['tank-you','hunt-daily','mini-cactpot','duty-roulette','morbid-motivation']],
+  ['Continuous', ['tank-you','hunt-daily','hunt-clan-daily','hunt-veteran-daily','hunt-nutsy-daily',
+                  'hunt-guildship-daily','hunt-dawn-daily','mini-cactpot','duty-roulette','morbid-motivation']],
   ['Relic Weapons', ['cut-different-cloth','will-to-resist','aether-everywhere']],
   ['Allied Societies', ['allied-society']],
   ['Grand Company', ['squadron-training','gc-turnin']]
