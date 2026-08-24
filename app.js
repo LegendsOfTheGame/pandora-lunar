@@ -701,7 +701,7 @@ const CHALLENGE_LOG = {
 // either — Wondrous Tails wants level 60 as well as 3.0, and the level half stays yours.
 // Checked and deliberately left blank: Duty Roulette, Tank You, Treasure Hunt, Retainer
 // Ventures, Mini/Jumbo Cactpot, Fashion Report, Challenge Log, Grand Company turn-in,
-// Squadron training and missions, both Hunt rows, Masked Carnivale (Blue Mage asks only
+// Squadron training and missions, the ARR Hunt rows, Masked Carnivale (Blue Mage asks only
 // for "The Ultimate Weapon"), Morbid Motivation (Zodiac, level 50), Allied Society
 // (earliest tribe is Amalj'aa, behind the 2.0 MSQ "In Pursuit of the Past"), and capping
 // tomestones — which drop from level 60+ alliance raids too, so its floor is a level.
@@ -731,6 +731,11 @@ const DEFAULT_ROUTINES = [
   ["Tank You (Leveling or High-level roulette, as a tank)","daily15","tank-you",""],
   ["Mini Cactpot","daily15","mini-cactpot",""],
   ["The Hunt (Daily Marks)","daily15","hunt-daily",""],
+  ["Clan Hunt (Daily Marks)","daily15","hunt-clan-daily","3.0"],           // Let the Clan Hunt Begin, Foundation → Heavensward
+  ["Veteran Clan Hunt (Daily Marks)","daily15","hunt-veteran-daily","4.0"], // One-star Veteran Clan Hunt, Kugane → Stormblood
+  ["Nutsy Clan Hunt (Daily Marks)","daily15","hunt-nutsy-daily","5.0"],    // Nuts to You, the Crystarium → Shadowbringers
+  ["Guildship Hunt (Daily Marks)","daily15","hunt-guildship-daily","6.0"], // The Hunt for Specimens, Old Sharlayan → Endwalker
+  ["Dawn Hunt (Daily Marks)","daily15","hunt-dawn-daily","7.0"],           // A New Dawn a New Hunt, Tuliyollal → Dawntrail
   ["Grand Company Turn-in","daily20","gc-turnin",""],
   ["Treasure Hunt (map every 18h)","cooldown18h","treasure-hunt",""],
   ["Adventurer Squadron Training","daily20","squadron-training",""],
@@ -768,6 +773,11 @@ const DEFAULT_ROUTINES = [
   ["Wondrous Tails","weeklyTue","wondrous-tails","3.0"],                                     // Keeping Up with the Aliapohs, Idyllshire
   ["Jumbo Cactpot","weeklySat","jumbo-cactpot",""],
   ["Hunt — B-Rank Elite Marks","weeklyTue","hunt-brank",""],
+  ["Clan Hunt — B-Rank Elite Marks","weeklyTue","hunt-clan-brank","3.0"],
+  ["Veteran Clan Hunt — B-Rank Elite Marks","weeklyTue","hunt-veteran-brank","4.0"],
+  ["Nutsy Clan Hunt — B-Rank Elite Marks","weeklyTue","hunt-nutsy-brank","5.0"],
+  ["Guildship Hunt — B-Rank Elite Marks","weeklyTue","hunt-guildship-brank","6.0"],
+  ["Dawn Hunt — B-Rank Elite Marks","weeklyTue","hunt-dawn-brank","7.0"],
   ["Masked Carnivale / Blue Mage Log","weeklyTue","masked-carnivale",""],
   ["Fashion Report","weeklyTue","fashion-report",""],
   ["Custom Deliveries","weeklyTue","custom-deliveries","3.0"],                               // earliest client is Zhloe, Idyllshire
@@ -795,7 +805,7 @@ function seededRoutine(seedKey){
 // A generation counter fixes it without giving up that protection — each step names the
 // keys it introduces, so nothing outside the new set is ever touched. To add rows later:
 // bump SEED_GENERATION and add a step listing them.
-const SEED_GENERATION = 2;
+const SEED_GENERATION = 3;
 const SEED_GENERATIONS = {
   // Challenge Log split from one weekly tick into its 13 real categories.
   2: {
@@ -807,6 +817,15 @@ const SEED_GENERATIONS = {
     // rename it and you keep it, same rule as every other fix here. A pristine row carries
     // no intent worth preserving, and leaving it would double-count the whole log.
     retire: [{ seedKey:'challenge-log', label:'Challenge Log' }]
+  },
+  // "The Hunt" only names the ARR mark bills — HW, StB, ShB, EW and DT each run their own
+  // named board (Clan Hunt, Veteran Clan Hunt, Nutsy Clan Hunt, Guildship Hunt, Dawn Hunt)
+  // with its own daily and weekly B-rank bill. Nothing retires: hunt-daily/hunt-brank were
+  // never wrong, just ARR-only, and stay that way.
+  3: {
+    add: ['hunt-clan-daily','hunt-clan-brank','hunt-veteran-daily','hunt-veteran-brank',
+          'hunt-nutsy-daily','hunt-nutsy-brank','hunt-guildship-daily','hunt-guildship-brank',
+          'hunt-dawn-daily','hunt-dawn-brank']
   }
 };
 function applySeedGenerations(c){
