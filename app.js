@@ -905,7 +905,20 @@ const SEED_LABEL_FIXES = [
   // pair looked identical to how they read before the split, the one thing that was actually
   // supposed to change everywhere.
   { seedKey:'hunt-daily', from:'The Hunt (Daily Marks)',        to:'The Hunt — A Realm Reborn (Daily Marks)' },
-  { seedKey:'hunt-brank', from:'Hunt — B-Rank Elite Marks',     to:'The Hunt — A Realm Reborn (B-Rank Elite Marks)' }
+  { seedKey:'hunt-brank', from:'Hunt — B-Rank Elite Marks',     to:'The Hunt — A Realm Reborn (B-Rank Elite Marks)' },
+  // The five HW-DT rows were already seeded (generation 3, above) before the expansion name
+  // was added to their labels, so anyone who loaded in that window is stuck on the old
+  // wording same as the ARR pair was — chain them to the corrected text the same way.
+  { seedKey:'hunt-clan-daily',      from:'Clan Hunt (Daily Marks)',                 to:'Clan Hunt — Heavensward (Daily Marks)' },
+  { seedKey:'hunt-clan-brank',      from:'Clan Hunt — B-Rank Elite Marks',          to:'Clan Hunt — Heavensward (B-Rank Elite Marks)' },
+  { seedKey:'hunt-veteran-daily',   from:'Veteran Clan Hunt (Daily Marks)',         to:'Veteran Clan Hunt — Stormblood (Daily Marks)' },
+  { seedKey:'hunt-veteran-brank',   from:'Veteran Clan Hunt — B-Rank Elite Marks',  to:'Veteran Clan Hunt — Stormblood (B-Rank Elite Marks)' },
+  { seedKey:'hunt-nutsy-daily',     from:'Nutsy Clan Hunt (Daily Marks)',           to:'Nutsy Clan Hunt — Shadowbringers (Daily Marks)' },
+  { seedKey:'hunt-nutsy-brank',     from:'Nutsy Clan Hunt — B-Rank Elite Marks',    to:'Nutsy Clan Hunt — Shadowbringers (B-Rank Elite Marks)' },
+  { seedKey:'hunt-guildship-daily', from:'Guildship Hunt (Daily Marks)',            to:'Guildship Hunt — Endwalker (Daily Marks)' },
+  { seedKey:'hunt-guildship-brank', from:'Guildship Hunt — B-Rank Elite Marks',     to:'Guildship Hunt — Endwalker (B-Rank Elite Marks)' },
+  { seedKey:'hunt-dawn-daily',      from:'Dawn Hunt (Daily Marks)',                 to:'Dawn Hunt — Dawntrail (Daily Marks)' },
+  { seedKey:'hunt-dawn-brank',      from:'Dawn Hunt — B-Rank Elite Marks',          to:'Dawn Hunt — Dawntrail (B-Rank Elite Marks)' }
 ];
 function applySeedLabelFixes(c){
   SEED_LABEL_FIXES.forEach(({seedKey,from,to})=>{
