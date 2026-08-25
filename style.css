@@ -24,6 +24,11 @@ body{
   color:var(--text);
   font-family:var(--font-body);
   padding:0 20px 60px;
+  /* Every size on this page is hand-tuned px, not rem — scaling the root font-size
+     would do nothing. `zoom` reflows the page exactly like the browser's own zoom
+     does (unlike `transform: scale`, which doesn't), so 100% here behaves like the
+     130% users were already reaching for by hand on a 1080p monitor. */
+  zoom:1.3;
 }
 /* Wide enough to use a desktop monitor, capped so prose in the instructions and
    notes does not run to an unreadable line length. Grouping sections into tabs
