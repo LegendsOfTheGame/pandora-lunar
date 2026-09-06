@@ -2274,7 +2274,12 @@ function societyRowHTML(cid, name){
   const id = socId(name);
   const rankOpts = validRanksFor(name)
     .map(rank=>{ const r = rankInfo(rank); return `<option value="${r.rank}"${r.rank===s.rank?' selected':''}>${r.rank}. ${esc(r.name)}</option>`; }).join('');
-  const capped = info.quota === 0;
+  // Trust the plugin's own per-society quota over the generic rank table when we have it —
+  // it knows things the table can't, like Ixal capping at Sworn(7) instead of the usual
+  // rank 8, same as the four core ARR tribes cap at Trusted(4) instead of 8.
+  const hasLiveQuota = c.societiesSynced && typeof s.needed === 'number';
+  const quota = hasLiveQuota ? s.needed : info.quota;
+  const capped = quota === 0;
   const cappedText = INTERSOCIETAL_QUESTS[exp]
     ? `capped &mdash; needs ${esc(INTERSOCIETAL_QUESTS[exp])}`
     : `capped &mdash; Bloodsworn is the max (no Intersocietal Quests exist for ${esc(exp)})`;
@@ -2289,7 +2294,7 @@ function societyRowHTML(cid, name){
   const pointsCell = capped
     ? `<span class="society-capped">${cappedText}</span>`
     : c.societiesSynced
-      ? `<span class="society-points">${s.points}</span><span class="society-quota">/ ${info.quota}</span>`
+      ? `<span class="society-points">${s.points}</span><span class="society-quota">/ ${quota}</span>`
       : `<input type="text" id="${cid}-soc-points-${id}" value="${s.points}" style="text-align:right" oninput="onSocietyPointsInput('${cid}','${jsStr(name)}')">
          <span class="society-quota">/ ${info.quota}</span>`;
 
@@ -3403,6 +3408,10 @@ function applyTmImport(){
 
       c.societies[name].rank = rank > 0 ? rank : startRank;
       c.societies[name].points = rank > 0 ? num(entry.points) : 0;
+      // The plugin's own quota for the current rank — 0 means this society cannot earn any
+      // more points here (e.g. Ixal capped at Sworn, or any ARR tribe capped at Trusted),
+      // which the generic SOCIETY_RANKS table has no way to know on its own.
+      c.societies[name].needed = rank > 0 ? num(entry.needed) : undefined;
     });
 
     // Only set once a block has actually arrived, so a character synced by an older
