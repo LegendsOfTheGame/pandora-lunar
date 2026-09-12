@@ -95,6 +95,168 @@ const ALLIED_SOCIETIES = [
   ["Arkasodara","Endwalker",3,7,true], ["Omicron","Endwalker",3,7,true], ["Loporrit","Endwalker",3,7,true],
   ["Pelupelu","Dawntrail",3,7,true], ["Mamool Ja","Dawntrail",3,7,true], ["Yok Huy","Dawntrail",3,7,true]
 ];
+
+// Every A and S rank in the game, in expansion order, S first within each expansion so
+// the rarest sits at the top of its block. Shape is
+// [rank, BNpcName id, name, zone, spawn condition] — the condition is present only for S
+// ranks, since A ranks have none and simply come back on a timer.
+//
+// B ranks are deliberately absent. They respawn in seconds and die incidentally to any
+// train, so a tick against one records nothing the player would ever want to look up.
+//
+// The id is the game's own BNpcName row, read out of NotoriousMonster by MemoriaProbe,
+// and it is what a tick is stored against. It cannot drift: Ker is 10615 whatever the
+// mark is called in any language or patch, so correcting a display name below can never
+// strand what someone has already ticked.
+//
+// Membership and rank were confirmed against that sheet — 127 marks, no additions, no
+// omissions, no rank disagreements. The names and zones stay as the community wiki
+// writes them: the sheet stores names in the form the client title-cases at draw time
+// ("mindflayer", "queen hawk"), which is not the form anyone reads them in. Neither rank
+// is listed on a hunt board — the board issues B-rank bills — so a player meets these
+// names on the enemy's own nameplate in the field, and everywhere else on Faloop or Bear
+// Tracker. All three render them title-cased, which is what this list matches.
+const ELITE_MARKS = [
+["A Realm Reborn", [
+  ["S",2962,"Croque-Mitaine","Middle La Noscea","Mine Grade 3 La Noscean Topsoil. Node shows 7pm-10pm Eorzea Time."],
+  ["S",2963,"Croakadile","Lower La Noscea","Traverse spawn points during a Full Moon."],
+  ["S",2965,"Bonnacon","Western La Noscea","Harvest La Noscean Leeks. Node shows 8am-11am Eorzea Time."],
+  ["S",2964,"The Garlok","Eastern La Noscea","Spawns after its random timer expires. Rain puts it to sleep, ensuring it won't spawn for 200 minutes. (3 hours 20 minutes)"],
+  ["S",2966,"Nandi","Upper La Noscea","Traverse spawn points with a minion out."],
+  ["S",2967,"Chernobog","Outer La Noscea","A player dying."],
+  ["S",2958,"Brontes","Central Thanalan","Eat food at spawn points."],
+  ["S",2957,"Zona Seeker","Western Thanalan","Fish a Glimmerscale."],
+  ["S",2959,"Lampalagua","Eastern Thanalan","Initiate Battlecraft Leves."],
+  ["S",2960,"Nunyunuwi","Southern Thanalan","Ensure all FATEs succeed for exactly 1 hour straight."],
+  ["S",2961,"Minhocao","Northern Thanalan","Kill 100 Earth Sprites."],
+  ["S",2953,"Laideronnette","Central Shroud","Spawns 6 minutes into the second consecutive Rain weather window."],
+  ["S",2955,"Mindflayer","South Shroud","Traverse spawn points at 00:00 during a New Moon."],
+  ["S",2954,"Wulgaru","East Shroud","Initiate Battlecraft Leves."],
+  ["S",2956,"Thousand-cast Theda","North Shroud","Fish a Judgeray at 5-9pm."],
+  ["S",2968,"Safat","Coerthas Central Highlands","Fall off cliffs to 1 HP."],
+  ["S",2969,"Agrippa the Mighty","Mor Dhona","Complete Treasure Maps."],
+  ["A",2945,"Vogaal Ja","Middle La Noscea"],
+  ["A",2946,"Unktehi","Lower La Noscea"],
+  ["A",2948,"Nahn","Western La Noscea"],
+  ["A",2947,"Hellsclaw","Eastern La Noscea"],
+  ["A",2949,"Marberry","Upper La Noscea"],
+  ["A",2950,"Cornu","Outer La Noscea"],
+  ["A",2941,"Sabotender Bailarina","Central Thanalan"],
+  ["A",2940,"Alectryon","Western Thanalan"],
+  ["A",2942,"Maahes","Eastern Thanalan"],
+  ["A",2943,"Zanig'oh","Southern Thanalan"],
+  ["A",2944,"Dalvag's Final Flame","Northern Thanalan"],
+  ["A",2936,"Forneus","Central Shroud"],
+  ["A",2938,"Ghede Ti Malice","South Shroud"],
+  ["A",2937,"Melt","Eastern Shroud"],
+  ["A",2939,"Girtab","North Shroud"],
+  ["A",2951,"Marraco","Coerthas Central Highlands"],
+  ["A",2952,"Kurrea","Mor Dhona"],
+]],
+["Heavensward", [
+  ["S",4374,"Kaiser Behemoth","Coerthas Western Highlands","Fly over spawn points with Behemoth Heir."],
+  ["S",4375,"Senmurv","The Dravanian Forelands","Complete the \"Cerf's Up\" FATE at (19,27) 5 times in a row."],
+  ["S",4377,"Gandarewa","The Churning Mists","Harvest Seventh Heaven or mine Aurum Regis Ore."],
+  ["S",4378,"Bird of Paradise","The Sea of Clouds","Squonk's Chirp AoE has a chance to spawn it."],
+  ["S",4376,"The Pale Rider","The Dravanian Hinterlands","Open treasure coffers from Timeworn Wyvernskin Maps."],
+  ["S",4380,"Leucrotta","Azys Lla","Kill 50 Allagan Chimera, 50 Meracydian Vouivre, and 50 Lesser Hydra."],
+  ["A",4362,"Mirka","Coerthas Western Highlands"],
+  ["A",4363,"Lyuba","Coerthas Western Highlands"],
+  ["A",4364,"Pylraster","The Dravanian Forelands"],
+  ["A",4365,"Lord of the Wyverns","The Dravanian Forelands"],
+  ["A",4368,"Bune","The Churning Mists"],
+  ["A",4369,"Agathos","The Churning Mists"],
+  ["A",4370,"Enkelados","The Sea of Clouds"],
+  ["A",4371,"Sisiutl","The Sea of Clouds"],
+  ["A",4366,"Slipkinx Steeljoints","The Dravanian Hinterlands"],
+  ["A",4367,"Stolas","The Dravanian Hinterlands"],
+  ["A",4372,"Campacti","Azys Lla"],
+  ["A",4373,"Stench Blossom","Azys Lla"],
+]],
+["Stormblood", [
+  ["S",5987,"Udumbara","The Fringes","Kill 100 Leshy & 100 Diakka."],
+  ["S",5985,"Gamma","Yanxia","Fly over spawn points with the Toy Alexander minion."],
+  ["S",5984,"Okina","The Ruby Sea","Kill 100 Yumemi and 100 Naked Yumemi. Spawns from 12pm during a Full Moon."],
+  ["S",5988,"Bone Crawler","The Peaks","Travel via chocobo porter."],
+  ["S",5986,"Orghana","The Azim Steppe","Complete 'Not Just a Tribute' FATE at (12,14) then fly over spawn points."],
+  ["S",5989,"Salt and Light","The Lochs","Discard items 50 times."],
+  ["A",5990,"Orcus","The Fringes"],
+  ["A",5991,"Erle","The Fringes"],
+  ["A",5998,"Gajasura","Yanxia"],
+  ["A",5999,"Angada","Yanxia"],
+  ["A",5996,"Funa Yurei","The Ruby Sea"],
+  ["A",5997,"Oni Yumemi","The Ruby Sea"],
+  ["A",5992,"Vochstein","The Peaks"],
+  ["A",5993,"Aqrabuamelu","The Peaks"],
+  ["A",6000,"Girimekhala","The Azim Steppe"],
+  ["A",6001,"Sum","The Azim Steppe"],
+  ["A",5994,"Mahisha","The Lochs"],
+  ["A",5995,"Luminare","The Lochs"],
+]],
+["Shadowbringers", [
+  ["S",8905,"Tyger","Lakeland","Discard a Rail Tenderloin."],
+  ["S",8653,"Aglaope","Il Mheg","Travel over spawn points with the Scarlet Peacock minion out."],
+  ["S",8910,"Forgiven Pedantry","Kholusia","Gather 50 Dwarven Cotton Bolls."],
+  ["S",8900,"Tarchia","Amh Araeng","Cast the blue mage action Self-destruct on spawn points."],
+  ["S",8890,"Ixtab","The Rak'tika Greatwood","Kill 100 Cracked Ronkan Dolls, 100 Cracked Ronkan Thorns and 100 Cracked Ronkan Vessels."],
+  ["S",8895,"Gunitt","The Tempest","Drag 3 Deep-sea Leeches to a Clionid and get hit by its attack \"Buccal Cones\"."],
+  ["S",8915,"Forgiven Rebellion","Norvrandt","When an S rank dies in Norvrandt, it has a chance to spawn Forgiven Gossips. Killing all four will spawn Forgiven Rebellion."],
+  ["A",8907,"Nariphon","Lakeland"],
+  ["A",8906,"Nuckelavee","Lakeland"],
+  ["A",8655,"O Poorest Pauldia","Il Mheg"],
+  ["A",8654,"The Mudman","Il Mheg"],
+  ["A",8911,"Li'l Murderer","Kholusia"],
+  ["A",8912,"Huracan","Kholusia"],
+  ["A",8901,"Maliktender","Amh Araeng"],
+  ["A",8902,"Sugaar","Amh Araeng"],
+  ["A",8892,"Grassman","The Rak'tika Greatwood"],
+  ["A",8891,"Supay","The Rak'tika Greatwood"],
+  ["A",8897,"Baal","The Tempest"],
+  ["A",8896,"Rusalka","The Tempest"],
+]],
+["Endwalker", [
+  ["S",10617,"Burfurlur the Canny","Labyrinthos","Use a Tiny Troll minion on spawn points in clear skies Clear Skies/fair skies Fair Skies daytime."],
+  ["S",10618,"Sphatika","Thavnair","Kill 100 Vajralangula, 100 Pisaca and 100 Asvattha."],
+  ["S",10619,"Armstrong","Garlemald","Wear Mended Imperial Pot Helm and Mended Imperial Short Robe and die on spawn points."],
+  ["S",10620,"Ruminator","Mare Lamentorum","Kill 100 Thinkers, 100 Weepers, and 100 Wanderers."],
+  ["S",10621,"Ophioneus","Elpis","Discard a stack of 5 Egg of Elpis."],
+  ["S",10622,"Narrow-rift","Ultima Thule","Have 10 people travel over spawn points with the Wee Ea minion summoned."],
+  ["S",10615,"Ker","Endwalker areas","When an S rank dies in and Endwalker area, it has a chance to spawn Ker Shrouds. Killing all four will spawn Ker."],
+  ["A",10624,"Hulder","Labyrinthos"],
+  ["A",10623,"Storsie","Labyrinthos"],
+  ["A",10626,"Sugriva","Thavnair"],
+  ["A",10625,"Yilan","Thavnair"],
+  ["A",10628,"Aegeiros","Garlemald"],
+  ["A",10627,"Minerva","Garlemald"],
+  ["A",10630,"Mousse Princess","Mare Lamentorum"],
+  ["A",10629,"Lunatender Queen","Mare Lamentorum"],
+  ["A",10632,"Petalodus","Elpis"],
+  ["A",10631,"Gurangatch","Elpis"],
+  ["A",10634,"Arch-Eta","Ultima Thule"],
+  ["A",10633,"Fan Ail","Ultima Thule"],
+]],
+["Dawntrail", [
+  ["S",13444,"Ihnuxokiy","Kozama'uka","Use the Morpho minion on spawn points."],
+  ["S",13360,"Kirlirger the Abhorrent","Urqopacha","Be on a spawn point during Fog and a new moon."],
+  ["S",12754,"Neyoozoteel","Yak T'el","Discard a stack of at least 50 Fish Meal."],
+  ["S",13399,"Sansheya","Shaaloani","Complete 'You Are What You Drink' FATE at (14,23.5) three times in a row."],
+  ["S",13156,"Atticus the Primogenitor","Heritage Found","Craft HQ Rroneek Steak."],
+  ["S",13437,"The Forecaster","Living Memory","Cast the blue mage action Northerlies on spawn points."],
+  ["S",13406,"Arch Aethereater","Dawntrail areas","When an S rank dies in a Dawntrail area, it has a chance to spawn Crystal Incarnations. Killing all four will spawn Arch Aethereater."],
+  ["A",13443,"Pkuucha","Kozama'uka"],
+  ["A",13442,"The Raintriller","Kozama'uka"],
+  ["A",13362,"Nechuciho","Urqopacha"],
+  ["A",13361,"Queen Hawk","Urqopacha"],
+  ["A",12753,"Rrax Yity'a","Yak T'el"],
+  ["A",12692,"Starcrier","Yak T'el"],
+  ["A",13401,"Keheniheyamewi","Shaaloani"],
+  ["A",13400,"Yehehetoaua'pyo","Shaaloani"],
+  ["A",13157,"Heshuala","Heritage Found"],
+  ["A",13158,"Urna Variabilis","Heritage Found"],
+  ["A",13436,"Cat's Eye","Living Memory"],
+  ["A",13435,"Sally the Sweeper","Living Memory"],
+]],
+];
 // Time Memoria sends societies keyed by the game's own BeastTribe row id, because at least
 // four spellings of each society are in circulation — the sheet says "sylphs", the wiki says
 // "Sylphs", this page says "Sylph". The id cannot drift; the wording can.
@@ -1486,6 +1648,10 @@ function newCharacter(name){
     societies: Object.fromEntries(ALLIED_SOCIETIES.map(([name,exp,startRank])=>[name,{rank:startRank,points:0}])),
     intersocietalDone: {},
     societiesSynced:false,
+    // Keyed by the game's own BNpcName row id, so neither reordering the table nor
+    // correcting a mark's spelling can shift what is already ticked. Only slain marks
+    // are stored.
+    hunts: {}, huntsCollapsed: {},
     tmSyncedAt: null, tmSyncedVersion: null, playtimeAsOf: null
   };
 }
@@ -1560,6 +1726,10 @@ function normalizeCharacter(c){
     }
   });
   if(!c.intersocietalDone || typeof c.intersocietalDone !== 'object') c.intersocietalDone = {};
+  // A key matching no mark is left in place rather than pruned — see migrateHuntKeys.
+  if(!c.hunts || typeof c.hunts !== 'object') c.hunts = {};
+  migrateHuntKeys(c);
+  if(!c.huntsCollapsed || typeof c.huntsCollapsed !== 'object') c.huntsCollapsed = {};
   if(typeof c.tmSyncedAt !== 'string') c.tmSyncedAt = null;
   if(typeof c.tmSyncedVersion !== 'string') c.tmSyncedVersion = null;
   if(typeof c.playtimeAsOf !== 'string') c.playtimeAsOf = null;
@@ -1746,6 +1916,7 @@ function characterPageHTML(cid){
       <button class="tab-btn" data-tab="routines" onclick="switchTab('${cid}','routines')">Routines</button>
       <button class="tab-btn" data-tab="jobs" onclick="switchTab('${cid}','jobs')">Jobs</button>
       <button class="tab-btn" data-tab="societies" onclick="switchTab('${cid}','societies')">Societies</button>
+      <button class="tab-btn" data-tab="hunts" onclick="switchTab('${cid}','hunts')">Hunts</button>
       <button class="tab-btn" data-tab="mentor" onclick="switchTab('${cid}','mentor')">Mentor</button>
       <button class="tab-btn" data-tab="notes" onclick="switchTab('${cid}','notes')">Notes</button>
   </div>
@@ -1801,6 +1972,19 @@ function characterPageHTML(cid){
   <div class="section">
     <h2>Allied society relations <span class="hint-group"><span class="hint" id="${cid}-sochint">rank + points reset to 0 on every rank-up</span><button class="link-btn" id="${cid}-socmode-btn" onclick="toggleSocietiesManual('${cid}')">Edit manually</button></span></h2>
     <div id="${cid}-societies" class="society-columns"></div>
+  </div>
+  </div>
+  <div class="tab-panel" data-tab="hunts">
+  <div class="section">
+    <h2>Marks slain <span class="hint">${ELITE_MARK_TOTAL} A and S ranks across six expansions</span></h2>
+    <div class="dash-grid" id="${cid}-hunt-dash"></div>
+    <div class="check-note ok" id="${cid}-hunt-tally"></div>
+  </div>
+  <div class="section">
+    <h2>Elite marks
+      <span class="hint">ticked by hand &mdash; no import fills this in</span>
+    </h2>
+    <div id="${cid}-hunts" class="hunt-columns"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="mentor">
@@ -2399,6 +2583,135 @@ function onSocietyPointsInput(cid, name){
   scheduleSave();
 }
 
+/* ---------- elite marks (the Hunt) ---------- */
+// Nothing fills this tab in. The game records no per-mark kill of its own — the Hunt
+// achievements only count how many marks of a rank you have killed, and the same mark
+// killed twice counts twice — so no export, Lodestone page or plugin can reconstruct it.
+// Every tick here is the player saying so.
+const ELITE_MARK_TOTAL = ELITE_MARKS.reduce((n, [, marks]) => n + marks.length, 0);
+const ELITE_RANKS = ['S', 'A'];
+const ELITE_RANK_LABEL = {S:'S rank', A:'A rank'};
+const ELITE_RANK_TOTALS = ELITE_MARKS.reduce((acc, [, marks]) => {
+  marks.forEach(([rank]) => { acc[rank]++; });
+  return acc;
+}, {S:0, A:0});
+
+// Ticks were stored against the display name until MemoriaProbe read the BNpcName ids out
+// of the game's NotoriousMonster sheet. This converts a save written under the old scheme,
+// once, on load.
+const ELITE_MARK_IDS_BY_NAME = ELITE_MARKS.reduce((acc, [, marks]) => {
+  marks.forEach(([, id, name]) => { acc[name.toLowerCase()] = id; });
+  return acc;
+}, {});
+
+function migrateHuntKeys(c){
+  const keys = Object.keys(c.hunts);
+  if(keys.every(key => /^\d+$/.test(key))) return;
+
+  const moved = {};
+  keys.forEach(key => {
+    const id = ELITE_MARK_IDS_BY_NAME[key.toLowerCase()];
+    // A key matching no mark is carried across untouched rather than dropped. It is either
+    // a B rank from before they were removed, or a name the wiki list spelled differently
+    // from this one — and a tick nobody can see is still better than a tick destroyed.
+    moved[id === undefined ? key : id] = true;
+  });
+  c.hunts = moved;
+}
+
+// Every group starts open, so an absent key is the default rather than a state anyone
+// has to write on a fresh character.
+function huntGroupKey(exp, rank){ return exp + '|' + rank; }
+function huntGroupCollapsed(c, exp, rank){
+  return c.huntsCollapsed[huntGroupKey(exp, rank)] === true;
+}
+
+function huntRowHTML(cid, c, mark){
+  const [rank, id, name, zone, trigger] = mark;
+  const done = !!c.hunts[id];
+  return `
+    <label class="hunt-item${done ? ' done' : ''}">
+      <input type="checkbox" data-mark="${id}" data-rank="${rank}" ${done ? 'checked' : ''} onchange="toggleHunt('${cid}', this)">
+      <span class="hunt-text"><span class="hunt-name">${esc(name)}</span>${trigger ? `<span class="hunt-trigger">${esc(trigger)}</span>` : ''}</span>
+      <span class="hunt-zone">${esc(zone)}</span>
+    </label>`;
+}
+
+function renderHunts(cid){
+  const c = getChar(cid);
+  const html = ELITE_MARKS.map(([exp, marks]) => {
+    const groups = ELITE_RANKS.map(rank => {
+      const list = marks.filter(m => m[0] === rank);
+      if(!list.length) return '';
+      const done = list.filter(m => c.hunts[m[1]]).length;
+      const collapsed = huntGroupCollapsed(c, exp, rank);
+      return `
+        <div class="hunt-rankgroup${collapsed ? ' is-collapsed' : ''}">
+          <div class="hunt-rankhead">
+            <span class="rank-pill rank-${rank.toLowerCase()}">${rank}</span>
+            <span class="hunt-rankname">${ELITE_RANK_LABEL[rank]}</span>
+            <span class="hunt-rankcount"><b>${done}</b> / ${list.length}</span>
+            <button class="sec-toggle" data-exp="${esc(exp)}" data-rank="${rank}" onclick="toggleHuntGroup('${cid}', this)">${collapsed ? 'show' : 'hide'}</button>
+          </div>
+          <div class="hunt-list">${list.map(m => huntRowHTML(cid, c, m)).join('')}</div>
+        </div>`;
+    }).join('');
+    return `<div class="hunt-exp"><div class="subhead">${esc(exp)}</div>${groups}</div>`;
+  }).join('');
+  document.getElementById(cid+'-hunts').innerHTML = html;
+  renderHuntDash(cid);
+}
+
+// Split by rank rather than rolled into one figure: an A rank comes back on a 4-6 hour
+// timer and an S rank on a 84-132 hour one, so the two are not the same achievement and a
+// combined total would let the easier half speak for both.
+function renderHuntDash(cid){
+  const c = getChar(cid);
+  const tally = {S:0, A:0};
+  ELITE_MARKS.forEach(([, marks]) => marks.forEach(([rank, id]) => { if(c.hunts[id]) tally[rank]++; }));
+  document.getElementById(cid+'-hunt-dash').innerHTML = ELITE_RANKS.map(rank => {
+    const total = ELITE_RANK_TOTALS[rank];
+    const done = tally[rank];
+    return `
+      <div class="metric${done === total ? ' done' : ''}">
+        <div class="label">${ELITE_RANK_LABEL[rank]}s</div>
+        <div class="value">${done} <small>/ ${total}</small></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct(done, total)}%"></div></div>
+      </div>`;
+  }).join('');
+  const slain = tally.S + tally.A;
+  const left = ELITE_RANK_TOTALS.S - tally.S;
+  document.getElementById(cid+'-hunt-tally').textContent =
+    `${slain} of ${ELITE_MARK_TOTAL} marks ticked. ` +
+    (left === 0 ? 'Every S rank accounted for.' : `${left} S rank${left === 1 ? '' : 's'} still out there.`);
+}
+
+// Rebuilding the whole tab on one tick would throw away the scroll position halfway down a
+// 127-row page, so this updates only the three things that changed.
+function toggleHunt(cid, cb){
+  const c = getChar(cid);
+  const id = cb.dataset.mark;
+  if(cb.checked) c.hunts[id] = true;
+  else delete c.hunts[id];
+  cb.closest('.hunt-item').classList.toggle('done', cb.checked);
+  const group = cb.closest('.hunt-rankgroup');
+  const on = group.querySelectorAll('input:checked').length;
+  const all = group.querySelectorAll('input').length;
+  group.querySelector('.hunt-rankcount').innerHTML = `<b>${on}</b> / ${all}`;
+  renderHuntDash(cid);
+  scheduleSave();
+}
+
+function toggleHuntGroup(cid, btn){
+  const c = getChar(cid);
+  const key = huntGroupKey(btn.dataset.exp, btn.dataset.rank);
+  const collapsed = !huntGroupCollapsed(c, btn.dataset.exp, btn.dataset.rank);
+  c.huntsCollapsed[key] = collapsed;
+  btn.closest('.hunt-rankgroup').classList.toggle('is-collapsed', collapsed);
+  btn.textContent = collapsed ? 'show' : 'hide';
+  scheduleSave();
+}
+
 /* ---------- job quest checklist (levels 1-70) ---------- */
 // Job names never collide across combat/craft/gather, so one lookup covers all three.
 function jobLevelOf(c, job){
@@ -2948,6 +3261,7 @@ function renderChar(cid){
   updateOverallCheck(cid);
   renderJobTables(cid);
   renderSocieties(cid);
+  renderHunts(cid);
   renderRoutines(cid);
   renderCustom(cid);
   renderTmSyncNote(cid);
