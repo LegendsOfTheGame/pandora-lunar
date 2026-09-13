@@ -684,13 +684,16 @@ function missedJobQuests(job, level, doneMap){
 
 // "Overall" is a roll-up: sub-categories should sum to it on both the done and total side.
 // Totals are editable per-character (Edit totals button) since they grow with patches.
+// Read off the in-game Overview tab on 13/09/2026, on a 7.56 client. That reading also
+// corrected Sidequests, which sat at 1987 here from before and is really 1986 — the one
+// figure that was wrong rather than merely out of date.
 const QUEST_CATS = [
-  ["overall","Overall",6472],
-  ["msq","Main scenario",991],
+  ["overall","Overall",6485],
+  ["msq","Main scenario",995],
   ["era","Chronicles of a New Era",192],
-  ["side","Sidequests",1987],
+  ["side","Sidequests",1986],
   ["allied","Allied Society",716],
-  ["class","Class & Job Quests",848],
+  ["class","Class & Job Quests",858],
   ["leve","Levequests",1738]
 ];
 const SUB_CATS = QUEST_CATS.filter(([key])=>key!=='overall');
@@ -701,16 +704,17 @@ const SUB_CATS = QUEST_CATS.filter(([key])=>key!=='overall');
 // showing Stormblood at 122/162, which is exactly 122 initial + 40 post-Stormblood).
 // "A Realm Reborn" here is two wiki arcs combined — Seventh Umbral Era (160-161,
 // starting-city/GC-dependent) + Seventh Astral Era (80, fixed) = 240 or 241. ARR's total
-// is deliberately editable: summing all six with 240 gives exactly 991, with 241 giving
-// exactly 992 — both independently confirmed against the plugin's real numbers, so this
-// checks out rather than being assumed.
+// is deliberately editable: summing all six with 240 gives exactly 995, with 241 giving
+// exactly 996 — both independently confirmed against the plugin's real numbers, so this
+// checks out rather than being assumed. Dawntrail carries patch 7.56's four new quests
+// (A Winter's Dream through Windborne), which is why it reads 143 and not 139.
 const MSQ_EXPANSIONS = [
   ["arr","A Realm Reborn",240],
   ["hw","Heavensward",138],
   ["stb","Stormblood",162],
   ["shb","Shadowbringers",157],
   ["ew","Endwalker",155],
-  ["dt","Dawntrail",139]
+  ["dt","Dawntrail",143]
 ];
 
 // Every reset is a fixed instant in UTC (SE's own convention: GMT reference regardless of
@@ -1100,6 +1104,31 @@ function applySeedRequires(c){
     if(r && !r.requires) r.requires = requires;
   });
   c.seedRequiresApplied = true;
+}
+// Quest totals are copied into each character when it is created, so raising a default
+// does nothing for characters that already exist — they keep whatever was current on the
+// day they were made, and every percentage stays against the old denominator. These two
+// lists carry the stored value forward, with the same only-if-still-default safety as the
+// seed fixes above: a total still sitting on the exact old figure was never edited, and a
+// total you typed yourself matches no `from` and is left alone. Add a line per figure when
+// a patch moves one, rather than editing the defaults on their own.
+const QUEST_TOTAL_FIXES = [
+  { key:'overall', from:6472, to:6485 },   // 7.56: +4 MSQ, +10 Class & Job, -1 Sidequests
+  { key:'msq',     from:991,  to:995  },
+  { key:'side',    from:1987, to:1986 },   // never right, not a patch change
+  { key:'class',   from:848,  to:858  }
+];
+const MSQ_TOTAL_FIXES = [
+  { key:'dt', from:139, to:143 }           // 7.56's four Dawntrail quests
+];
+function applyQuestTotalFixes(c){
+  QUEST_TOTAL_FIXES.forEach(({key,from,to})=>{
+    if(c.questTotals[key] === from) c.questTotals[key] = to;
+  });
+  MSQ_TOTAL_FIXES.forEach(({key,from,to})=>{
+    if(c.msqBreakdownTotals[key] === from) c.msqBreakdownTotals[key] = to;
+  });
+  c.questTotalFixesApplied = true;
 }
 
 function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHEDULES[0]; }
@@ -1682,6 +1711,7 @@ function normalizeCharacter(c){
     if(c.msqBreakdown[key] === undefined) c.msqBreakdown[key] = 0;
     if(c.msqBreakdownTotals[key] === undefined) c.msqBreakdownTotals[key] = total;
   });
+  if(!c.questTotalFixesApplied) applyQuestTotalFixes(c);
   c.msqBreakdownOpen = !!c.msqBreakdownOpen;
   if(typeof c.playtime === 'string'){
     const d = c.playtime.match(/(\d+)\s*d/i), h = c.playtime.match(/(\d+)\s*h/i);
