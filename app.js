@@ -257,6 +257,40 @@ const ELITE_MARKS = [
   ["A",13435,"Sally the Sweeper","Living Memory"],
 ]],
 ];
+
+// Which "Mark of the ..." achievement each mark belongs to, so the tab can be read
+// alongside the achievement window instead of against it.
+//
+// The achievements are named for regions the game uses nowhere else — nothing tells a
+// player that "the Holt" is the Black Shroud, or that "the Lake" means Mor Dhona and
+// Coerthas together. Grouping the list this way defines each name by the zones sitting
+// under it.
+//
+// Shape is [expansion, achievement name, region as the reader knows it, rank, mark ids].
+// The ids come from each achievement's own Data field, read out of the game by
+// MemoriaProbe, so a mark in an unexpected zone cannot land in the wrong group.
+//
+// A Realm Reborn through Stormblood only. Shadowbringers onward has no group
+// achievements at all, and those expansions stay a flat list per rank — an honest
+// asymmetry, since there is genuinely nothing there to correspond to.
+const ELITE_MARK_GROUPS = [
+  ["A Realm Reborn","Mark of the Holt: S","the Black Shroud","S",[2953,2955,2954,2956]],
+  ["A Realm Reborn","Mark of the Holt: A","the Black Shroud","A",[2936,2938,2937,2939]],
+  ["A Realm Reborn","Mark of the Desert: S","Thanalan","S",[2958,2957,2959,2960,2961]],
+  ["A Realm Reborn","Mark of the Desert: A","Thanalan","A",[2941,2940,2942,2943,2944]],
+  ["A Realm Reborn","Mark of the Sea: S","La Noscea","S",[2962,2963,2965,2964,2966,2967]],
+  ["A Realm Reborn","Mark of the Sea: A","La Noscea","A",[2945,2946,2948,2947,2949,2950]],
+  ["A Realm Reborn","Mark of the Lake: S","Mor Dhona & Coerthas","S",[2968,2969]],
+  ["A Realm Reborn","Mark of the Lake: A","Mor Dhona & Coerthas","A",[2951,2952]],
+  ["Heavensward","Mark of the Dragon: S","Dravania & the Churning Mists","S",[4375,4377,4376]],
+  ["Heavensward","Mark of the Dragon: A","Dravania & the Churning Mists","A",[4364,4365,4368,4369,4366,4367]],
+  ["Heavensward","Mark of Cloud and Ice: S","Abalathia & Coerthas West","S",[4374,4378,4380]],
+  ["Heavensward","Mark of Cloud and Ice: A","Abalathia & Coerthas West","A",[4362,4363,4370,4371,4372,4373]],
+  ["Stormblood","Mark of the Wastes: S","Gyr Abania","S",[5987,5988,5989]],
+  ["Stormblood","Mark of the Wastes: A","Gyr Abania","A",[5990,5991,5992,5993,5994,5995]],
+  ["Stormblood","Mark of the East: S","Othard","S",[5985,5984,5986]],
+  ["Stormblood","Mark of the East: A","Othard","A",[5998,5999,5996,5997,6000,6001]],
+];
 // Time Memoria sends societies keyed by the game's own BeastTribe row id, because at least
 // four spellings of each society are in circulation — the sheet says "sylphs", the wiki says
 // "Sylphs", this page says "Sylph". The id cannot drift; the wording can.
@@ -2651,9 +2685,12 @@ function migrateHuntKeys(c){
 
 // Every group starts open, so an absent key is the default rather than a state anyone
 // has to write on a fresh character.
-function huntGroupKey(exp, rank){ return exp + '|' + rank; }
-function huntGroupCollapsed(c, exp, rank){
-  return c.huntsCollapsed[huntGroupKey(exp, rank)] === true;
+// Keyed by the block's own identity — an achievement name where one exists, expansion
+// and rank where none does. Achievement names are unique across the table, so the two
+// kinds cannot collide. Collapse state left over from the old expansion|rank scheme
+// simply stops matching and the block opens, which is the default anyway.
+function huntGroupCollapsed(c, key){
+  return c.huntsCollapsed[key] === true;
 }
 
 function huntRowHTML(cid, c, mark){
@@ -2667,27 +2704,52 @@ function huntRowHTML(cid, c, mark){
     </label>`;
 }
 
+// One block per achievement where an achievement exists, a plain rank block where none
+// does. The header carries the achievement's own name beside the region a reader would
+// recognise, because nothing in the game connects "the Holt" to the Black Shroud — the
+// only people who can make that jump are the ones who already knew.
+function huntBlockHTML(cid, c, key, rank, title, region, list){
+  const done = list.filter((m) => c.hunts[m[1]]).length;
+  const collapsed = huntGroupCollapsed(c, key);
+
+  return `
+    <div class="hunt-rankgroup${collapsed ? ' is-collapsed' : ''}">
+      <div class="hunt-rankhead">
+        <span class="rank-pill rank-${rank.toLowerCase()}">${rank}</span>
+        <span class="hunt-rankname">${esc(title)}${region ? `<span class="hunt-rankwhere">${esc(region)}</span>` : ''}</span>
+        <span class="hunt-rankcount"><b>${done}</b> / ${list.length}</span>
+        <button class="sec-toggle" data-key="${esc(key)}" onclick="toggleHuntGroup('${cid}', this)">${collapsed ? 'show' : 'hide'}</button>
+      </div>
+      <div class="hunt-list">${list.map((m) => huntRowHTML(cid, c, m)).join('')}</div>
+    </div>`;
+}
+
 function renderHunts(cid){
   const c = getChar(cid);
+
   const html = ELITE_MARKS.map(([exp, marks]) => {
-    const groups = ELITE_RANKS.map(rank => {
-      const list = marks.filter(m => m[0] === rank);
+    const blocks = ELITE_RANKS.map((rank) => {
+      const list = marks.filter((m) => m[0] === rank);
       if(!list.length) return '';
-      const done = list.filter(m => c.hunts[m[1]]).length;
-      const collapsed = huntGroupCollapsed(c, exp, rank);
-      return `
-        <div class="hunt-rankgroup${collapsed ? ' is-collapsed' : ''}">
-          <div class="hunt-rankhead">
-            <span class="rank-pill rank-${rank.toLowerCase()}">${rank}</span>
-            <span class="hunt-rankname">${ELITE_RANK_LABEL[rank]}</span>
-            <span class="hunt-rankcount"><b>${done}</b> / ${list.length}</span>
-            <button class="sec-toggle" data-exp="${esc(exp)}" data-rank="${rank}" onclick="toggleHuntGroup('${cid}', this)">${collapsed ? 'show' : 'hide'}</button>
-          </div>
-          <div class="hunt-list">${list.map(m => huntRowHTML(cid, c, m)).join('')}</div>
-        </div>`;
+
+      const achievements = ELITE_MARK_GROUPS.filter((g) => g[0] === exp && g[3] === rank);
+
+      // Shadowbringers onward: no achievement covers these, so there is nothing to group
+      // by and the flat rank list is the honest presentation.
+      if(achievements.length === 0)
+        return huntBlockHTML(cid, c, exp + '|' + rank, rank, ELITE_RANK_LABEL[rank], '', list);
+
+      // Ordered by the achievement's own id list rather than by the table, so the block
+      // reads in the order the game names them.
+      return achievements.map(([, name, region, , ids]) =>
+        huntBlockHTML(cid, c, name, rank, name, region,
+          ids.map((id) => list.find((m) => m[1] === id)).filter(Boolean))
+      ).join('');
     }).join('');
-    return `<div class="hunt-exp"><div class="subhead">${esc(exp)}</div>${groups}</div>`;
+
+    return `<div class="hunt-exp"><div class="subhead">${esc(exp)}</div>${blocks}</div>`;
   }).join('');
+
   document.getElementById(cid+'-hunts').innerHTML = html;
   renderHuntDash(cid);
 }
@@ -2734,8 +2796,8 @@ function toggleHunt(cid, cb){
 
 function toggleHuntGroup(cid, btn){
   const c = getChar(cid);
-  const key = huntGroupKey(btn.dataset.exp, btn.dataset.rank);
-  const collapsed = !huntGroupCollapsed(c, btn.dataset.exp, btn.dataset.rank);
+  const key = btn.dataset.key;
+  const collapsed = !huntGroupCollapsed(c, key);
   c.huntsCollapsed[key] = collapsed;
   btn.closest('.hunt-rankgroup').classList.toggle('is-collapsed', collapsed);
   btn.textContent = collapsed ? 'show' : 'hide';
