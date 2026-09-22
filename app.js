@@ -982,7 +982,7 @@ const DEFAULT_ROUTINES = [
   ["Fashion Report","weeklyTue","fashion-report",""],
   ["Custom Deliveries","weeklyTue","custom-deliveries","3.0"],                               // earliest client is Zhloe, Idyllshire
   ["Doman Enclave Reconstruction","weeklyTue","doman-enclave","4.2"],                        // Elation and Trepidation
-  ["Squadron Missions","weeklyTue","squadron-missions",""],
+  ["Squadron Missions","cooldown18h","squadron-missions",""],        // 18h per dispatch; the weekly cap is per unique mission
   ["Faux Hollows","weeklyTue","faux-hollows","5.0"],                                         // Fantastic Mr. Faux → Shadowbringers
   ["Island Sanctuary Weekly","weeklyTue","island-sanctuary","6.0"],                          // Seeking Sanctuary → Endwalker
   ["Bozjan Frontier (Delubrum Reginae)","weeklyTue","bozjan-frontier","5.0"]                 // Hail to the Queen → Shadowbringers
@@ -1059,24 +1059,51 @@ function backfillSeedRoutines(c){
   });
   c.routinesSeeded = true;
 }
-// One-time corrections to already-seeded routines whose original best-effort schedule
-// turned out wrong after the fact (Jumbo Cactpot was on the standard Tuesday reset; it's
-// really its own Saturday drawing. Treasure Hunt was approximated to a fixed daily reset;
-// it's really an 18h cooldown from whenever you last clicked it). Each only applies if the
-// routine is still sitting on the specific old (wrong) schedId — a deliberate manual change
-// away from that couldn't have happened before the fix existed, so this can't clobber a real
-// user choice. Add future corrections here rather than one-off functions.
+// Corrections to already-seeded routines whose original best-effort schedule turned out
+// wrong after the fact (Jumbo Cactpot was on the standard Tuesday reset; it's really its
+// own Saturday drawing. Treasure Hunt and Retainer Ventures were approximated to a fixed
+// daily reset; both are really an 18h cooldown from whenever you last dispatched them).
+// Each only applies if the routine is still sitting on the specific old (wrong) schedId —
+// a deliberate manual change away from that couldn't have happened before the fix existed,
+// so this can't clobber a real user choice. Add future corrections here rather than
+// one-off functions.
+//
+// Each fix is applied at most once per character, recorded by its own id.
+//
+// Two wrong designs came before this one. A single seedScheduleFixesApplied boolean
+// stranded anyone whose record was marked before a later entry was added: Retainer
+// Ventures sat on daily15 for a flagged character and no reload could correct it.
+// Re-running the list on every load fixes that but breaks something worse — the `from`
+// guard does NOT protect a deliberate choice here. A schedule is a closed set of eight
+// options, so a user can pick the very value a fix treats as wrong, and it would be
+// silently reverted on every load, for ever. That is the difference from SEED_LABEL_FIXES
+// below, where a user's rename can never equal the `from` string.
+//
+// So: per-fix ids. A new entry reaches existing characters once, and anything the user
+// does afterwards is never touched again. The id is recorded whether or not it matched,
+// because "considered" is the thing worth remembering. The old boolean is dropped, since
+// it cannot say which fixes it stood for.
+// Squadron Missions carries two clocks, and the seed picked the wrong one. A mission takes
+// 18 hours to complete once dispatched, and separately each unique Trainee or Routine
+// mission may be completed once a week, with one Priority mission a week. The weekly cap
+// limits WHICH mission you may run, not whether you can send the squadron out at all, so
+// the cadence of the row is the 18h dispatch — the same shape as Retainer Ventures and
+// Treasure Hunt. Both figures are from the wiki's Squadron page.
 const SEED_SCHEDULE_FIXES = [
-  { seedKey:'jumbo-cactpot',      from:'weeklyTue', to:'weeklySat' },
-  { seedKey:'treasure-hunt',      from:'daily15',   to:'cooldown18h' },
-  { seedKey:'retainer-ventures',  from:'daily15',   to:'cooldown18h' }
+  { id:'jumbo-sat',    seedKey:'jumbo-cactpot',     from:'weeklyTue', to:'weeklySat' },
+  { id:'treasure-18h', seedKey:'treasure-hunt',     from:'daily15',   to:'cooldown18h' },
+  { id:'retainer-18h', seedKey:'retainer-ventures', from:'daily15',   to:'cooldown18h' },
+  { id:'squadron-18h', seedKey:'squadron-missions', from:'weeklyTue', to:'cooldown18h' }
 ];
 function applySeedScheduleFixes(c){
-  SEED_SCHEDULE_FIXES.forEach(({seedKey,from,to})=>{
+  if(!Array.isArray(c.seedScheduleFixesDone)) c.seedScheduleFixesDone = [];
+  SEED_SCHEDULE_FIXES.forEach(({id,seedKey,from,to})=>{
+    if(c.seedScheduleFixesDone.includes(id)) return;
     const r = c.routines.find(r=>r.seedKey===seedKey);
     if(r && r.schedId===from) r.schedId = to;
+    c.seedScheduleFixesDone.push(id);
   });
-  c.seedScheduleFixesApplied = true;
+  delete c.seedScheduleFixesApplied;
 }
 // Same only-if-still-default safety as SEED_SCHEDULE_FIXES, but for wording corrections —
 // a user's own rename is never touched, because nothing matches `from` any more.
@@ -1892,7 +1919,7 @@ function normalizeCharacter(c){
   });
   if(!c.routinesSeeded) backfillSeedRoutines(c);
   applySeedGenerations(c);
-  if(!c.seedScheduleFixesApplied) applySeedScheduleFixes(c);
+  applySeedScheduleFixes(c);
   applySeedLabelFixes(c);
   if(!c.seedRequiresApplied) applySeedRequires(c);
   if(!c.societies || typeof c.societies !== 'object') c.societies = {};
