@@ -2386,6 +2386,10 @@ function renderRail(){
          +  (n !== '' ? `<span class="n">${n}</span>` : '')
          +  `</div>`;
   });
+  html += `<div class="rail-group">Global</div>`
+       + `<div class="rail-item${toolsOpen()?' active':''}" title="Backup and import"`
+       + ` onclick="openTools()"><span class="ico">⭳</span>`
+       + `<span class="label">Backup &amp; import</span></div>`;
   box.innerHTML = html;
 }
 function goSection(key){
@@ -2501,13 +2505,24 @@ function toggleRail(){
   DATA.ui.railCollapsed = collapsed;
   scheduleSave();
 }
-function toggleTools(){
+function toolsOpen(){
   const panel = document.getElementById('tools-panel');
-  const open = panel.style.display === 'none';
+  return !!panel && panel.style.display !== 'none';
+}
+function setTools(open){
+  const panel = document.getElementById('tools-panel');
+  if(!panel) return;
   panel.style.display = open ? '' : 'none';
-  document.getElementById('ico-tools').classList.toggle('active', open);
+  const ico = document.getElementById('ico-tools');
+  if(ico) ico.classList.toggle('active', open);
+  renderRail();
   if(open) window.scrollTo(0,0);
 }
+function toggleTools(){ setTools(!toolsOpen()); }
+/* The import panel lives inside the tools tray. Opening it while the tray is
+   still hidden sets a visible panel inside a display:none parent, so nothing
+   appears and the import looks broken. Open the tray with it. */
+function openTools(){ setTools(true); }
 
 /* ---------- rail footer ----------
    Three countdowns in the space of one. The slot shows one at a time and
@@ -4031,6 +4046,7 @@ let tmImportPayload = null;
 function toggleTmImportPanel(){
   const panel = document.getElementById('tm-import-panel');
   const opening = panel.style.display === 'none';
+  if(opening) openTools();
   panel.style.display = opening ? '' : 'none';
   if(!opening){
     tmImportPayload = null;
