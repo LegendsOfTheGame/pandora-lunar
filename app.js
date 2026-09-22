@@ -1172,7 +1172,8 @@ function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHED
 // is a single activity — and unlike the rest, the whole feature is one you either work or
 // ignore, so it gets one switch instead of thirteen hide buttons.
 const CHALLENGE_SECTION = 'Challenge Log';
-const ROUTINE_SECTIONS = ['Daily','Weekly',CHALLENGE_SECTION,'Monthly','Other'];
+const COOLDOWN_SECTION = 'Cooldowns';
+const ROUTINE_SECTIONS = ['Daily','Weekly',CHALLENGE_SECTION,'Monthly',COOLDOWN_SECTION];
 function isChallengeRow(item){ return (item.seedKey || '').startsWith('challenge-'); }
 // No monthly-reset content has ever existed in FFXIV — Monthly stays folded into Other
 // (so nothing a user adds goes missing) until patch 8.0 actually ships. Flip this to true
@@ -1181,10 +1182,10 @@ const PATCH_8_0_RELEASED = false;
 function routineSection(item){
   if(isChallengeRow(item)) return CHALLENGE_SECTION;
   const kind = schedById(item.schedId).kind;
-  if(kind === 'monthly') return PATCH_8_0_RELEASED ? 'Monthly' : 'Other';
+  if(kind === 'monthly') return PATCH_8_0_RELEASED ? 'Monthly' : COOLDOWN_SECTION;
   if(kind === 'weekly') return 'Weekly';
   if(kind === 'daily' || kind === 'interval') return 'Daily';
-  return 'Other'; // cooldown (Treasure Hunt) and anything else that isn't clock-based
+  return COOLDOWN_SECTION; // cooldown (Treasure Hunt) and anything else that isn't clock-based
 }
 
 // Finer grouping within Daily specifically — Weekly/Monthly/Other don't need this level of
@@ -1196,25 +1197,139 @@ function routineSection(item){
 // now, same category as Tank You or Mini Cactpot, no level check needed.
 // Retainer Ventures isn't in this list at all — it's an 18h personal cooldown (same
 // mechanism as Treasure Hunt), so it lives in the top-level Other section, not Daily.
-const DAILY_SUBGROUPS = [
-  ['Continuous', ['tank-you','hunt-daily','hunt-clan-daily','hunt-veteran-daily','hunt-nutsy-daily',
-                  'hunt-guildship-daily','hunt-dawn-daily','mini-cactpot','duty-roulette','morbid-motivation']],
-  ['Relic Weapons', ['cut-different-cloth','will-to-resist','aether-everywhere']],
+/* Grouped by the activity rather than the clock, and shared by Daily and
+   Weekly. The old list covered Daily only, and its "Continuous" group put the
+   six hunt bills, the roulettes and Mini Cactpot under one heading.
+
+   The Hunt is why this matters. Twelve of the fifty-five seeded routines are
+   hunt bills: six daily and six weekly, one per expansion. */
+const ACTIVITY_GROUPS = [
+  ['The Hunt', ['hunt-daily','hunt-clan-daily','hunt-veteran-daily','hunt-nutsy-daily',
+                'hunt-guildship-daily','hunt-dawn-daily',
+                'hunt-brank','hunt-clan-brank','hunt-veteran-brank','hunt-nutsy-brank',
+                'hunt-guildship-brank','hunt-dawn-brank']],
+  ['Roulettes and duties', ['duty-roulette','tank-you','morbid-motivation']],
+  ['Raids and tomestones', ['dancing-mad','aac-m4','aac-savage','tomestone-cap']],
+  ['Gold Saucer', ['mini-cactpot','jumbo-cactpot','fashion-report']],
+  ['Idyllshire', ['wondrous-tails','faux-hollows']],
+  ['Relic weapons', ['cut-different-cloth','will-to-resist','aether-everywhere','seeking-inspiration']],
+  ['Grand Company', ['squadron-training','gc-turnin','squadron-missions']],
   ['Allied Societies', ['allied-society']],
-  ['Grand Company', ['squadron-training','gc-turnin']]
+  ['Crafting and gathering', ['custom-deliveries']],
+  ['Field operations', ['bozjan-frontier']],
+  ['Retainers', ['retainer-ventures']],
+  ['Treasure Hunt', ['treasure-hunt']]
 ];
-function dailySubgroup(item){
-  for(const [name, keys] of DAILY_SUBGROUPS){
+function activityGroup(item){
+  for(const [name, keys] of ACTIVITY_GROUPS){
     if(item.seedKey && keys.includes(item.seedKey)) return name;
   }
   return 'Other';
 }
-function dailySubgroupHTML(cid, items){
-  const names = DAILY_SUBGROUPS.map(([name])=>name).concat(['Other']);
+const HUNT_DAILY_KEYS  = ['hunt-daily','hunt-clan-daily','hunt-veteran-daily',
+                          'hunt-nutsy-daily','hunt-guildship-daily','hunt-dawn-daily'];
+const HUNT_WEEKLY_KEYS = ['hunt-brank','hunt-clan-brank','hunt-veteran-brank',
+                          'hunt-nutsy-brank','hunt-guildship-brank','hunt-dawn-brank'];
+const HUNT_SHORT = {
+  'hunt-daily':'ARR','hunt-clan-daily':'HW','hunt-veteran-daily':'SB',
+  'hunt-nutsy-daily':'ShB','hunt-guildship-daily':'EW','hunt-dawn-daily':'DT',
+  'hunt-brank':'ARR','hunt-clan-brank':'HW','hunt-veteran-brank':'SB',
+  'hunt-nutsy-brank':'ShB','hunt-guildship-brank':'EW','hunt-dawn-brank':'DT'
+};
+function huntSetOf(item){
+  if(HUNT_DAILY_KEYS.includes(item.seedKey)) return 'daily';
+  if(HUNT_WEEKLY_KEYS.includes(item.seedKey)) return 'weekly';
+  return null;
+}
+
+/* One row carrying six expansion ticks instead of six rows. The six bills are
+   the same errand six times, and across Daily and Weekly they were the largest
+   block in the list.
+
+   A tick the character cannot reach is greyed rather than hidden, so the row
+   still reads as six expansions. The leading box stands for no single routine,
+   so it ticks every expansion that is reachable. */
+function huntCompactHTML(cid, which, items){
+  const c = getChar(cid);
+  const keys = which === 'daily' ? HUNT_DAILY_KEYS : HUNT_WEEKLY_KEYS;
+  const present = keys.map(k => items.find(r => r.seedKey === k)).filter(Boolean);
+  if(!present.length) return '';
+  const now = new Date();
+  let done = 0, open = 0;
+  const ticks = present.map(r=>{
+    const lock = routineLock(r, c);
+    const isDone = isRoutineDone(r, now);
+    if(!lock){ open++; if(isDone) done++; }
+    return `<label class="hunt-tick${isDone?' done':''}${lock?' locked':''}"`
+      + ` title="${lock ? esc('needs ' + lock.need) : esc(r.label)}">`
+      + `<input type="checkbox" id="${cid}-rt-chk-${r.id}"${isDone?' checked':''}${lock?' disabled':''}`
+      + ` onchange="toggleRoutine('${cid}','${r.id}')">${HUNT_SHORT[r.seedKey]}</label>`;
+  }).join('');
+  const due = fmtDue(nextResetInstant(schedById(present[0].schedId), now, present[0].lastDone) - now.getTime());
+  const label = which === 'daily' ? 'The Hunt — daily mark bills'
+                                  : 'The Hunt — B-rank elite marks';
+  return `<div class="routine-item hunt-compact">
+    <input type="checkbox"${open && done===open ? ' checked' : ''} title="Tick every expansion you can reach"
+           onchange="toggleHuntSet('${cid}','${which}',this.checked)">
+    <div class="hunt-cell">
+      <span class="routine-label">${label}</span>
+      <span class="hunt-ticks">${ticks}</span>
+      <span class="hunt-tally">${done} / ${open}</span>
+    </div>
+    <span class="routine-due">${due}</span>
+  </div>`;
+}
+function huntSwitchHTML(cid, n){
+  const on = DATA.ui.huntRows === 'rows';
+  return `<div class="opt-switch">
+    <span class="sw${on?' on':''}" role="switch" tabindex="0" aria-checked="${on}"
+          onclick="toggleHuntRows()"></span>
+    <label onclick="toggleHuntRows()">Give each expansion its own row${
+      on ? '' : ' — ' + n + ' rows instead of 1'}</label>
+  </div>`;
+}
+/* One setting for the whole ledger, not per character and not per frame. It
+   describes how the reader likes to read the list, so it changes Daily and
+   Weekly together. */
+function toggleHuntRows(){
+  collectAllInputs();
+  DATA.ui.huntRows = DATA.ui.huntRows === 'rows' ? 'compact' : 'rows';
+  DATA.chars.forEach(c => renderRoutines(c.id));
+  DATA.chars.forEach(c => applyFrames(c.id, 'routines'));
+  renderFrameRow();
+  scheduleSave();
+}
+function toggleHuntSet(cid, which, on){
+  collectAllInputs();
+  const c = getChar(cid);
+  const keys = which === 'daily' ? HUNT_DAILY_KEYS : HUNT_WEEKLY_KEYS;
+  keys.forEach(k=>{
+    const r = c.routines.find(x => x.seedKey === k);
+    if(!r || routineLock(r, c)) return;
+    r.lastDone = on ? Date.now() : null;
+  });
+  renderRoutines(cid);
+  applyFrames(cid, 'routines');
+  renderLastCompleted(cid);
+  updateResetBar();
+  scheduleSave();
+}
+function subgroupHTML(cid, items){
+  const names = ACTIVITY_GROUPS.map(([name])=>name).concat(['Other']);
   return names.map(name=>{
-    const groupItems = items.filter(item => dailySubgroup(item) === name);
+    const groupItems = items.filter(item => activityGroup(item) === name);
     if(!groupItems.length) return '';
-    return `<div class="routine-subgroup"><div class="routine-subhead">${esc(name)}</div>${groupItems.map(item=>routineHTML(cid,item)).join('')}</div>`;
+    const set = name === 'The Hunt' ? huntSetOf(groupItems[0]) : null;
+    const compress = set && DATA.ui.huntRows !== 'rows';
+    const body = compress
+      ? huntCompactHTML(cid, set, groupItems)
+      : groupItems.map(item=>routineHTML(cid,item)).join('');
+    const count = compress ? 1 : groupItems.length;
+    return `<div class="routine-subgroup">`
+      + `<div class="routine-subhead">${esc(name)} <span style="opacity:.6">${count}</span></div>`
+      + body
+      + (set ? huntSwitchHTML(cid, groupItems.length) : '')
+      + `</div>`;
   }).join('');
 }
 
@@ -1931,6 +2046,9 @@ function setActiveChar(cid){
   DATA.activeId = cid;
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'page-'+cid));
   renderSwitcher();
+  renderRail();
+  renderFrameRow();
+  updateResetBar();
   scheduleSave();
 }
 function addCharacter(){
@@ -1975,23 +2093,13 @@ function characterPageHTML(cid){
     <div class="dash-grid" id="${cid}-dash"></div>
   </div>
 
-  <div class="tabbar" data-cid="${cid}">
-      <button class="tab-btn" data-tab="overview" onclick="switchTab('${cid}','overview')">Overview</button>
-      <button class="tab-btn" data-tab="routines" onclick="switchTab('${cid}','routines')">Routines</button>
-      <button class="tab-btn" data-tab="jobs" onclick="switchTab('${cid}','jobs')">Jobs</button>
-      <button class="tab-btn" data-tab="societies" onclick="switchTab('${cid}','societies')">Societies</button>
-      <button class="tab-btn" data-tab="hunts" onclick="switchTab('${cid}','hunts')">Hunts</button>
-      <button class="tab-btn" data-tab="mentor" onclick="switchTab('${cid}','mentor')">Mentor</button>
-      <button class="tab-btn" data-tab="notes" onclick="switchTab('${cid}','notes')">Notes</button>
-  </div>
-
   <div class="tab-panel" data-tab="overview">
-  <div class="section">
+  <div class="section" data-frame="progress">
     <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via Time Memoria</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
     <div class="quest-grid" id="${cid}-quests"></div>
     <div class="check-note" id="${cid}-overall-check"></div>
   </div>
-  <div class="section">
+  <div class="section" data-frame="session">
     <h2>Session</h2>
     <table>
       <tr><td style="width:160px;color:var(--text-faint)">Cumulative playtime</td><td>
@@ -2009,25 +2117,26 @@ function characterPageHTML(cid){
   <div class="section">
     <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn" onclick="resetRoutines('${cid}')">Reset to defaults</button></span></h2>
     <div class="routine-list" id="${cid}-routines"></div>
-    <div class="gated-note" id="${cid}-gated"></div>
-    <div class="hidden-note" id="${cid}-hiddennote"></div>
-    <button class="add-btn" onclick="addRoutine('${cid}')">+ Add routine</button>
+    <div id="${cid}-lastdone" data-frame="last-completed"></div>
+    <div class="gated-note" id="${cid}-gated" data-frame="${TICKABLE_FRAMES}"></div>
+    <div class="hidden-note" id="${cid}-hiddennote" data-frame="${TICKABLE_FRAMES}"></div>
+    <button class="add-btn" data-frame="${TICKABLE_FRAMES}" onclick="addRoutine('${cid}')">+ Add routine</button>
   </div>
   </div>
   <div class="tab-panel" data-tab="jobs">
   <div class="section">
     <h2>Job levels</h2>
-    <div class="subhead">Combat &middot; cap 100 (Blue Mage 80, Beastmaster 50)</div>
-    <div id="${cid}-combat" class="job-columns"></div>
-    <div class="two-col">
-      <div>
-        <div class="subhead">Crafting &middot; cap 100</div>
-        <table id="${cid}-craft"></table>
-      </div>
-      <div>
-        <div class="subhead">Gathering &middot; cap 100</div>
-        <table id="${cid}-gather"></table>
-      </div>
+    <div data-frame="combat">
+      <div class="subhead">Combat &middot; cap 100 (Blue Mage 80, Beastmaster 50)</div>
+      <div id="${cid}-combat" class="job-columns"></div>
+    </div>
+    <div data-frame="craft">
+      <div class="subhead">Crafting &middot; cap 100</div>
+      <table id="${cid}-craft"></table>
+    </div>
+    <div data-frame="gather">
+      <div class="subhead">Gathering &middot; cap 100</div>
+      <table id="${cid}-gather"></table>
     </div>
     <div class="gated-note" id="${cid}-jobsnote"></div>
   </div>
@@ -2039,12 +2148,12 @@ function characterPageHTML(cid){
   </div>
   </div>
   <div class="tab-panel" data-tab="hunts">
-  <div class="section">
+  <div class="section" data-frame="summary">
     <h2>Marks slain <span class="hint">${ELITE_MARK_TOTAL} A and S ranks across six expansions</span></h2>
     <div class="dash-grid" id="${cid}-hunt-dash"></div>
     <div class="check-note ok" id="${cid}-hunt-tally"></div>
   </div>
-  <div class="section">
+  <div class="section" data-frame="${ELITE_MARKS.map(([x])=>frameSlug(x)).join(' ')}">
     <h2>Elite marks
       <span class="hint">ticked by hand &mdash; no import fills this in</span>
     </h2>
@@ -2052,7 +2161,7 @@ function characterPageHTML(cid){
   </div>
   </div>
   <div class="tab-panel" data-tab="mentor">
-  <div class="section">
+  <div class="section" data-frame="battle">
     <h2>Battle Mentor requirements
       <span class="hint">1000 dungeons &middot; 1500 comms &middot; tank + healer + 1 dps role quest</span>
     </h2>
@@ -2062,7 +2171,7 @@ function characterPageHTML(cid){
     </table>
     <div id="${cid}-roles"></div>
   </div>
-  <div class="section">
+  <div class="section" data-frame="trade">
     <h2>Trade mentor requirements <span class="hint">300 collectables &middot; 100 synthesized &middot; a craft + gather job at 100</span></h2>
     <table style="margin-bottom:10px">
       <tr><td style="width:140px"><input type="text" id="${cid}-trade-collected" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 300 collectables gathered or caught</td><td style="width:60px" id="${cid}-trade-collected-done"></td></tr>
@@ -2072,12 +2181,12 @@ function characterPageHTML(cid){
   </div>
   </div>
   <div class="tab-panel" data-tab="notes">
-  <div class="section">
+  <div class="section" data-frame="trackers">
     <h2>Custom trackers <span class="hint">achievements, mounts, minions, logs &mdash; add your own</span></h2>
     <div class="custom-list" id="${cid}-custom"></div>
     <button class="add-btn" onclick="addCustomRow('${cid}')">+ Add tracker</button>
   </div>
-  <div class="section">
+  <div class="section" data-frame="notes">
     <h2>Notes</h2>
     <textarea class="note-area" id="${cid}-notes" placeholder="Anything worth remembering — GC, retainers, sync points, whatever." oninput="scheduleSave()"></textarea>
   </div>
@@ -2092,6 +2201,8 @@ function rebuildPages(){
   DATA.chars.forEach(c=>renderChar(c.id));
   initCollapsible();
   DATA.chars.forEach(c=>applyTab(c.id, activeTab(c.id)));
+  renderRail();
+  renderFrameRow();
 }
 
 /* ---------- tabs ---------- */
@@ -2108,7 +2219,372 @@ function switchTab(cid, tab){
   DATA.ui.tabs = DATA.ui.tabs || {};
   DATA.ui.tabs[cid] = tab;
   applyTab(cid, tab);
+  renderRail();
+  renderFrameRow();
   scheduleSave();
+}
+
+/* ---------- last completed ----------
+   The one place the tracker states when you actually did something. Every
+   other column shows a reset clock, which answers a different question.
+
+   The time is shown in the reader's own zone, because "when did I last do
+   this" is a human moment rather than a reset instant. The row's tooltip
+   carries the UTC value, which is what the record actually stores. */
+const TICKABLE_FRAMES = ROUTINE_SECTIONS.map(frameSlug).join(' ');
+
+function agoText(ms){
+  const mins = Math.floor(ms / 60000);
+  if(mins < 60) return Math.max(0, mins) + 'm ago';
+  const h = Math.floor(mins / 60);
+  if(h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+/* Two ways to name a zone, because neither suits everyone. The abbreviation is
+   the browser's, and only exists where its locale knows the zone — Yukon has
+   had permanent time since 2020 and still returns GMT-7. The offset is worked
+   out from the date, so it always resolves and always looks the same. Both are
+   read from the date being shown, so a row recorded under a different daylight
+   saving rule is labelled with its own zone. */
+function zoneAbbr(d){
+  try{
+    const part = new Intl.DateTimeFormat(undefined, {timeZoneName:'short'})
+      .formatToParts(d).find(x => x.type === 'timeZoneName');
+    return part ? part.value : '';
+  }catch(e){ return ''; }
+}
+function zoneOffset(d){
+  const mins = -d.getTimezoneOffset();
+  if(!mins) return 'UTC';
+  const a = Math.abs(mins), h = Math.floor(a / 60), m = a % 60;
+  return 'UTC' + (mins < 0 ? '-' : '+') + h + (m ? ':' + String(m).padStart(2,'0') : '');
+}
+function zoneLabel(d){ return DATA.ui.zoneStyle === 'offset' ? zoneOffset(d) : zoneAbbr(d); }
+function toggleZoneStyle(){
+  DATA.ui.zoneStyle = DATA.ui.zoneStyle === 'offset' ? 'abbr' : 'offset';
+  DATA.chars.forEach(c => renderLastCompleted(c.id));
+  DATA.chars.forEach(c => applyFrames(c.id, 'routines'));
+  scheduleSave();
+}
+
+function renderLastCompleted(cid){
+  const box = document.getElementById(cid + '-lastdone');
+  if(!box) return;
+  const c = getChar(cid);
+  const rows = (c.routines||[]).filter(r => r.lastDone).sort((a,b) => b.lastDone - a.lastDone);
+  const never = (c.routines||[]).length - rows.length;
+
+  if(!rows.length){
+    box.innerHTML = '<div class="empty-hint">No routine has been ticked yet. Tick one in any frame and it appears here.</div>';
+    return;
+  }
+  const now = Date.now();
+  const headZone = zoneLabel(new Date());
+  const body = rows.map(r=>{
+    const d = new Date(r.lastDone);
+    // Day first on a 24 hour clock, to match every other time on the page.
+    const when = d.toLocaleString('en-GB',
+      {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false});
+    const rowZone = zoneLabel(d);
+    return `<div class="done-item" title="${esc(d.toUTCString())}">
+      <span class="dn-label">${esc(r.label)}</span>
+      <span class="dn-frame">${esc(routineSection(r))}</span>
+      <span class="dn-when">${esc(when)}${
+        rowZone && rowZone !== headZone ? `<span class="dn-zone">${esc(rowZone)}</span>` : ''}</span>
+      <span class="dn-ago">${agoText(now - r.lastDone)}</span>
+    </div>`;
+  }).join('');
+  const offsetOn = DATA.ui.zoneStyle === 'offset';
+  box.innerHTML = `
+    <div class="done-head"><span>Routine</span><span>Section</span><span>Last done${
+      headZone ? ' (' + esc(headZone) + ')' : ''}</span><span class="r">Ago</span></div>
+    ${body}
+    ${never ? `<div class="gated-note">${never} routine${never===1?'':'s'} ${never===1?'has':'have'} never been ticked</div>` : ''}
+    <div class="opt-switch">
+      <span class="sw${offsetOn?' on':''}" role="switch" tabindex="0"
+            aria-checked="${offsetOn}" onclick="toggleZoneStyle()"></span>
+      <label onclick="toggleZoneStyle()">Name the time zone as an offset${
+        offsetOn ? '' : ' — ' + esc(zoneOffset(new Date())) + ' instead of ' + esc(zoneAbbr(new Date()))}</label>
+    </div>`;
+}
+
+function refreshNav(cid){
+  if(!DATA || cid !== DATA.activeId) return;
+  renderRail();
+  renderFrameRow();
+}
+
+/* ---------- rail ----------
+   The sections are the old tabs. They moved from a bar above the page to a
+   pinned column on the left, so reaching one is a click from anywhere rather
+   than a scroll back to the top. The panels themselves are untouched. */
+const RAIL_SECTIONS = [
+  {key:'overview',  label:'Overview',  group:'Progress',    ico:'◔'},
+  {key:'routines',  label:'Routines',  group:'Progress',    ico:'↻', count:visibleRoutineCount},
+  {key:'jobs',      label:'Jobs',      group:'Progress',    ico:'⚔', count:visibleJobCount},
+  {key:'societies', label:'Societies', group:'Collections', ico:'⚬', count:()=>ALLIED_SOCIETIES.length},
+  {key:'hunts',     label:'Hunts',     group:'Collections', ico:'✦', count:c=>Object.keys(c.hunts||{}).length},
+  {key:'mentor',    label:'Mentor',    group:'Collections', ico:'✚'},
+  {key:'notes',     label:'Notes',     group:'Personal',    ico:'✎'}
+];
+/* Counts use the same filters the panels use, so the number beside a section
+   is the number of rows that section will actually draw. */
+function visibleRoutineCount(c){
+  return (c.routines||[]).filter(r =>
+    (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden)).length;
+}
+function visibleJobCount(c){
+  if(c.showZeroJobs) return COMBAT_JOBS.length + CRAFT_JOBS.length + GATHER_JOBS.length;
+  const above = o => Object.values(o||{}).filter(v => v > 0).length;
+  return above(c.combat) + above(c.craft) + above(c.gather);
+}
+function renderRail(){
+  const box = document.getElementById('rail-nav');
+  if(!box || !DATA) return;
+  const c = getChar(DATA.activeId);
+  const current = activeTab(DATA.activeId);
+  let html = '', lastGroup = null;
+  RAIL_SECTIONS.forEach(s=>{
+    if(s.group !== lastGroup){ html += `<div class="rail-group">${esc(s.group)}</div>`; lastGroup = s.group; }
+    let n = '';
+    try{ n = (s.count && c) ? s.count(c) : ''; }catch(e){ n = ''; }
+    html += `<div class="rail-item${s.key===current?' active':''}" title="${esc(s.label)}"`
+         +  ` onclick="goSection('${s.key}')">`
+         +  `<span class="ico">${s.ico}</span><span class="label">${esc(s.label)}</span>`
+         +  (n !== '' ? `<span class="n">${n}</span>` : '')
+         +  `</div>`;
+  });
+  box.innerHTML = html;
+}
+function goSection(key){
+  switchTab(DATA.activeId, key);
+  window.scrollTo(0,0);
+}
+
+/* ---------- frames ----------
+   A frame is a slice of a panel that is already drawn. Changing frame toggles
+   a class; nothing is re-rendered and nothing leaves the DOM, so every input
+   collectCharInputs() reads is still there whatever frame is on screen.
+
+   data-frame may hold several keys separated by spaces. A block that belongs
+   to more than one frame — the elite marks wrapper, which is wanted for every
+   expansion but not for the summary — lists them all. */
+function frameSlug(s){ return String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+
+function framesFor(section, c){
+  switch(section){
+    case 'overview':
+      return [{k:'progress', l:'Progress'}, {k:'session', l:'Session'}];
+    case 'routines': {
+      const visible = (c.routines||[]).filter(r =>
+        (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden));
+      const out = ROUTINE_SECTIONS
+        .filter(sec => visible.some(r => routineSection(r) === sec)
+                    || (sec === CHALLENGE_SECTION && challengeRowsExist(c)))
+        .map(sec => ({k:frameSlug(sec), l:sec,
+                      n:visible.filter(r => routineSection(r) === sec).length}));
+      out.push({k:'last-completed', l:'Last completed',
+                n:(c.routines||[]).filter(r => r.lastDone).length});
+      return out;
+    }
+    case 'jobs': {
+      const above = o => Object.values(o||{}).filter(v => v > 0).length;
+      return [
+        {k:'combat', l:'Combat',    n:c.showZeroJobs ? COMBAT_JOBS.length : above(c.combat)},
+        {k:'craft',  l:'Crafting',  n:c.showZeroJobs ? CRAFT_JOBS.length  : above(c.craft)},
+        {k:'gather', l:'Gathering', n:c.showZeroJobs ? GATHER_JOBS.length : above(c.gather)}
+      ];
+    }
+    case 'societies': {
+      const have = patchValue(c.patch);
+      return [...new Set(ALLIED_SOCIETIES.map(a=>a[1]))]
+        .filter(exp => !(have !== null && SOCIETY_EXP_GATE[exp] > have))
+        .map(exp => ({k:frameSlug(exp), l:exp,
+                      n:ALLIED_SOCIETIES.filter(a=>a[1]===exp).length}));
+    }
+    case 'hunts':
+      return [{k:'summary', l:'Summary'}].concat(
+        ELITE_MARKS.map(([exp, marks]) => ({k:frameSlug(exp), l:exp, n:marks.length})));
+    case 'mentor':
+      return [{k:'battle', l:'Battle'}, {k:'trade', l:'Trade'}];
+    case 'notes':
+      return [{k:'trackers', l:'Trackers'}, {k:'notes', l:'Notes'}];
+  }
+  return [];
+}
+
+/* Remembered per character and per section, because two characters are usually
+   being tracked for different reasons. */
+function activeFrame(cid, section){
+  const c = getChar(cid);
+  const list = framesFor(section, c);
+  if(!list.length) return null;
+  DATA.ui.frames = DATA.ui.frames || {};
+  const saved = (DATA.ui.frames[cid] || {})[section];
+  return list.some(f => f.k === saved) ? saved : list[0].k;
+}
+function goFrame(key){
+  const cid = DATA.activeId, section = activeTab(cid);
+  DATA.ui.frames = DATA.ui.frames || {};
+  DATA.ui.frames[cid] = DATA.ui.frames[cid] || {};
+  DATA.ui.frames[cid][section] = key;
+  renderFrameRow();
+  applyFrames(cid, section);
+  window.scrollTo(0,0);
+  scheduleSave();
+}
+function applyFrames(cid, section){
+  const panel = document.querySelector(`#page-${cid} .tab-panel[data-tab="${section}"]`);
+  if(!panel) return;
+  const frame = activeFrame(cid, section);
+  panel.querySelectorAll('[data-frame]').forEach(el=>{
+    const keys = String(el.dataset.frame).split(/\s+/);
+    el.classList.toggle('frame-on', frame !== null && keys.includes(frame));
+  });
+}
+function renderFrameRow(){
+  const row = document.getElementById('frame-row');
+  if(!row || !DATA) return;
+  const cid = DATA.activeId, section = activeTab(cid);
+  const list = framesFor(section, getChar(cid));
+  if(list.length < 2){ row.innerHTML = ''; return; }
+  const current = activeFrame(cid, section);
+  row.innerHTML = list.map(f =>
+    `<button class="tab-btn${f.k===current?' active':''}" onclick="goFrame('${f.k}')">${esc(f.l)}${
+      f.n != null ? ` <span style="opacity:.55">${f.n}</span>` : ''}</button>`).join('');
+  applyFrames(cid, section);
+}
+
+function toggleRail(){
+  const rail = document.getElementById('rail');
+  const collapsed = rail.classList.toggle('collapsed');
+  document.getElementById('ico-collapse').innerHTML = collapsed ? '&rsaquo;' : '&lsaquo;';
+  DATA.ui.railCollapsed = collapsed;
+  scheduleSave();
+}
+function toggleTools(){
+  const panel = document.getElementById('tools-panel');
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? '' : 'none';
+  document.getElementById('ico-tools').classList.toggle('active', open);
+  if(open) window.scrollTo(0,0);
+}
+
+/* ---------- rail footer ----------
+   Three countdowns in the space of one. The slot shows one at a time and
+   changes every 5 seconds; all of them keep running while hidden, because
+   only the display rotates. The count comes from the DOM, so adding a fourth
+   is one block of markup and no change here.
+
+   One format for all three. Days appear only when there is at least one, so a
+   daily reset reads 6:41:12 and an expansion reads 118d 20:01:36. */
+function fmtCountdown(ms){
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const pad = n => String(n).padStart(2,'0');
+  const d = Math.floor(t / 86400), h = Math.floor(t % 86400 / 3600);
+  const rest = pad(Math.floor(t % 3600 / 60)) + ':' + pad(t % 60);
+  return d ? `${d}d ${pad(h)}:${rest}` : `${h}:${rest}`;
+}
+
+/* 8.0 Evercold. 07:00 UTC on 19 January 2027 is the reported date, not a
+   confirmed one — Square Enix states it at Tokyo Fan Fest on 1 November 2026,
+   so the strip says "unconfirmed" until then. The same date is written into
+   the comment above RESET_SCHEDULES, because 8.0 reworks the reset clocks.
+   Keep the two in step when the real date lands. */
+const EVERCOLD_UTC = Date.UTC(2027, 0, 19, 7, 0, 0);
+function updateExpacBar(){
+  const bar = document.getElementById('expac-bar');
+  if(!bar) return;
+  const time = document.getElementById('ex-time'), when = document.getElementById('ex-when');
+  const ms = EVERCOLD_UTC - Date.now();
+  if(ms <= 0){
+    bar.classList.add('released');
+    time.textContent = 'live';
+    when.textContent = '· released';
+    return;
+  }
+  time.textContent = fmtCountdown(ms);
+  when.textContent = '· 19 Jan 2027, 07:00 UTC';
+}
+
+/* Only a routine you have ticked is waiting on a reset. An unticked one needs
+   no clock, because you can do it now. So this scans the ticked routines of
+   the active character, takes the soonest reset among them, and names it —
+   a bare countdown does not say what is about to happen. */
+function updateResetBar(){
+  const bar = document.getElementById('reset-bar');
+  if(!bar || !DATA) return;
+  const label = document.getElementById('rs-label');
+  const time  = document.getElementById('rs-time');
+  const what  = document.getElementById('rs-what');
+  const c = getChar(DATA.activeId);
+  if(!c) return;
+
+  const now = new Date();
+  const visible = (c.routines||[]).filter(r =>
+    (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden) && isRoutineDone(r, now));
+
+  let soonest = null;
+  visible.forEach(r=>{
+    const at = nextResetInstant(schedById(r.schedId), now, r.lastDone);
+    if(soonest === null || at < soonest) soonest = at;
+  });
+
+  if(soonest === null){
+    bar.classList.add('idle');
+    label.textContent = 'Next reset';
+    time.textContent = '—';
+    what.textContent = '· nothing is waiting on a reset';
+    bar.title = 'A countdown appears when you tick a routine. Until then there is nothing to wait for.';
+    return;
+  }
+  const due = visible.filter(r =>
+    nextResetInstant(schedById(r.schedId), now, r.lastDone) === soonest);
+  bar.classList.remove('idle');
+  const name = String(schedById(due[0].schedId).label).split(' — ')[0];
+  label.innerHTML = 'Next reset · <em>' + esc(name) + '</em>';
+  time.textContent = fmtCountdown(soonest - now.getTime());
+  what.textContent = due.length === 1
+    ? '· ' + esc(due[0].label)
+    : '· ' + due.length + ' routines return';
+  bar.title = 'Returns at ' + new Date(soonest).toUTCString();
+}
+
+const FOOT_PERIOD_MS = 5000;
+let footIndex = 0, footHeld = false, footTimer = null;
+function footItems(){ return Array.from(document.querySelectorAll('.foot-slot .foot-item')); }
+function showFoot(i){
+  const items = footItems();
+  if(!items.length) return;
+  footIndex = ((i % items.length) + items.length) % items.length;
+  items.forEach((el,k)=> el.classList.toggle('on', k === footIndex));
+  const dots = document.getElementById('foot-dots');
+  if(dots) Array.from(dots.children).forEach((d,k)=> d.classList.toggle('on', k === footIndex));
+}
+function pickFoot(i){ showFoot(i); restartFootTimer(); }
+function restartFootTimer(){
+  clearInterval(footTimer);
+  footTimer = setInterval(()=>{ if(!footHeld) showFoot(footIndex + 1); }, FOOT_PERIOD_MS);
+}
+function initFootSlot(){
+  const items = footItems();
+  const dots = document.getElementById('foot-dots');
+  if(dots){
+    dots.innerHTML = items.map((el,k)=>
+      `<button title="${esc(el.dataset.name || ('View ' + (k+1)))}" onclick="pickFoot(${k})"></button>`).join('');
+  }
+  const slot = document.getElementById('foot-slot');
+  if(slot){
+    // The rotation stops while the pointer is over the slot, so a countdown
+    // being read does not move.
+    slot.addEventListener('mouseenter', ()=>{ footHeld = true; });
+    slot.addEventListener('mouseleave', ()=>{ footHeld = false; });
+  }
+  showFoot(0);
+  restartFootTimer();
+  updateExpacBar();
+  updateResetBar();
+  setInterval(()=>{ updateExpacBar(); updateResetBar(); }, 1000);
 }
 
 /* ---------- theme ---------- */
@@ -2138,6 +2614,7 @@ function applyTab(cid, tab){
   if(!page) return;
   page.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.dataset.tab===tab));
   page.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  applyFrames(cid, tab);
 }
 
 /* ---------- per-character render/update ---------- */
@@ -2150,11 +2627,18 @@ function renderCharDash(cid){
   const craftTotal = Object.values(c.craft).reduce((a,b)=>a+b,0);
   const gatherTotal = Object.values(c.gather).reduce((a,b)=>a+b,0);
   const questPct = pct(c.quests.overall, c.questTotals.overall);
+  // Built the same way as the Battle figure, over this track's four parts:
+  // each counter capped at its target, plus one job at 100 on each side.
+  const craftCap = Math.max(0, ...Object.values(c.craft)) >= 100 ? 1 : 0;
+  const gatherCap = Math.max(0, ...Object.values(c.gather)) >= 100 ? 1 : 0;
+  const tradePct = ((Math.min(c.tradeCollected,300)/300) + (Math.min(c.tradeMade,100)/100)
+                   + craftCap + gatherCap) / 4 * 100;
   document.getElementById(cid+'-dash').innerHTML = `
     <div class="metric ${c.duty>=1000?'done':''}"><div class="label">Duty completions</div><div class="value">${fmt(c.duty)}<small> / 1,000</small></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(dutyPct,100)}%"></div></div></div>
     <div class="metric ${c.comm>=1500?'done':''}"><div class="label">Commendations</div><div class="value">${fmt(c.comm)}<small> / 1,500</small></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(commPct,100)}%"></div></div></div>
     <div class="metric ${rolesGot>=3?'done':''}"><div class="label">Battle mentor role quests</div><div class="value">${rolesGot}<small> / 3 req'd</small></div><div class="bar-track"><div class="bar-fill" style="width:${rolesGot/3*100}%"></div></div></div>
     <div class="metric"><div class="label">Overall to Battle Mentor</div><div class="value">${overallPct.toFixed(1)}%</div><div class="bar-track"><div class="bar-fill" style="width:${overallPct}%"></div></div></div>
+    <div class="metric"><div class="label">Overall to Trade Mentor</div><div class="value">${tradePct.toFixed(1)}%</div><div class="bar-track"><div class="bar-fill" style="width:${tradePct}%"></div></div></div>
     <div class="metric"><div class="label">Quest completion</div><div class="value">${questPct.toFixed(2)}%</div><div class="bar-track"><div class="bar-fill" style="width:${questPct}%"></div></div></div>
     <div class="metric"><div class="label">Combat levels</div><div class="value">${fmtLvl(combatTotal)}<small> / 2,230</small></div><div class="bar-track"><div class="bar-fill" style="width:${pct(combatTotal,2230)}%"></div></div></div>
     <div class="metric"><div class="label">Crafting levels</div><div class="value">${fmtLvl(craftTotal)}<small> / 800</small></div><div class="bar-track"><div class="bar-fill" style="width:${pct(craftTotal,800)}%"></div></div></div>
@@ -2466,6 +2950,8 @@ function renderJobTables(cid){
     emptyJobRow(GATHER_JOBS.filter(show).map(name=>craftGatherRowHTML(cid,'gather',name)).join(''));
   updateJobCaps(cid);
   renderJobsNote(cid);
+  applyFrames(cid, 'jobs');
+  refreshNav(cid);
 }
 
 /* ---------- hiding jobs at 0 ---------- */
@@ -2582,7 +3068,7 @@ function renderSocieties(cid){
   // Each expansion is one block rather than loose siblings, so the columns on a
   // wide screen can never split a heading from the societies under it.
   const html = groups.map(exp => `
-    <div class="society-exp">
+    <div class="society-exp" data-frame="${frameSlug(exp)}">
       <div class="subhead">${esc(exp)}</div>
       <div class="society-group">${ALLIED_SOCIETIES.filter(a=>a[1]===exp).map(a=>societyRowHTML(cid,a[0])).join('')}</div>
       ${INTERSOCIETAL_QUESTS[exp] && intersocietalReady(c,exp) ? intersocietalRowHTML(cid,exp) : ''}
@@ -2590,6 +3076,8 @@ function renderSocieties(cid){
   `).join('');
   document.getElementById(cid+'-societies').innerHTML = html || '<div class="empty-hint">Set your MSQ progress above to see allied societies as you unlock them.</div>';
   updateSocietyModeUi(cid);
+  applyFrames(cid, 'societies');
+  refreshNav(cid);
 }
 // Hands the section back to manual entry, or back to the plugin's figures. Not a
 // destructive switch either way — the stored values are the same numbers; this only
@@ -2747,11 +3235,13 @@ function renderHunts(cid){
       ).join('');
     }).join('');
 
-    return `<div class="hunt-exp"><div class="subhead">${esc(exp)}</div>${blocks}</div>`;
+    return `<div class="hunt-exp" data-frame="${frameSlug(exp)}"><div class="subhead">${esc(exp)}</div>${blocks}</div>`;
   }).join('');
 
   document.getElementById(cid+'-hunts').innerHTML = html;
   renderHuntDash(cid);
+  applyFrames(cid, 'hunts');
+  refreshNav(cid);
 }
 
 // Split by rank rather than rolled into one figure: an A rank comes back on a 4-6 hour
@@ -2976,6 +3466,8 @@ function renderCustom(cid){
   box.innerHTML = list.length
     ? list.map(item=>customRowHTML(cid,item)).join('')
     : '<div class="empty-hint">Nothing yet &mdash; add achievements, mounts, minions, hunting log, or anything else worth counting.</div>';
+  applyFrames(cid, 'notes');
+  refreshNav(cid);
 }
 function addCustomRow(cid){
   collectAllInputs();
@@ -3103,13 +3595,17 @@ function renderRoutines(cid){
       const head = challenge
         ? `<div class="subhead with-toggle">${esc(sec)}<button class="section-toggle${on?'':' is-off'}" title="${on?'Hide the Challenge Log for every character':'Show the Challenge Log again'}" onclick="toggleChallengeLog('${cid}')">${on?'● on':'○ off'}</button></div>`
         : `<div class="subhead">${esc(sec)}</div>`;
-      if(challenge && !on) return `<div class="routine-section">${head}</div>`;
-      const body = sec === 'Daily' ? dailySubgroupHTML(cid, items) : items.map(item=>routineHTML(cid,item)).join('');
-      return `<div class="routine-section">${head}${body}</div>`;
+      if(challenge && !on) return `<div class="routine-section" data-frame="${frameSlug(sec)}">${head}</div>`;
+      const body = (sec === 'Daily' || sec === 'Weekly')
+        ? subgroupHTML(cid, items)
+        : items.map(item=>routineHTML(cid,item)).join('');
+      return `<div class="routine-section" data-frame="${frameSlug(sec)}">${head}${body}</div>`;
     }).join('');
   }
   renderGatedNote(cid);
   renderHiddenNote(cid);
+  applyFrames(cid, 'routines');
+  refreshNav(cid);
 }
 function renderGatedNote(cid){
   const el = document.getElementById(cid+'-gated');
@@ -3237,6 +3733,13 @@ function toggleRoutine(cid, id){
   // Recompute the due countdown immediately — otherwise it's stuck showing whatever it read
   // before the click (e.g. "now") until the next 30s periodic refresh or a page reload.
   refreshRoutines(cid);
+  // A tick is exactly what these two read: the rail's countdown watches for a
+  // ticked routine waiting on a reset, and the record lists when each was
+  // ticked. Without this they stay stale until the next reload.
+  renderLastCompleted(cid);
+  applyFrames(cid, 'routines');
+  renderFrameRow();
+  updateResetBar();
   scheduleSave();
 }
 // A schedule change can move an item into a different Daily/Weekly/Monthly/Other section
@@ -3357,6 +3860,10 @@ function renderChar(cid){
   renderRoutines(cid);
   renderCustom(cid);
   renderTmSyncNote(cid);
+  renderLastCompleted(cid);
+  // Every renderer above rewrites innerHTML, which takes the frame classes
+  // with it. Settle them again for each section of this character.
+  RAIL_SECTIONS.forEach(s => applyFrames(cid, s.key));
 }
 function onNameInput(cid){
   collectAllInputs();
@@ -3857,8 +4364,13 @@ function applyTmImport(){
 (async function init(){
   await loadData();
   applyTheme();
+  if(DATA.ui.railCollapsed){
+    document.getElementById('rail').classList.add('collapsed');
+    document.getElementById('ico-collapse').innerHTML = '&rsaquo;';
+  }
   rebuildPages();
   renderSwitcher();
   updateSoundToggleUI();
+  initFootSlot();
   setInterval(()=>{ DATA.chars.forEach(c=>refreshRoutines(c.id)); checkResetSounds(); }, 30000);
 })();

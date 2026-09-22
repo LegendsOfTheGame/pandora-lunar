@@ -684,3 +684,227 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 }
 .theme-switch button:hover{color:var(--text)}
 .theme-switch button.active{border-color:var(--accent,var(--gold));color:var(--accent,var(--gold))}
+
+/* ==========================================================================
+   Rail layout
+   --------------------------------------------------------------------------
+   The page used to stack every section down one column under a tab bar.
+   Reaching a routine meant scrolling past everything above it, and changing
+   tab meant scrolling back up. The rail holds navigation on the left where it
+   never moves, a row of frame buttons sits at the top of the pane, and only
+   the pane scrolls.
+
+   Nothing leaves the DOM. Every character page and every tab panel is still
+   drawn exactly as before, because renderChar() writes into elements by id
+   and collectCharInputs() reads them back. The rail and the frame row change
+   what is displayed, never what exists.
+   ========================================================================== */
+
+/* :root carries zoom:1.3. A vh resolves against the unzoomed viewport and is
+   then scaled up, so a plain 100vh makes the rail 1.3 screens tall and pushes
+   the pinned footer off the bottom. Keep --zoom equal to that zoom. */
+:root{--zoom:1.3}
+
+.shell{display:flex;align-items:flex-start;min-height:calc(100vh / var(--zoom))}
+
+.rail{
+  position:sticky;top:0;width:224px;flex:0 0 224px;height:calc(100vh / var(--zoom));
+  background:var(--panel);border-right:1px solid var(--line);
+  padding:14px 0 0;display:flex;flex-direction:column;
+  transition:width .12s,flex-basis .12s;z-index:40;
+}
+.rail-scroll{flex:1 1 auto;overflow-y:auto;min-height:0}
+.rail-brand{padding:0 16px 13px;border-bottom:1px solid var(--line-soft);margin-bottom:8px}
+.rail-brand h1{font-family:var(--font-display);font-size:15px;margin:0;color:var(--gold);letter-spacing:.3px}
+.rail-brand p{margin:3px 0 0;font-size:10px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.7px}
+
+.rail-group{padding:11px 16px 4px;font-size:9.5px;text-transform:uppercase;letter-spacing:.9px;color:var(--text-faint)}
+.rail-item{
+  display:flex;align-items:center;gap:9px;padding:8px 16px;font-size:12.5px;
+  color:var(--text-dim);cursor:pointer;border-left:2px solid transparent;
+}
+.rail-item:hover{background:var(--line-soft);color:var(--text)}
+.rail-item.active{background:var(--ink);color:var(--text);border-left-color:var(--accent,var(--gold))}
+.rail-item .ico{width:15px;text-align:center;flex:0 0 15px;opacity:.75}
+.rail-item .n{margin-left:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint)}
+
+/* The character switcher keeps its own markup and handler. Only the size
+   changes, because a 224px rail cannot hold the wide seal buttons. */
+.rail .switcher{padding:6px 10px 10px;border-bottom:1px solid var(--line-soft);margin:0 0 6px;display:block}
+.rail .switch-btn{width:100%;margin:0 0 4px;padding:6px 8px;gap:8px}
+.rail .switch-btn .seal{width:22px;height:22px;font-size:11px;flex:0 0 22px}
+.rail .switch-btn .name{font-size:12px}
+.rail .switch-btn .role{font-size:9.5px}
+.rail .add-char-btn{width:100%;padding:5px;font-size:11px;margin:2px 0 0}
+.rail .cap-note{padding:0 10px 8px;font-size:10px}
+
+/* ---- pane ---- */
+.pane{flex:1;min-width:0;padding:0 0 80px}
+.pane-top{
+  position:sticky;top:0;z-index:20;background:var(--ink);
+  border-bottom:1px solid var(--line);padding:12px 26px 0;
+}
+.frame-row{display:flex;gap:4px;flex-wrap:wrap}
+.frame-row:empty{display:none}
+.pane-body{padding:20px 26px 0;max-width:1500px}
+
+/* ---- frames ----
+   A frame is a slice of a panel that is already drawn. Hidden by attribute,
+   shown by class, so changing frame re-renders nothing. */
+[data-frame]{display:none}
+[data-frame].frame-on{display:block}
+
+/* ---- Last completed ---- */
+.done-head,
+.done-item{display:grid;grid-template-columns:1.6fr 120px 165px 84px;gap:10px;align-items:center}
+.done-head{
+  padding:0 8px 6px;border-bottom:1px solid var(--line);margin-bottom:4px;
+  font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px;
+}
+.done-head .r{text-align:right}
+.done-item{padding:7px 8px;font-size:13px;border-radius:3px}
+.done-item:nth-child(even){background:var(--panel2)}
+.done-item .dn-label{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.done-item .dn-frame{font-size:10.5px;color:var(--text-faint);text-transform:uppercase;letter-spacing:.5px}
+.done-item .dn-when{font-family:var(--font-mono);font-size:11.5px;color:var(--text)}
+.done-item .dn-ago{font-family:var(--font-mono);font-size:11.5px;color:var(--text-faint);text-align:right}
+/* Only on a row whose zone differs from the heading, which happens across a
+   daylight saving change. */
+.done-item .dn-zone{font-size:10px;color:var(--text-faint);margin-left:5px}
+@media (max-width:820px){
+  .done-head{display:none}
+  .done-item{grid-template-columns:1fr 100px;gap:4px 10px;font-size:12px}
+  .done-item .dn-frame{grid-row:2}
+  .done-item .dn-ago{grid-row:2;text-align:left}
+}
+
+/* ---- the compressed Hunt row ---- */
+.routine-item.hunt-compact{grid-template-columns:20px minmax(0,1fr) 84px}
+.hunt-cell{display:flex;align-items:center;gap:14px;flex-wrap:wrap;min-width:0}
+.hunt-ticks{display:flex;gap:9px;flex-wrap:wrap}
+.hunt-tick{
+  display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-dim);
+  border:1px solid var(--line-soft);border-radius:4px;padding:2px 6px;cursor:pointer;
+}
+.hunt-tick input{width:13px;height:13px;accent-color:var(--accent,var(--gold));cursor:pointer;margin:0}
+.hunt-tick.done{border-color:var(--gold-dim);color:var(--text-faint)}
+/* Greyed, not hidden, so the row still reads as six expansions. */
+.hunt-tick.locked{opacity:.35;cursor:not-allowed}
+.hunt-tally{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);white-space:nowrap}
+
+/* ---- a two-state setting shown under the rows it changes ---- */
+.opt-switch{display:flex;align-items:center;gap:10px;padding:12px 0 2px;font-size:11.5px;color:var(--text-faint)}
+.opt-switch .sw{
+  position:relative;width:34px;height:18px;flex:0 0 34px;
+  background:var(--ink);border:1px solid var(--line);border-radius:9px;cursor:pointer;
+  transition:border-color .12s;
+}
+.opt-switch .sw::after{
+  content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;
+  background:var(--text-faint);transition:transform .12s,background .12s;
+}
+.opt-switch .sw.on{border-color:var(--gold-dim)}
+.opt-switch .sw.on::after{transform:translateX(16px);background:var(--accent,var(--gold))}
+.opt-switch .sw:focus-visible{outline:1px solid var(--accent,var(--gold))}
+.opt-switch label{cursor:pointer}
+
+/* ---- pinned rail footer ---- */
+.rail-foot{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel)}
+.foot-slot{position:relative;min-height:80px;border-bottom:1px solid var(--line-soft)}
+.rail-foot .foot-item{display:none}
+.rail-foot .foot-item.on{display:block}
+.rail-foot .ocean-bar{
+  position:static;margin:0;border:none;border-radius:0;box-shadow:none;
+  background:var(--ink);padding:9px 12px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+}
+.rail-foot .ocean-bar .oc-label{font-size:9.5px;line-height:1.3}
+.rail-foot .ocean-bar .oc-time{font-size:15px}
+.rail-foot .ocean-bar .oc-npc{font-size:9.5px;line-height:1.35;color:var(--text-faint)}
+.rail-foot .ocean-bar.registering{background:var(--panel2);box-shadow:inset 2px 0 0 var(--sage)}
+.rail-foot .oc-mute{position:absolute;top:8px;right:10px}
+.oc-wrap{position:relative}
+
+.reset-bar,.expac-bar{
+  background:var(--ink);padding:9px 12px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+}
+.reset-bar .rs-label,.expac-bar .ex-label{
+  font-size:9.5px;line-height:1.3;color:var(--text-faint);
+  text-transform:uppercase;letter-spacing:.6px;
+}
+.expac-bar .ex-label em{font-style:normal;color:var(--rose)}
+.reset-bar .rs-time,.expac-bar .ex-time{font-family:var(--font-mono);font-size:15px;color:var(--text)}
+.reset-bar .rs-what,.expac-bar .ex-when{font-size:9.5px;line-height:1.35;color:var(--text-faint)}
+.reset-bar.idle .rs-time{color:var(--text-faint);font-size:13px}
+
+.foot-dots{display:flex;justify-content:center;gap:5px;padding:5px 0 4px;border-bottom:1px solid var(--line-soft)}
+.foot-dots button{width:6px;height:6px;padding:0;border-radius:50%;cursor:pointer;background:var(--line);border:none}
+.foot-dots button:hover{background:var(--text-faint)}
+.foot-dots button.on{background:var(--accent,var(--gold))}
+
+.rail-theme{padding:8px 10px 2px;border-bottom:1px solid var(--line-soft)}
+.rail-theme .theme-switch{display:flex;flex-wrap:wrap;gap:4px;margin-left:0}
+.rail-theme .theme-switch button{padding:4px 8px;font-size:10px}
+
+.rail-icons{display:flex;align-items:center;gap:2px;padding:7px 8px}
+.rail-icons button{
+  background:transparent;border:1px solid transparent;color:var(--text-faint);
+  width:30px;height:28px;border-radius:5px;cursor:pointer;font-size:13px;line-height:1;
+  font-family:var(--font-body);
+}
+.rail-icons button:hover{border-color:var(--line);color:var(--text)}
+.rail-icons button.active{color:var(--accent,var(--gold));border-color:var(--gold-dim)}
+.rail-icons .spacer{margin-left:auto}
+
+/* ---- collapsed rail ---- */
+.rail.collapsed{width:56px;flex-basis:56px}
+.rail.collapsed .rail-brand p,
+.rail.collapsed .switcher,
+.rail.collapsed .cap-note,
+.rail.collapsed .rail-group,
+.rail.collapsed .rail-item .label,
+.rail.collapsed .rail-item .n,
+.rail.collapsed .oc-label,
+.rail.collapsed .oc-npc,
+.rail.collapsed .rs-label,
+.rail.collapsed .rs-what,
+.rail.collapsed .ex-label,
+.rail.collapsed .ex-when,
+.rail.collapsed .rail-theme,
+.rail.collapsed .foot-dots,
+.rail.collapsed .oc-mute{display:none}
+.rail.collapsed .rail-brand{padding:0 0 10px;text-align:center}
+.rail.collapsed .rail-brand h1{font-size:0}
+.rail.collapsed .rail-brand h1::after{content:'AL';font-size:13px}
+.rail.collapsed .rail-item{justify-content:center;padding:9px 0}
+.rail.collapsed .foot-slot{min-height:0}
+.rail.collapsed .reset-bar,
+.rail.collapsed .expac-bar,
+.rail.collapsed .rail-foot .ocean-bar{align-items:center;padding:8px 4px}
+.rail.collapsed .rs-time,
+.rail.collapsed .ex-time,
+.rail.collapsed .rail-foot .ocean-bar .oc-time{font-size:10.5px;text-align:center}
+.rail.collapsed .rail-icons{flex-direction:column;padding:6px 4px}
+.rail.collapsed .rail-icons .spacer{margin-left:0}
+
+/* ---- narrow windows ----
+   Below this width a 224px rail leaves too little for the pane, so the rail
+   becomes a bar across the top and the page runs as one column again. */
+@media (max-width:820px){
+  .shell{display:block}
+  .rail{
+    position:static;width:auto;flex-basis:auto;height:auto;
+    border-right:none;border-bottom:1px solid var(--line);
+  }
+  .rail-scroll{overflow:visible}
+  .rail #rail-nav{display:flex;flex-wrap:wrap;gap:2px;padding:0 8px 8px}
+  .rail .rail-group{display:none}
+  .rail-item{border-left:none;border-bottom:2px solid transparent;padding:7px 11px;border-radius:5px}
+  .rail-item.active{border-left-color:transparent;border-bottom-color:var(--accent,var(--gold))}
+  .rail-foot{display:flex;flex-wrap:wrap;align-items:center;gap:0 10px}
+  .foot-slot{min-height:0;flex:1 1 220px;border-bottom:none}
+  .foot-dots{border-bottom:none}
+  .pane-top{padding:10px 14px 0}
+  .pane-body{padding:16px 14px 0}
+}

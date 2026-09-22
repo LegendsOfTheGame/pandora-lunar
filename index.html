@@ -7,71 +7,171 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
 
-  <div class="ocean-bar" id="ocean-bar">
-    <span class="oc-label" id="oc-label">Ocean Fishing</span>
-    <span class="oc-time" id="oc-time">&mdash;</span>
-    <span class="oc-npc" id="oc-npc"></span>
-    <button class="oc-mute" id="oc-mute-btn" onclick="toggleResetSound()" title="Reset sounds on — click to mute">&#128276;</button>
-  </div>
+<div class="shell">
 
-  <div class="masthead">
-    <h1>Adventurer's Ledger</h1>
-    <p>Pandora Lunar &middot; Progression Tracker</p>
-    <div class="fc-link">Your data stays in this browser only &mdash; nothing is shared with other members.
-      <button onclick="toggleInstructions()" id="instructions-toggle-btn">How this works</button>
-      <span class="theme-switch">
-        <button data-theme="poetic" onclick="setTheme('poetic')">Poetic</button>
-        <button data-theme="midnight" onclick="setTheme('midnight')">Midnight</button>
-        <button data-theme="daylight" onclick="setTheme('daylight')">Daylight</button>
-      </span>
+  <!-- ================= rail =================
+       Navigation on the left, pinned. It never scrolls away, so every section
+       is one click from anywhere on the page. -->
+  <nav class="rail" id="rail">
+    <div class="rail-brand">
+      <h1>Adventurer's Ledger</h1>
+      <p>Pandora Lunar</p>
     </div>
-  </div>
 
-  <div class="instructions-panel" id="instructions-panel" style="display:none">
-    <h2>How this works</h2>
-    <p>This tracker is completely self-serve. Add your own character (up to 3), and everything you type is saved <strong>only in this browser, on this device</strong> &mdash; nothing is sent anywhere, and no other FC member can see it.</p>
-    <h3>Adding a character</h3>
-    <p>Click <code>+ Add character</code> above. Give it a name, then fill in whatever sections matter to you &mdash; nothing is required. Click the &times; next to a character's name to remove it.</p>
-    <h3>Three-character limit</h3>
-    <p>Each browser can hold up to 3 characters. If you play more than 3 and want to track them all, use a second browser (e.g. Firefox alongside Edge) &mdash; each one keeps its own completely separate storage, so nothing overlaps.</p>
-    <h3>Backing up your data</h3>
-    <p>Click <code>Download backup</code> any time to save a <code>.json</code> file with everything. <code>Restore from file</code> loads one back &mdash; useful for moving to a new device or recovering from a cleared browser. Clearing your browser's site data <em>will</em> erase your tracker, so back up before you do that.</p>
-    <h3>Routines &amp; MSQ progress gating</h3>
-    <p>The Routines section is for anything that repeats on the game's reset schedule (dailies, weeklies) &mdash; it clears itself automatically, on real UTC reset times. The <code>requires</code> field hides a routine until you've reached a given point in the story &mdash; set the <code>MSQ progress</code> box next to your character's name first (it takes a patch number like <code>5.3</code> as a stand-in for how far along you are, not necessarily the current live patch). The seeded routines arrive with theirs filled in, worked out from the <em>main scenario quest</em> each one actually sits behind rather than the patch it shipped in &mdash; Faux Hollows came out in 5.3, but all it asks is that you've finished Shadowbringers, so it reads 5.0. Where a routine wants an expansion <em>finished</em> rather than merely started, it's measured against how far you've completed, not how far you've reached &mdash; so pausing after a finale doesn't hide anything you can actually do. The plugin sends both figures; type only the one box and everything falls back to it. Anything left blank has no story gate worth writing down: it's open from early A Realm Reborn, or held back by a level rather than by the story. Change or clear any of them &mdash; what you type is never overwritten. If you import from Time Memoria, the patch numbers mostly stop mattering: the plugin sends what you've actually unlocked, quest by quest, and an exact answer wins over a patch standing in for one. That cuts both ways &mdash; finishing Stormblood no longer makes Eureka content appear if you've never been to Eureka. A few routines are also hidden when the job they need isn't unlocked at all &mdash; the Masked Carnivale without Blue Mage, Grand Company turn-ins without a crafter or gatherer. That's unlock only, never a level: nothing hides just because you're underlevelled for it, and none of it applies until your Jobs tab has some levels in it.</p>
-    <h3>Job levels</h3>
-    <p>Any job still sitting at <code>0</code> is hidden &mdash; most people play a handful out of thirty-four, and the rest are rows to scroll past. The note under the tab says how many went and brings them back with one click, which is what you want when you unlock something new and need somewhere to type it &mdash; including on a brand new character, where everything is at 0 and the whole tab starts out hidden behind that one click.</p>
-    <h3>Ocean Fishing</h3>
-    <p>The bar at the very top is global and always live &mdash; registration opens for 15 minutes every 2 hours (even UTC hours), independent of any character.</p>
-  </div>
-
-  <div class="switcher" id="switcher"></div>
-  <div class="cap-note" id="cap-note" style="display:none">Up to 3 characters per browser. Need more? Use a second browser (e.g. Firefox alongside Edge) &mdash; each keeps its own separate storage.</div>
-
-  <div id="pages"></div>
-
-  <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
-  <div class="copyright">&copy; Kaye Sharpedge</div>
-  <div class="build-stamp">Last updated 14/09/2026 @ 14:22 UTC</div>
-
-  <div class="backup-bar">
-    <button class="edit-btn" onclick="exportData()">Download backup</button>
-    <button class="edit-btn" onclick="document.getElementById('import-file').click()">Restore from file</button>
-    <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(this)">
-    <button class="edit-btn" onclick="toggleTmImportPanel()">Import from Time Memoria</button>
-  </div>
-
-  <div class="tm-import-panel" id="tm-import-panel" style="display:none">
-    <h2>Import from Time Memoria <button class="link-btn" onclick="toggleTmImportPanel()">Close</button></h2>
-    <p class="hint">Paste a Time Memoria clipboard export below. It's parsed entirely in this browser — nothing is sent anywhere, same as everywhere else on this site.</p>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0">
-      <button class="edit-btn" onclick="tmPasteFromClipboard()">Paste from clipboard</button>
-      <span class="tm-import-error" id="tm-import-error"></span>
+    <div class="rail-scroll">
+      <div class="switcher" id="switcher"></div>
+      <div class="cap-note" id="cap-note" style="display:none">Up to 3 characters per browser. Need more? Use a second browser (e.g. Firefox alongside Edge) &mdash; each keeps its own separate storage.</div>
+      <div id="rail-nav"></div>
     </div>
-    <textarea class="note-area" id="tm-import-text" style="min-height:90px" placeholder="Or paste manually here (Ctrl+V)" oninput="onTmPasteInput()"></textarea>
-    <div id="tm-import-summary"></div>
-  </div>
+
+    <!-- The footer shows one countdown at a time and changes every 5 seconds.
+         All of them keep counting while hidden; only the display rotates. Add
+         a .foot-item and the rotation and the dots pick it up. -->
+    <div class="rail-foot">
+      <div class="foot-slot" id="foot-slot">
+
+        <div class="foot-item on" data-name="Next reset">
+          <div class="reset-bar idle" id="reset-bar">
+            <span class="rs-label" id="rs-label">Next reset</span>
+            <span class="rs-time" id="rs-time">&mdash;</span>
+            <span class="rs-what" id="rs-what"></span>
+          </div>
+        </div>
+
+        <div class="foot-item" data-name="Ocean Fishing">
+          <div class="oc-wrap">
+            <div class="ocean-bar" id="ocean-bar">
+              <span class="oc-label" id="oc-label">Ocean Fishing</span>
+              <span class="oc-time" id="oc-time">&mdash;</span>
+              <span class="oc-npc" id="oc-npc"></span>
+            </div>
+            <button class="oc-mute" id="oc-mute-btn" onclick="toggleResetSound()" title="Reset sounds on &mdash; click to mute">&#128276;</button>
+          </div>
+        </div>
+
+        <div class="foot-item" data-name="Evercold">
+          <div class="expac-bar" id="expac-bar" title="Reported date. Square Enix confirms it at Tokyo Fan Fest on 1 November 2026.">
+            <span class="ex-label">Evercold &middot; <em>unconfirmed</em></span>
+            <span class="ex-time" id="ex-time">&mdash;</span>
+            <span class="ex-when" id="ex-when"></span>
+          </div>
+        </div>
+
+      </div>
+      <div class="foot-dots" id="foot-dots"></div>
+
+      <div class="rail-theme">
+        <span class="theme-switch">
+          <button data-theme="poetic" onclick="setTheme('poetic')">Poetic</button>
+          <button data-theme="midnight" onclick="setTheme('midnight')">Midnight</button>
+          <button data-theme="daylight" onclick="setTheme('daylight')">Daylight</button>
+        </span>
+      </div>
+
+      <div class="rail-icons">
+        <button id="ico-tools" title="Backup and import" onclick="toggleTools()">&#11123;</button>
+        <button id="instructions-toggle-btn" title="How this works" onclick="toggleInstructions()">?</button>
+        <button class="spacer" id="ico-collapse" title="Collapse the rail" onclick="toggleRail()">&lsaquo;</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ================= pane ================= -->
+  <main class="pane">
+    <div class="pane-top">
+      <div class="frame-row" id="frame-row"></div>
+    </div>
+
+    <div class="pane-body">
+
+      <div class="instructions-panel" id="instructions-panel" style="display:none">
+        <h2>How this works</h2>
+        <p>This tracker is self-serve. You add your own characters. The tracker saves your data in this browser, on this device. It sends nothing to a server. No other Free Company member can read it.</p>
+
+        <h3>The rail</h3>
+        <p>The rail is the column on the left. It lists your characters at the top. It lists the sections below them.</p>
+        <p>Click a section to open it. Some sections divide into frames. The frame buttons are in the row at the top of the pane. Click a frame button to change what the pane shows.</p>
+        <p>The rail and the frame buttons stay on the screen. Only the pane scrolls.</p>
+        <p>Click <code>&lsaquo;</code> at the bottom of the rail to make the rail narrow. Click it again to make the rail wide.</p>
+
+        <h3>Characters</h3>
+        <p>Click <code>+ Add character</code> in the rail. Type a name. Then complete the parts that apply to you. No field is mandatory.</p>
+        <p>Each browser holds a maximum of 3 characters. To track more than 3 characters, use a second browser. Each browser keeps its own storage. The two sets of data stay separate.</p>
+        <p>To remove a character, click its name in the rail. Then click <code>Remove character</code> at the top of the pane.</p>
+
+        <h3>Backups</h3>
+        <p>Click the backup icon at the bottom of the rail. The backup tools open at the top of the pane.</p>
+        <p>Click <code>Download backup</code> to save a <code>.json</code> file with all of your data. Click <code>Restore from file</code> to load a backup file into the tracker. Use a backup to move to a new device, or to recover data.</p>
+        <p><strong>WARNING:</strong> If you clear the site data of your browser, the browser erases your tracker. Make a backup first.</p>
+
+        <h3>Routines</h3>
+        <p>A routine is a task that repeats on a reset schedule. The tracker clears each routine at its reset time. All reset times are UTC.</p>
+        <p>The Routines section has five frames. Daily and Weekly clear on the game's reset clock. Challenge Log holds the 13 challenge categories. Cooldowns holds the tasks that run from your own last click, not from a shared clock. Last completed lists when you last did each one.</p>
+        <p>Click <code>+ Add routine</code> to add your own routine.</p>
+
+        <h3>MSQ progress</h3>
+        <p>The <code>requires</code> value hides a routine until you reach a point in the main scenario.</p>
+        <p>Type your MSQ progress in the box next to your character's name. Use a patch number, for example <code>5.3</code>. If this box is empty, the tracker hides no routine.</p>
+        <p>Each seeded routine has a <code>requires</code> value. The value comes from the main scenario quest that unlocks the content. It does not come from the patch that released the content. Example: Faux Hollows released in patch 5.3, but it needs the end of Shadowbringers. Therefore it reads <code>5.0</code>.</p>
+        <p>You can change or clear any <code>requires</code> value. The tracker never overwrites your value.</p>
+        <p>The note below each list gives the number of hidden routines. Click <code>Show them</code> to show all routines.</p>
+
+        <h3>Import from Time Memoria</h3>
+        <p>The Time Memoria plugin sends what you unlocked, quest by quest. After an import, the tracker uses that data and ignores the patch number.</p>
+        <p>This is more exact, and it applies in both directions. The end of Stormblood no longer shows Eureka content if you never entered Eureka.</p>
+        <p>An import also hides a routine when you have not unlocked the job it needs. The Masked Carnivale needs Blue Mage. Grand Company turn-ins need a crafting job or a gathering job. This test uses the unlock only. A low level hides nothing.</p>
+
+        <h3>The Hunt</h3>
+        <p>The Hunt issues six mark bills each day and six elite mark bills each week, one for each expansion.</p>
+        <p>The tracker shows each set as one row with six ticks. A tick is grey when your MSQ progress does not reach that expansion.</p>
+        <p>To show one row for each expansion instead, turn on <code>Give each expansion its own row</code> below the Hunt rows. This setting applies to Daily and Weekly together.</p>
+
+        <h3>Job levels</h3>
+        <p>The tracker hides a job at level 0. Most players use a few of the 34 jobs.</p>
+        <p>The note below the list gives the number of hidden jobs. Click <code>Show them</code> to show all jobs. Use this when you unlock a new job and need a field to type in.</p>
+        <p>A new character has every job at 0. The list therefore starts hidden.</p>
+
+        <h3>Ocean Fishing</h3>
+        <p>The Ocean Fishing panel is at the bottom of the rail. It is global. It shows the same time for every character.</p>
+        <p>Registration opens for 15 minutes every 2 hours, at each even UTC hour.</p>
+
+        <h3>Evercold</h3>
+        <p>The second panel at the bottom of the rail counts down to the 8.0 expansion.</p>
+        <p>This date is a report. Square Enix has not confirmed it. Square Enix gives the confirmed date at Tokyo Fan Fest on 1 November 2026.</p>
+
+        <h3>Themes</h3>
+        <p>The tracker has three themes: Poetic, Midnight and Daylight. Click a theme name at the bottom of the rail. Each theme changes the colours and the corner shapes.</p>
+      </div>
+
+      <div id="tools-panel" style="display:none">
+        <div class="backup-bar" style="justify-content:flex-start;margin-top:0">
+          <button class="edit-btn" onclick="exportData()">Download backup</button>
+          <button class="edit-btn" onclick="document.getElementById('import-file').click()">Restore from file</button>
+          <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(this)">
+          <button class="edit-btn" onclick="toggleTmImportPanel()">Import from Time Memoria</button>
+        </div>
+
+        <div class="tm-import-panel" id="tm-import-panel" style="display:none">
+          <h2>Import from Time Memoria <button class="link-btn" onclick="toggleTmImportPanel()">Close</button></h2>
+          <p class="hint">Paste a Time Memoria clipboard export below. It's parsed entirely in this browser &mdash; nothing is sent anywhere, same as everywhere else on this site.</p>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0">
+            <button class="edit-btn" onclick="tmPasteFromClipboard()">Paste from clipboard</button>
+            <span class="tm-import-error" id="tm-import-error"></span>
+          </div>
+          <textarea class="note-area" id="tm-import-text" style="min-height:90px" placeholder="Or paste manually here (Ctrl+V)" oninput="onTmPasteInput()"></textarea>
+          <div id="tm-import-summary"></div>
+        </div>
+      </div>
+
+      <div id="pages"></div>
+
+      <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
+      <div class="copyright">&copy; Kaye Sharpedge</div>
+      <div class="build-stamp">Last updated 22/09/2026 @ 15:16 UTC</div>
+
+    </div>
+  </main>
 
 </div>
 
