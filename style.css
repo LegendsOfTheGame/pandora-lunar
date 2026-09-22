@@ -748,6 +748,15 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .frame-row:empty{display:none}
 .pane-body{padding:20px 26px 0;max-width:1500px}
 
+/* The character line pins directly below the frame row. --pane-top-h is
+   measured in JS, because the frame row wraps to two lines on a narrow pane
+   and a fixed offset would leave a gap or an overlap. */
+.pane-body .char-header{
+  position:sticky;top:calc(var(--pane-top-h, 62px) - 1px);z-index:15;
+  background:var(--ink);border-bottom:1px solid var(--line-soft);
+  margin:-20px 0 16px;padding:12px 0 10px;
+}
+
 /* ---- frames ----
    A frame is a slice of a panel that is already drawn. Hidden by attribute,
    shown by class, so changing frame re-renders nothing. */

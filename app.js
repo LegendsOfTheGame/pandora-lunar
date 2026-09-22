@@ -2107,14 +2107,19 @@ function removeCharacter(cid){
 /* ---------- per-character page markup ---------- */
 function characterPageHTML(cid){
   return `
-  <div class="section">
-    <div class="char-header">
-      <div class="char-name-group">
-        <input type="text" class="char-name-input" id="${cid}-name" placeholder="Character name" oninput="onNameInput('${cid}')">
-        <span class="patch-box">MSQ progress <input type="text" id="${cid}-patch" class="patch-input" placeholder="4.0" oninput="onPatchInput('${cid}')"></span>
-      </div>
-      <button class="remove-char-btn" onclick="removeCharacter('${cid}')">Remove character</button>
+  <!-- Pinned under the frame row, and a direct child of .page rather than a
+       section, so it stays put for the whole scroll instead of only while the
+       first section is on screen. It holds the name, the MSQ box and Remove
+       character: scrolling used to carry all three under the sticky frame row,
+       where clicks landed on the row and the buttons could not be used. -->
+  <div class="char-header">
+    <div class="char-name-group">
+      <input type="text" class="char-name-input" id="${cid}-name" placeholder="Character name" oninput="onNameInput('${cid}')">
+      <span class="patch-box">MSQ progress <input type="text" id="${cid}-patch" class="patch-input" placeholder="4.0" oninput="onPatchInput('${cid}')"></span>
     </div>
+    <button class="remove-char-btn" onclick="removeCharacter('${cid}')">Remove character</button>
+  </div>
+  <div class="section">
     <span class="cap" id="${cid}-tm-sync-note"></span>
     <div class="server-picker" id="${cid}-server-picker"></div>
     <div class="dash-grid" id="${cid}-dash"></div>
@@ -2469,17 +2474,24 @@ function applyFrames(cid, section){
     el.classList.toggle('frame-on', frame !== null && keys.includes(frame));
   });
 }
+function syncPaneTopHeight(){
+  const top = document.querySelector('.pane-top');
+  if(top) document.documentElement.style.setProperty('--pane-top-h', top.offsetHeight + 'px');
+}
+window.addEventListener('resize', syncPaneTopHeight);
+
 function renderFrameRow(){
   const row = document.getElementById('frame-row');
   if(!row || !DATA) return;
   const cid = DATA.activeId, section = activeTab(cid);
   const list = framesFor(section, getChar(cid));
-  if(list.length < 2){ row.innerHTML = ''; return; }
+  if(list.length < 2){ row.innerHTML = ''; syncPaneTopHeight(); return; }
   const current = activeFrame(cid, section);
   row.innerHTML = list.map(f =>
     `<button class="tab-btn${f.k===current?' active':''}" onclick="goFrame('${f.k}')">${esc(f.l)}${
       f.n != null ? ` <span style="opacity:.55">${f.n}</span>` : ''}</button>`).join('');
   applyFrames(cid, section);
+  syncPaneTopHeight();
 }
 
 function toggleRail(){
