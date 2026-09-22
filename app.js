@@ -2380,7 +2380,7 @@ function renderRail(){
     if(s.group !== lastGroup){ html += `<div class="rail-group">${esc(s.group)}</div>`; lastGroup = s.group; }
     let n = '';
     try{ n = (s.count && c) ? s.count(c) : ''; }catch(e){ n = ''; }
-    html += `<div class="rail-item${s.key===current?' active':''}" title="${esc(s.label)}"`
+    html += `<div class="rail-item${(s.key===current && !globalPageOpen())?' active':''}" title="${esc(s.label)}"`
          +  ` onclick="goSection('${s.key}')">`
          +  `<span class="ico">${s.ico}</span><span class="label">${esc(s.label)}</span>`
          +  (n !== '' ? `<span class="n">${n}</span>` : '')
@@ -2393,6 +2393,7 @@ function renderRail(){
   box.innerHTML = html;
 }
 function goSection(key){
+  if(globalPageOpen()) showGlobalPage(null);
   switchTab(DATA.activeId, key);
   window.scrollTo(0,0);
 }
@@ -2487,6 +2488,7 @@ window.addEventListener('resize', syncPaneTopHeight);
 function renderFrameRow(){
   const row = document.getElementById('frame-row');
   if(!row || !DATA) return;
+  if(globalPageOpen()){ row.innerHTML = ''; syncPaneTopHeight(); return; }
   const cid = DATA.activeId, section = activeTab(cid);
   const list = framesFor(section, getChar(cid));
   if(list.length < 2){ row.innerHTML = ''; syncPaneTopHeight(); return; }
@@ -2505,24 +2507,44 @@ function toggleRail(){
   DATA.ui.railCollapsed = collapsed;
   scheduleSave();
 }
-function toolsOpen(){
-  const panel = document.getElementById('tools-panel');
-  return !!panel && panel.style.display !== 'none';
+/* ---------- global pages ----------
+   Backup & import and How this works are destinations, not trays laid over the
+   character. Each replaces the pane's contents while it is open.
+
+   They used to render above #pages, which put them underneath the pinned
+   character line: that line is sticky, opaque and z-index 15, so it painted
+   over the panel and the backup buttons could barely be seen. Swapping what
+   the pane shows removes the overlap instead of fighting it. */
+function panelOpen(id){
+  const el = document.getElementById(id);
+  return !!el && el.style.display !== 'none';
 }
-function setTools(open){
-  const panel = document.getElementById('tools-panel');
-  if(!panel) return;
-  panel.style.display = open ? '' : 'none';
+function showGlobalPage(id){
+  ['tools-panel','instructions-panel'].forEach(k=>{
+    const el = document.getElementById(k);
+    if(el) el.style.display = (k === id) ? '' : 'none';
+  });
+  const pages = document.getElementById('pages');
+  if(pages) pages.style.display = id ? 'none' : '';
+
   const ico = document.getElementById('ico-tools');
-  if(ico) ico.classList.toggle('active', open);
+  if(ico) ico.classList.toggle('active', id === 'tools-panel');
+  const help = document.getElementById('instructions-toggle-btn');
+  if(help) help.classList.toggle('active', id === 'instructions-panel');
+
   renderRail();
-  if(open) window.scrollTo(0,0);
+  renderFrameRow();
+  window.scrollTo(0,0);
 }
-function toggleTools(){ setTools(!toolsOpen()); }
-/* The import panel lives inside the tools tray. Opening it while the tray is
-   still hidden sets a visible panel inside a display:none parent, so nothing
-   appears and the import looks broken. Open the tray with it. */
-function openTools(){ setTools(true); }
+function globalPageOpen(){
+  return panelOpen('tools-panel') ? 'tools-panel'
+       : panelOpen('instructions-panel') ? 'instructions-panel' : null;
+}
+function toolsOpen(){ return panelOpen('tools-panel'); }
+function toggleTools(){ showGlobalPage(toolsOpen() ? null : 'tools-panel'); }
+/* The import panel lives inside the backup page, so that page has to be the
+   one on screen or the import looks broken. */
+function openTools(){ showGlobalPage('tools-panel'); }
 
 /* ---------- rail footer ----------
    Three countdowns in the space of one. The slot shows one at a time and
@@ -3983,10 +4005,7 @@ function toggleSection(key){
 
 /* ---------- instructions ---------- */
 function toggleInstructions(){
-  const panel = document.getElementById('instructions-panel');
-  const open = panel.style.display === 'none';
-  panel.style.display = open ? '' : 'none';
-  document.getElementById('instructions-toggle-btn').textContent = open ? 'Hide' : 'How this works';
+  showGlobalPage(panelOpen('instructions-panel') ? null : 'instructions-panel');
 }
 
 /* ---------- backup ---------- */
