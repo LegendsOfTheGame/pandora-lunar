@@ -863,6 +863,12 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   font-family:var(--font-body);
 }
 .rail-icons button:hover{border-color:var(--line);color:var(--text)}
+.rail-icons .rail-kofi{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:28px;border:1px solid transparent;border-radius:5px;
+  color:var(--text-faint);font-size:13px;line-height:1;text-decoration:none;
+}
+.rail-icons .rail-kofi:hover{border-color:var(--line);color:var(--text)}
 .rail-icons button.active{color:var(--accent,var(--gold));border-color:var(--gold-dim)}
 .rail-icons .spacer{margin-left:auto}
 
