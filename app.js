@@ -2183,6 +2183,12 @@ function characterPageHTML(cid){
     <div id="${cid}-cosmic-meta"></div>
     <div id="${cid}-cosmic" class="cosmic-columns"></div>
   </div>
+  <div class="section" data-frame="red-alerts ${RED_ALERT_ZONES.map(frameSlug).join(' ')}">
+    <h2>Red Alerts <span class="hint">reference &mdash; wiki "Red Alert", revision 12 June 2026</span></h2>
+    <p class="ra-intro">Each zone and weather has one or two variants. Each variant opens two regions, and each region has critical missions for two or three classes. Red Alerts have no fixed schedule, and each world and zone has its own. This table does not show which Red Alert occurs next.</p>
+    <div id="${cid}-ra-bar"></div>
+    <div id="${cid}-redalert"></div>
+  </div>
   </div>
   <div class="tab-panel" data-tab="societies">
   <div class="section">
@@ -2445,7 +2451,8 @@ function framesFor(section, c){
       ];
     }
     case 'cosmic':
-      return [{k:'tools', l:'Tools'}];
+      return [{k:'tools', l:'Tools'}, {k:'red-alerts', l:'Red Alerts'}]
+        .concat(RED_ALERT_ZONES.map(z => ({k:frameSlug(z), l:z})));
     case 'societies': {
       const have = patchValue(c.patch);
       return [...new Set(ALLIED_SOCIETIES.map(a=>a[1]))]
@@ -3544,6 +3551,225 @@ function renderCosmic(cid){
     || '<div class="empty-hint">The export has no research data for any class.</div>';
 }
 
+/* ---------- red alerts ----------
+   Reference data only: for each zone, each Red Alert weather and variant, the two
+   regions and the classes with a critical mission in each. From the wiki page "Red
+   Alert", revision 12 June 2026, parsed from its {{Cosmic Red Alert table}} templates.
+   The per-zone counts agree with the page's own text: 33 critical missions in Sinus
+   Ardorum and Phaenna (three per class), 22 in Oizys and Auxesia (two per class).
+
+   This never says which Red Alert comes next or when. They have no schedule, each world
+   and zone runs its own, and the only live source is player reports, which would need a
+   server. The wiki's "the same red alert type cannot spawn twice in a row" does not say
+   whether "type" is the weather or the variant, so not even that is offered.
+
+   Variants are α and β, as the wiki's notes and dialogue name them. `lock` is the
+   world development log a variant needs before it can occur. */
+const RED_ALERTS = [
+  {zone:"Sinus Ardorum", weather:"Astromagnetic Storm",
+   lock:"On a world before development log 8 (Gleamslope available), variant β does not occur.",
+   variants:[
+    [
+      {dir:"Far South", xy:"24.7, 32.5", missions:[["Armorer","Spare Vacuum Tanks"], ["Goldsmith","Intricate Vacuum Parts"], ["Alchemist","Aether-resistant Agent"]]},
+      {dir:"North", xy:"19.7, 16.6", missions:[["Miner","Fallen Drone Salvage"], ["Fisher","Sunken Drone Salvage"]]}
+    ],
+    [
+      {dir:"Far South", xy:"19.9, 36.9", missions:[["Carpenter","Work Ladders"], ["Goldsmith","Lighting Repair Tools"], ["Weaver","Spare Cloth"]]},
+      {dir:"Far West", xy:"12.2, 20.1", missions:[["Culinarian","Cured Foodstuffs"], ["Miner","Insulating Material"], ["Fisher","Edible Fish"]]}
+    ]
+   ]},
+  {zone:"Sinus Ardorum", weather:"Meteor Showers",
+   lock:"On a world before development log 14 (Lunar Nadir Cosmoliner), variant β does not occur.",
+   variants:[
+    [
+      {dir:"Southwest", xy:"17.1, 25.7", missions:[["Blacksmith","Meteorite Drills"], ["Leatherworker","Impenetrable Gloves"], ["Miner","Rare Siderite Extraction"]]},
+      {dir:"North", xy:"22.2, 14.5", missions:[["Armorer","Vehicular Plating"], ["Goldsmith","Spare Vehicle Parts"]]}
+    ],
+    [
+      {dir:"Far Northeast", xy:"38.1, 13.9", missions:[["Blacksmith","Vacuum Muzzles"], ["Armorer","Gas Tanks"], ["Leatherworker","Reinforced Gas Masks"]]},
+      {dir:"Far Northeast", xy:"31.3, 4.4", missions:[["Alchemist","Gas Poisoning Antidote"], ["Culinarian","Nutrient Supplement Jelly"], ["Botanist","Medicinal Sclerotia"]]}
+    ]
+   ]},
+  {zone:"Sinus Ardorum", weather:"Sporing Mist",
+   variants:[
+    [
+      {dir:"Far East", xy:"32.3, 22.5", missions:[["Blacksmith","Flamethrower Parts"], ["Alchemist","Flamethrower Fuel"]]},
+      {dir:"Far East", xy:"34.6, 23.5", missions:[["Carpenter","Fungal Building Materials"], ["Weaver","Fungal Cloth"], ["Botanist","Mutated Spongoi"]]}
+    ],
+    [
+      {dir:"Far Southeast", xy:"29.1, 35.6", missions:[["Carpenter","Kindling"], ["Leatherworker","Flame-resistant Workboots"], ["Weaver","Flame-resistant Work Cloth"]]},
+      {dir:"Northeast", xy:"23.5, 17.3", missions:[["Culinarian","Irregular Spongoi Analysis"], ["Botanist","Sporing Mist Analysis"], ["Fisher","Mutated Fish"]]}
+    ]
+   ]},
+  {zone:"Phaenna", weather:"Thunderstorms",
+   lock:"On a world before development log 7 (The Soda-lime Float Cosmoliner), variant β does not occur.",
+   variants:[
+    [
+      {dir:"Northeast", xy:"29.9, 12.6", missions:[["Carpenter","Wiring Repair Tools"], ["Leatherworker","Wiring Repair Gloves"], ["Alchemist","Wiring Repair Rubber"]]},
+      {dir:"East", xy:"30.1, 18.1", missions:[["Goldsmith","Precision Components"], ["Weaver","Repair Cloth"]]}
+    ],
+    [
+      {dir:"Central", xy:"24.9, 17.3", missions:[["Goldsmith","Electroconductive Wire"], ["Weaver","Hanging Tool Pouches"], ["Botanist","Supply Route Clearing"]]},
+      {dir:"Far Northwest", xy:"9.2, 11.2", missions:[["Blacksmith","Experimental Lightning Rod Materials"], ["Alchemist","Experimental Storage Batteries"], ["Miner","Lightning Rod Materials"]]}
+    ]
+   ]},
+  {zone:"Phaenna", weather:"Annealing Winds",
+   lock:"On a world before development log 9 (Capsule Chasm Cosmoliner), variant β does not occur.",
+   variants:[
+    [
+      {dir:"Far North", xy:"26.3, 7.4", missions:[["Culinarian","Hot Soup"], ["Miner","Rare Glass Resources"], ["Fisher","Soup Broth Ingredients"]]},
+      {dir:"Far Northwest", xy:"11.2, 6.2", missions:[["Blacksmith","Vitreobotany Tools"], ["Leatherworker","Reinforced Lumbering Boots"], ["Botanist","Glass Flora Samples"]]}
+    ],
+    [
+      {dir:"East", xy:"29.6, 22.2", missions:[["Armorer","Upgrade Parts"], ["Culinarian","Reconfiguration Lubricant"], ["Fisher","Oil-extractable Aquatic Life"]]},
+      {dir:"South", xy:"21.7, 28.3", missions:[["Carpenter","Mutated Flora Samples"], ["Botanist","Mutated Flora"]]}
+    ]
+   ]},
+  {zone:"Phaenna", weather:"Glass Rain",
+   lock:"On a world before development log 9 (Capsule Chasm Cosmoliner), variant α does not occur. On a world before development log 14 (Fusingway Vent unlocked), variant β does not occur.",
+   variants:[
+    [
+      {dir:"Southeast", xy:"29.3, 25.6", missions:[["Carpenter","Glass Dust Cleaning Tools"], ["Armorer","Dust Tanks"], ["Leatherworker","Dust-filtering Masks"]]},
+      {dir:"Far Southeast", xy:"32.5, 34.2", missions:[["Culinarian","Water Quality Inspection Samples"], ["Fisher","Elemental-esque Specimen Acquisition"]]}
+    ],
+    [
+      {dir:"Far South", xy:"24.6, 31.4", missions:[["Armorer","Rover Plating"], ["Goldsmith","Spare Transport Parts"], ["Miner","Metallic Materials"]]},
+      {dir:"Far West", xy:"11.8, 22.3", missions:[["Blacksmith","Nozzle Parts"], ["Weaver","Dust Filters"], ["Alchemist","Surface Protectant"]]}
+    ]
+   ]},
+  {zone:"Oizys", weather:"Gravitational Anomaly",
+   variants:[
+    [
+      {dir:"Far North", xy:"22.9, 11.9", missions:[["Blacksmith","Compact Gravity Generator"], ["Leatherworker","Sturdy Leather Band"]]},
+      {dir:"North", xy:"17.6, 20.1", missions:[["Armorer","Rover Chain"], ["Goldsmith","Portable Beacon"], ["Weaver","Rover Protective Covering"]]}
+    ]
+   ]},
+  {zone:"Oizys", weather:"Bubble Bloom",
+   variants:[
+    [
+      {dir:"West", xy:"10.1, 24.6", missions:[["Carpenter","Hydrophytic Flora Biofuel"], ["Culinarian","Hydrophytic Flora Preservatives"], ["Botanist","Hydrophytic Flora Harvest"]]},
+      {dir:"Far Southwest", xy:"14.1, 39.0", missions:[["Goldsmith","Wrought Metallic Coral"], ["Miner","Gilded Coral Rush"], ["Fisher","Iron Coral Collection"]]}
+    ]
+   ]},
+  {zone:"Oizys", weather:"Gale-force Winds",
+   variants:[
+    [
+      {dir:"Far Northeast", xy:"33.2, 12.9", missions:[["Armorer","Overturned Rover Repair"], ["Leatherworker","Mechanic's Gloves"], ["Culinarian","Emergency Pananoodles"]]},
+      {dir:"East", xy:"24.1, 20.2", missions:[["Carpenter","Relic Restoration Brushes"], ["Alchemist","Ruin Remedy"], ["Fisher","Sunken Relic Salvage"]]}
+    ],
+    [
+      {dir:"Far Northwest", xy:"8.2, 12.3", missions:[["Blacksmith","Astrodrill Replacement Bit"], ["Miner","Long-lost Carrot Mining"]]},
+      {dir:"North", xy:"19.0, 20.5", missions:[["Weaver","Emergency Bandaging"], ["Alchemist","Emergency Salves"], ["Botanist","Medicinal Flora Harvest"]]}
+    ]
+   ]},
+  {zone:"Auxesia", weather:"Auroral Flare",
+   variants:[
+    [
+      {dir:"Central", xy:"20.7, 28.5", missions:[["Blacksmith","Plant Incineration Equipment"], ["Leatherworker","Flora Extraction Gloves"], ["Botanist","Flamethrower Alternative"]]},
+      {dir:"Far West", xy:"8.3, 27.2", missions:[["Culinarian","Water Sample Collection"], ["Fisher","Luminescent Aquatic Flora"]]}
+    ],
+    [
+      {dir:"Northwest", xy:"21.7, 24.0", missions:[["Carpenter","Firepower Fuel"], ["Weaver","Incineration Masks"], ["Alchemist","Functional Firelighter"]]},
+      {dir:"North", xy:"27.4, 21.6", missions:[["Blacksmith","Boring Drill Bits"], ["Culinarian","Drill Lubricant"], ["Miner","Rare Gold Artichoke Ore"]]}
+    ]
+   ]},
+  {zone:"Auxesia", weather:"Floracane",
+   variants:[
+    [
+      {dir:"West", xy:"14.1, 30.0", missions:[["Armorer","Machina Repair Plating"], ["Goldsmith","Precision Replacement Parts"], ["Miner","Machina Repair Plating Materials"]]},
+      {dir:"Far Northwest", xy:"16.7, 11.3", missions:[["Carpenter","Wakening Incense"], ["Alchemist","Sobering Tonic"], ["Fisher","Incense Materials"]]}
+    ],
+    [
+      {dir:"East", xy:"36.4, 31.7", missions:[["Goldsmith","Replacement Drone Circuits"], ["Weaver","Drone Repair Tool Pouch"]]},
+      {dir:"West", xy:"14.4, 25.9", missions:[["Armorer","Spore Collection Tanks"], ["Leatherworker","Filtered Masks"], ["Botanist","Fungi Samples"]]}
+    ]
+   ]}
+];
+const RED_ALERT_ZONES = [...new Set(RED_ALERTS.map(a => a.zone))];
+const RED_ALERT_VARIANT_NAMES = ['α','β'];
+
+// The class filter is shared by every character, since the table is the same for all.
+function redAlertClass(){
+  const k = DATA.ui.redAlertClass;
+  return COSMIC_CLASSES.includes(k) ? k : '';
+}
+function onRedAlertClassChange(cid){
+  DATA.ui.redAlertClass = document.getElementById(cid+'-ra-class').value;
+  DATA.chars.forEach(c => { renderRedAlerts(c.id); applyFrames(c.id, 'cosmic'); });
+  scheduleSave();
+}
+
+function redAlertVariantHTML(alert, regions, vi, pick){
+  const label = alert.variants.length > 1 ? `Variant ${RED_ALERT_VARIANT_NAMES[vi]}` : 'One variant';
+  const regionHTML = regions.map(r => `
+    <div class="ra-region">
+      <div class="ra-where">${esc(r.dir)} <span class="faint">(${esc(r.xy)})</span></div>
+      ${r.missions.map(([cls, mission]) => `
+        <div class="ra-mission${pick && cls === pick ? ' pick' : ''}${pick && cls !== pick ? ' other' : ''}">
+          <span class="ra-cls">${esc(cls)}</span><span class="ra-name">${esc(mission)}</span>
+        </div>`).join('')}
+    </div>`).join('');
+  return `
+    <div class="ra-variant">
+      <div class="ra-vlabel">${label}</div>
+      <div class="ra-regions">${regionHTML}</div>
+    </div>`;
+}
+
+function renderRedAlerts(cid){
+  const box = document.getElementById(cid+'-redalert');
+  const bar = document.getElementById(cid+'-ra-bar');
+  if(!box || !bar) return;
+  const pick = redAlertClass();
+  const has = regions => regions.some(r => r.missions.some(([cls]) => cls === pick));
+
+  bar.innerHTML = `
+    <label class="ra-pick">Class
+      <select id="${cid}-ra-class" onchange="onRedAlertClassChange('${cid}')">
+        <option value="">All classes</option>
+        ${COSMIC_CLASSES.map(j => `<option value="${j}"${j === pick ? ' selected' : ''}>${j}</option>`).join('')}
+      </select>
+    </label>`;
+
+  // Counted per zone, so each zone's own frame can state its own totals and the
+  // all-zones frame their sum.
+  const summary = (v, m) => pick
+    ? `${pick}: ${m} critical missions in ${v} Red Alert variants.`
+    : `${v} variants, ${m} critical missions.`;
+  let variantsShown = 0, missionsShown = 0;
+  const zones = RED_ALERT_ZONES.map(zone => {
+    let zv = 0, zm = 0;
+    const weathers = RED_ALERTS.filter(a => a.zone === zone).map(a => {
+      const variants = a.variants
+        .map((regions, vi) => ({regions, vi}))
+        .filter(({regions}) => !pick || has(regions));
+      if(!variants.length) return '';
+      zv += variants.length;
+      variants.forEach(({regions}) => regions.forEach(r =>
+        zm += r.missions.filter(([cls]) => !pick || cls === pick).length));
+      return `
+        <div class="ra-weather">
+          <div class="ra-wname">${esc(a.weather)}</div>
+          ${variants.map(({regions, vi}) => redAlertVariantHTML(a, regions, vi, pick)).join('')}
+          ${a.lock ? `<div class="ra-lock">${esc(a.lock)}</div>` : ''}
+        </div>`;
+    }).join('');
+    variantsShown += zv; missionsShown += zm;
+    // In the all-zones frame and in this zone's own frame. The zone's summary line is
+    // only for its own frame; the all-zones frame has one line for everything.
+    return `
+      <div class="ra-zone" data-frame="red-alerts ${frameSlug(zone)}">
+        <div class="subhead">${esc(zone)}</div>
+        <div class="check-note ok ra-zone-sum" data-frame="${frameSlug(zone)}">${esc(summary(zv, zm))}</div>
+        <div class="ra-weathers">${weathers || '<div class="empty-hint">No Red Alert in this zone includes this class.</div>'}</div>
+      </div>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div class="check-note ok" data-frame="red-alerts">${esc(summary(variantsShown, missionsShown))}</div>
+    <div class="ra-columns">${zones}</div>`;
+}
+
 /* ---------- job quest checklist (levels 1-70) ---------- */
 // Job names never collide across combat/craft/gather, so one lookup covers all three.
 function jobLevelOf(c, job){
@@ -4108,6 +4334,7 @@ function renderChar(cid){
   renderSocieties(cid);
   renderHunts(cid);
   renderCosmic(cid);
+  renderRedAlerts(cid);
   renderRoutines(cid);
   renderCustom(cid);
   renderTmSyncNote(cid);
