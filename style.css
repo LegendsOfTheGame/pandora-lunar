@@ -432,6 +432,47 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   }
 }
 .hunt-exp{break-inside:avoid}
+
+/* ---------- cosmic tools ---------- */
+/* One block per class. Same two-up rule as the sections above. */
+@media (min-width:1100px){
+  .cosmic-columns{display:grid;grid-template-columns:1fr 1fr;gap:0 32px;align-items:start}
+  .cosmic-columns .cosmic-class + .cosmic-class{border-top:none;margin-top:0;padding-top:0}
+  .cosmic-columns .cosmic-class:nth-child(n+3){
+    border-top:1px solid var(--accent,var(--gold));
+    margin-top:20px;padding-top:16px;
+  }
+}
+.cosmic-columns{margin-top:14px}
+.cosmic-class{break-inside:avoid}
+.cosmic-class + .cosmic-class{
+  border-top:1px solid var(--accent,var(--gold));
+  margin-top:20px;padding-top:16px;
+}
+.cosmic-stage{font-size:14px;color:var(--text);margin-bottom:2px}
+.cosmic-next{font-size:12px;margin-bottom:10px}
+.cosmic-class .faint{color:var(--text-faint);font-size:12px}
+.cosmic-grid{max-width:660px}
+.cosmic-row{
+  display:grid;grid-template-columns:70px repeat(4,1fr);gap:10px;align-items:center;
+  padding:5px 8px;font-size:13px;border-radius:3px;
+}
+.cosmic-row:nth-child(even){background:var(--panel2)}
+.cosmic-row.head{
+  font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-faint);
+  background:none;
+}
+.cosmic-row.head span:not(:first-child){text-align:right}
+.cosmic-type{color:var(--text-dim)}
+.cosmic-num{font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--text)}
+.cosmic-num.faint{color:var(--text-faint)}
+/* At the storage limit. Marked by colour on the current figure only; the note under
+   the table says what it means. */
+.cosmic-row.full .cosmic-num:nth-child(2){color:var(--gold)}
+.cosmic-note{margin-top:8px;font-size:12px;color:var(--text-dim);max-width:660px}
+@media (max-width:600px){
+  .cosmic-row{grid-template-columns:52px repeat(4,1fr);gap:6px;font-size:12px}
+}
 .hunt-exp + .hunt-exp{
   border-top:1px solid var(--accent,var(--gold));
   margin-top:20px;padding-top:16px;

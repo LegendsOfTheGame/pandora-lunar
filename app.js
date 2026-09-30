@@ -1857,6 +1857,8 @@ function newCharacter(name){
     // correcting a mark's spelling can shift what is already ticked. Only slain marks
     // are stored.
     hunts: {}, huntsCollapsed: {},
+    // The last cosmicTools block imported, as {asOf, jobs}. Null until one arrives.
+    cosmicTools: null,
     tmSyncedAt: null, tmSyncedVersion: null, playtimeAsOf: null
   };
 }
@@ -1936,6 +1938,8 @@ function normalizeCharacter(c){
   if(!c.hunts || typeof c.hunts !== 'object') c.hunts = {};
   migrateHuntKeys(c);
   if(!c.huntsCollapsed || typeof c.huntsCollapsed !== 'object') c.huntsCollapsed = {};
+  if(!c.cosmicTools || typeof c.cosmicTools !== 'object'
+     || !c.cosmicTools.jobs || typeof c.cosmicTools.jobs !== 'object') c.cosmicTools = null;
   if(typeof c.tmSyncedAt !== 'string') c.tmSyncedAt = null;
   if(typeof c.tmSyncedVersion !== 'string') c.tmSyncedVersion = null;
   if(typeof c.playtimeAsOf !== 'string') c.playtimeAsOf = null;
@@ -2173,6 +2177,13 @@ function characterPageHTML(cid){
     <div class="gated-note" id="${cid}-jobsnote"></div>
   </div>
   </div>
+  <div class="tab-panel" data-tab="cosmic">
+  <div class="section" data-frame="tools">
+    <h2>Cosmic tools <span class="hint">via Time Memoria &mdash; research data per class</span></h2>
+    <div id="${cid}-cosmic-meta"></div>
+    <div id="${cid}-cosmic" class="cosmic-columns"></div>
+  </div>
+  </div>
   <div class="tab-panel" data-tab="societies">
   <div class="section">
     <h2>Allied society relations <span class="hint-group"><span class="hint" id="${cid}-sochint">rank + points reset to 0 on every rank-up</span><button class="link-btn" id="${cid}-socmode-btn" onclick="toggleSocietiesManual('${cid}')">Edit manually</button></span></h2>
@@ -2354,6 +2365,7 @@ const RAIL_SECTIONS = [
   {key:'overview',  label:'Overview',  group:'Progress',    ico:'◔'},
   {key:'routines',  label:'Routines',  group:'Progress',    ico:'↻', count:visibleRoutineCount},
   {key:'jobs',      label:'Jobs',      group:'Progress',    ico:'⚔', count:visibleJobCount},
+  {key:'cosmic',    label:'Cosmic',    group:'Progress',    ico:'✧', count:c=>Object.keys((c.cosmicTools||{}).jobs||{}).length},
   {key:'societies', label:'Societies', group:'Collections', ico:'⚬', count:()=>ALLIED_SOCIETIES.length},
   {key:'hunts',     label:'Hunts',     group:'Collections', ico:'✦', count:c=>Object.keys(c.hunts||{}).length},
   {key:'mentor',    label:'Mentor',    group:'Collections', ico:'✚'},
@@ -2432,6 +2444,8 @@ function framesFor(section, c){
         {k:'gather', l:'Gathering', n:c.showZeroJobs ? GATHER_JOBS.length : above(c.gather)}
       ];
     }
+    case 'cosmic':
+      return [{k:'tools', l:'Tools'}];
     case 'societies': {
       const have = patchValue(c.patch);
       return [...new Set(ALLIED_SOCIETIES.map(a=>a[1]))]
@@ -3370,6 +3384,166 @@ function toggleHuntGroup(cid, btn){
   scheduleSave();
 }
 
+/* ---------- cosmic tools ----------
+   Research data per class, from the cosmicTools block of a Time Memoria export. Nothing
+   here is typed in: the plugin reads the game's own research module, and a hand-entered
+   figure would sit beside it with the same confidence it has not earned.
+
+   The export carries no stage name, only the cumulative total each data type needs for
+   the next upgrade. The stage is found by matching that set of totals to one column of
+   the wiki's table ("Cosmic Tools", revision 9 July 2026). The data types a stage asks
+   for grow as the tool climbs, so the set of types and their totals together pick out
+   exactly one column. A set that matches none means a later patch added stages; the
+   figures are still shown, only the name is withheld. */
+const COSMIC_TYPE_NUMERALS = ['I','II','III','IV','V','VI','VII'];
+
+// Every stage in order. `needs` is what the upgrade *to* that stage requires, Type I
+// first. Item and equip levels are from the per-stage item pages, and are the same
+// for all eleven classes.
+const COSMIC_STAGES = [
+  {form:0, ver:'Prototype v0.1', il:10,  lv:10,  needs:[]},
+  {form:0, ver:'Prototype v0.2', il:30,  lv:30,  needs:[200]},
+  {form:0, ver:'Prototype v0.3', il:55,  lv:50,  needs:[500]},
+  {form:0, ver:'Prototype v0.4', il:150, lv:60,  needs:[700,300]},
+  {form:0, ver:'Prototype v0.5', il:290, lv:70,  needs:[1000,800]},
+  {form:0, ver:'Prototype v0.6', il:430, lv:80,  needs:[1300,1200,500]},
+  {form:0, ver:'Prototype v0.7', il:560, lv:90,  needs:[1700,1700,1100]},
+  {form:0, ver:'Prototype v0.8', il:690, lv:100, needs:[2200,2300,1700,700]},
+  {form:0, ver:'',               il:720, lv:100, needs:[2800,2900,2300,1500]},
+  {form:0, ver:'v1.1',           il:725, lv:100, needs:[3000,3000,3000,2000]},
+  {form:0, ver:'v1.2',           il:730, lv:100, needs:[3450,3400,3250,2250,100]},
+  {form:0, ver:'v1.3',           il:735, lv:100, needs:[3900,3800,3650,2650,400]},
+  {form:0, ver:'v1.4',           il:740, lv:100, needs:[4300,4300,4150,3200,900]},
+  {form:1, ver:'',               il:750, lv:100, needs:[4700,4700,4700,4000,1500]},
+  {form:1, ver:'v1.1',           il:755, lv:100, needs:[5500,5500,5500,4300,1800]},
+  {form:1, ver:'v1.2',           il:760, lv:100, needs:[6300,6300,6300,5500,2550,600]},
+  {form:2, ver:'',               il:765, lv:100, needs:[7100,7100,7100,7100,3150,1600]},
+  {form:2, ver:'v1.1',           il:770, lv:100, needs:[7900,7900,7900,7900,3950,1900]},
+  {form:2, ver:'v1.2',           il:775, lv:100, needs:[8700,8700,8700,8700,4750,2300,600]},
+  {form:3, ver:'',               il:780, lv:100, needs:[9500,9500,9500,9500,5600,2700,1600]}
+];
+// [tier, index of its last stage]. A tool that reaches that stage counts toward the
+// tier's research bonus for the other tools.
+const COSMIC_TIERS = [['Novice',8], ['Intermediate',13], ['Advanced',16], ['Expert',19]];
+
+// One name per form: Cosmic, Stellar, Hyper, Stars. The Hyper and Stars forms do not
+// follow one pattern ("Hypermallet", "Cross-pein Hyperhammer", "Fishing Hyperrod"), so
+// each is written out rather than built.
+const COSMIC_TOOL_NAMES = {
+  Carpenter:     ['Cosmic Saw','Stellar Saw','Hypersaw','Saw of Stars'],
+  Blacksmith:    ['Cosmic Cross-pein Hammer','Stellar Cross-pein Hammer','Cross-pein Hyperhammer','Cross-pein Hammer of Stars'],
+  Armorer:       ['Cosmic Raising Hammer','Stellar Raising Hammer','Raising Hyperhammer','Raising Hammer of Stars'],
+  Goldsmith:     ['Cosmic Mallet','Stellar Mallet','Hypermallet','Mallet of Stars'],
+  Leatherworker: ['Cosmic Round Knife','Stellar Round Knife','Round Hyperknife','Round Knife of Stars'],
+  Weaver:        ['Cosmic Needle','Stellar Needle','Hyperneedle','Needle of Stars'],
+  Alchemist:     ['Cosmic Alembic','Stellar Alembic','Hyperalembic','Alembic of Stars'],
+  Culinarian:    ['Cosmic Frypan','Stellar Frypan','Hyperfrypan','Frypan of Stars'],
+  Miner:         ['Cosmic Pickaxe','Stellar Pickaxe','Hyperpickaxe','Pickaxe of Stars'],
+  Botanist:      ['Cosmic Hatchet','Stellar Hatchet','Hyperhatchet','Hatchet of Stars'],
+  Fisher:        ['Cosmic Fishing Rod','Stellar Fishing Rod','Fishing Hyperrod','Fishing Rod of Stars']
+};
+const COSMIC_CLASSES = CRAFT_JOBS.concat(GATHER_JOBS);
+
+function cosmicToolName(job, stageIndex){
+  const stage = COSMIC_STAGES[stageIndex];
+  const names = COSMIC_TOOL_NAMES[job];
+  if(!stage || !names) return null;
+  return names[stage.form] + (stage.ver ? ' ' + stage.ver : '');
+}
+function cosmicTierOf(stageIndex){
+  return (COSMIC_TIERS.find(([, last]) => stageIndex <= last) || COSMIC_TIERS[COSMIC_TIERS.length-1])[0];
+}
+// The stage the tool is at now: the one before the column whose totals match. -1 when
+// no column matches.
+function cosmicStageIndex(types){
+  const needed = {};
+  types.forEach(t => { needed[t.type] = t.needed; });
+  const count = Object.keys(needed).length;
+  for(let i = 1; i < COSMIC_STAGES.length; i++){
+    const needs = COSMIC_STAGES[i].needs;
+    if(needs.length === count && needs.every((n, k) => needed[k+1] === n)) return i - 1;
+  }
+  return -1;
+}
+
+// "Type I", "Types I and II", "Types I, II and IV".
+function cosmicTypeList(types){
+  const n = types.map(t => COSMIC_TYPE_NUMERALS[t.type-1] || String(t.type));
+  if(n.length === 1) return 'Type ' + n[0];
+  return 'Types ' + n.slice(0, -1).join(', ') + ' and ' + n[n.length-1];
+}
+
+function cosmicClassHTML(job, types){
+  const idx = cosmicStageIndex(types);
+  const rows = types.map(t => {
+    const short = Math.max(0, t.needed - t.current);
+    const full = t.max > 0 && t.current >= t.max;
+    return `
+      <div class="cosmic-row${full ? ' full' : ''}">
+        <span class="cosmic-type">Type ${COSMIC_TYPE_NUMERALS[t.type-1] || t.type}</span>
+        <span class="cosmic-num">${fmt(t.current)}</span>
+        <span class="cosmic-num">${fmt(t.needed)}</span>
+        <span class="cosmic-num">${short ? fmt(short) : '&mdash;'}</span>
+        <span class="cosmic-num faint">${fmt(t.max)}</span>
+      </div>`;
+  }).join('');
+
+  let stageLine;
+  if(idx < 0){
+    stageLine = `<div class="cosmic-stage faint">The research totals match no stage in this page's table. A later patch can add stages.</div>`;
+  }else{
+    const next = COSMIC_STAGES[idx+1];
+    stageLine = `
+      <div class="cosmic-stage">${esc(cosmicToolName(job, idx))}
+        <span class="faint">&middot; item level ${COSMIC_STAGES[idx].il} &middot; ${esc(cosmicTierOf(idx))} tier</span></div>
+      <div class="cosmic-next faint">Next: ${esc(cosmicToolName(job, idx+1))} &middot; item level ${next.il}</div>`;
+  }
+
+  const notes = [];
+  const full = types.filter(t => t.max > 0 && t.current >= t.max);
+  if(full.length){
+    const one = full.length === 1;
+    notes.push(`${cosmicTypeList(full)} ${one ? 'is' : 'are'} at the storage limit. More ${cosmicTypeList(full).replace(/^Types? /,'Type ')} data is lost until the upgrade.`);
+  }
+  if(types.every(t => t.current >= t.needed)) notes.push('Each data type meets the requirement for the next upgrade.');
+
+  return `
+    <div class="cosmic-class">
+      <div class="subhead">${esc(job)}</div>
+      ${stageLine}
+      <div class="cosmic-grid">
+        <div class="cosmic-row head"><span>Data</span><span>Current</span><span>Needed</span><span>Shortfall</span><span>Storage limit</span></div>
+        ${rows}
+      </div>
+      ${notes.map(n => `<div class="cosmic-note">${esc(n)}</div>`).join('')}
+    </div>`;
+}
+
+function renderCosmic(cid){
+  const c = getChar(cid);
+  const box = document.getElementById(cid+'-cosmic');
+  const meta = document.getElementById(cid+'-cosmic-meta');
+  if(!box || !meta) return;
+  const reading = c.cosmicTools;
+  const jobs = (reading && reading.jobs) || {};
+  const have = COSMIC_CLASSES.filter(j => Array.isArray(jobs[j]) && jobs[j].length);
+  // A class name this page does not know (a new class, or a plugin that could not
+  // name one) is still shown, after the known ones.
+  const extra = Object.keys(jobs).filter(j => !COSMIC_CLASSES.includes(j) && Array.isArray(jobs[j]) && jobs[j].length);
+
+  if(!reading){
+    meta.innerHTML = '';
+    box.innerHTML = `<div class="empty-hint">No Cosmic tool data. Import a Time Memoria export to fill in this section. Time Memoria reads the research data only when your character is in a Cosmic Exploration zone.</div>`;
+    return;
+  }
+  const missing = COSMIC_CLASSES.filter(j => !have.includes(j));
+  meta.innerHTML = `
+    <div class="check-note ok">Research data as of ${esc(reading.asOf ? fmtTmTimestamp(reading.asOf) : 'an unknown time')}. Time Memoria reads it only in a Cosmic Exploration zone, so this time can be earlier than the export.</div>
+    ${missing.length ? `<div class="check-note ok">No research data in the export for ${esc(missing.join(', '))}.</div>` : ''}`;
+  box.innerHTML = have.concat(extra).map(j => cosmicClassHTML(j, jobs[j])).join('')
+    || '<div class="empty-hint">The export has no research data for any class.</div>';
+}
+
 /* ---------- job quest checklist (levels 1-70) ---------- */
 // Job names never collide across combat/craft/gather, so one lookup covers all three.
 function jobLevelOf(c, job){
@@ -3933,6 +4107,7 @@ function renderChar(cid){
   renderJobTables(cid);
   renderSocieties(cid);
   renderHunts(cid);
+  renderCosmic(cid);
   renderRoutines(cid);
   renderCustom(cid);
   renderTmSyncNote(cid);
@@ -4188,6 +4363,36 @@ function tmReadCountChanges(p, c){
   }).filter(Boolean);
 }
 
+// Cosmic tool research, cleaned to {asOf, jobs}. Null when the export has no block: an
+// older plugin build, or a character never read in a Cosmic Exploration zone.
+function tmCosmicReading(p){
+  const src = p.cosmicTools;
+  if(!src || typeof src !== 'object' || !src.jobs || typeof src.jobs !== 'object') return null;
+  const jobs = {};
+  Object.keys(src.jobs).forEach(job=>{
+    if(!Array.isArray(src.jobs[job])) return;
+    const types = src.jobs[job]
+      .filter(t => t && typeof t.type === 'number')
+      .map(t => ({type:t.type, current:num(t.current), needed:num(t.needed), max:num(t.max)}))
+      .sort((a,b) => a.type - b.type);
+    if(types.length) jobs[job] = types;
+  });
+  return { asOf: typeof src.asOf === 'string' ? src.asOf : null, jobs };
+}
+// The reading this payload would store, or null if it changes nothing. The block is one
+// full pass over every class, so it replaces the stored one whole rather than merging.
+// Same age rule as the collectable counts: an older reading never replaces a newer one.
+function tmCosmicChange(p, c){
+  const incoming = tmCosmicReading(p);
+  if(!incoming) return null;
+  const stored = c.cosmicTools;
+  const storedAt = stored && stored.asOf ? Date.parse(stored.asOf) : null;
+  const incomingAt = incoming.asOf ? Date.parse(incoming.asOf) : null;
+  if(storedAt && incomingAt && incomingAt < storedAt) return null;
+  if(stored && JSON.stringify(stored) === JSON.stringify(incoming)) return null;
+  return incoming;
+}
+
 let TM_QUEST_KEYS = null;
 function tmQuestKeyIndex(){
   if(TM_QUEST_KEYS) return TM_QUEST_KEYS;
@@ -4299,6 +4504,14 @@ function computeTmDiffHTML(p, c){
     // Same number, newer reading — say so plainly rather than showing "7 → 7".
     else rows.push([label + ', re-read', c[key+'AsOf'] ? fmtTmTimestamp(c[key+'AsOf']) : 'never read', fmtTmTimestamp(entry.asOf)]);
   });
+  const cosmic = tmCosmicChange(p, c);
+  if(cosmic){
+    const describe = r => {
+      const n = Object.keys(r.jobs).length;
+      return `${n} class${n === 1 ? '' : 'es'}` + (r.asOf ? ` · ${fmtTmTimestamp(r.asOf)}` : '');
+    };
+    rows.push(['Cosmic tool research', c.cosmicTools ? describe(c.cosmicTools) : '(none)', describe(cosmic)]);
+  }
   const classTicks = tmClassQuestTicks(p, c);
   if(classTicks.length){
     const before = tmTickedCount(c);
@@ -4415,6 +4628,9 @@ function applyTmImport(){
     c[key+'AsOf'] = typeof entry.asOf === 'string' ? entry.asOf : null;
     c[key+'Exact'] = entry.exact !== false;
   });
+
+  const cosmic = tmCosmicChange(p, c);
+  if(cosmic) c.cosmicTools = cosmic;
 
   // Class, job and role quests, ticked from the export's completed titles. Nothing is ever
   // unticked here — see tmClassQuestTicks for why.
