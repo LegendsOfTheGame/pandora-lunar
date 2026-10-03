@@ -164,6 +164,8 @@ body{
   justify-content:space-between;
 }
 .hint{font-size:11px;color:var(--text-faint);font-weight:400;letter-spacing:0.3px}
+.hint a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px}
+.hint a:hover{color:var(--text-dim)}
 .hint-group{display:flex;align-items:center;gap:10px}
 .edit-btn{
   background:transparent;border:1px solid var(--line-soft);color:var(--text-dim);

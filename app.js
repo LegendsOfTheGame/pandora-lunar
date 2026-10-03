@@ -2184,7 +2184,7 @@ function characterPageHTML(cid){
     <div id="${cid}-cosmic" class="cosmic-columns"></div>
   </div>
   <div class="section" data-frame="red-alerts ${RED_ALERT_ZONES.map(frameSlug).join(' ')}">
-    <h2>Red Alerts <span class="hint">reference &mdash; wiki "Red Alert", revision 12 June 2026</span></h2>
+    <h2>Red Alerts <span class="hint">reference &mdash; <a href="https://linkly.link/2ugww" target="_blank" rel="noopener">wiki "Red Alert", revision 12 June 2026</a></span></h2>
     <p class="ra-intro">Each zone and weather has one or two variants. Each variant opens two regions, and each region has critical missions for two or three classes. Red Alerts have no fixed schedule, and each world and zone has its own. This table does not show which Red Alert occurs next.</p>
     <div id="${cid}-ra-bar"></div>
     <div id="${cid}-redalert"></div>
