@@ -903,8 +903,10 @@ const CHALLENGE_LOG = {
 // Ventures, Mini/Jumbo Cactpot, Fashion Report, Challenge Log, Grand Company turn-in,
 // Squadron training and missions, the ARR Hunt rows, Masked Carnivale (Blue Mage asks only
 // for "The Ultimate Weapon"), Morbid Motivation (Zodiac, level 50), Allied Society
-// (earliest tribe is Amalj'aa, behind the 2.0 MSQ "In Pursuit of the Past"), and capping
-// tomestones — which drop from level 60+ alliance raids too, so its floor is a level.
+// (earliest tribe is Amalj'aa, behind the 2.0 MSQ "In Pursuit of the Past").
+// Capping tomestones was on that list and is not any more: the current tomestone cannot be
+// capped until the newest expansion's main scenario is finished. When the next expansion
+// ships, the row's gate moves with it, along with the tomestone name in its label.
 // Schedule mapping is best-effort where the source didn't map cleanly to a fixed reset:
 // Squadron Training and Retainer Ventures run on their own per-action timers, approximated
 // to the closest fixed daily reset — adjust the dropdown per-item if the timing bugs you.
@@ -945,7 +947,7 @@ const DEFAULT_ROUTINES = [
   ["AAC Heavyweight M4","weeklyTue","aac-m4","7.0"],                                         // Dawntrail raid tier
   ["Windurst: The Third Walk","weeklyTue","windurst","7.0"],                                 // An Otherworldly Encounter → Dawntrail
   ["YoRHa Epilogue Quest Chain (one-time unlock)","weeklyTue","yorha-epilogue","5.0"],       // YoRHa series → Shadowbringers
-  ["Cap Allagan Tomestone of Mnemonics","weeklyTue","tomestone-cap",""],
+  ["Cap Allagan Tomestone of Mnemonics","weeklyTue","tomestone-cap","7.0"],                  // newest expansion's MSQ → Dawntrail
   ["AAC Heavyweight (Savage)","weeklyTue","aac-savage","7.0"],                               // Dawntrail raid tier
   // The Challenge Log is 13 categories of weekly challenges, not one tick — 80 of them, and
   // a category is dead weight until you've unlocked the feature it's about. Counts as of
@@ -1157,14 +1159,25 @@ function applySeedLabelFixes(c){
 // could ever have had, since nothing pre-filled the field. So an empty one is untouched
 // default, never a considered choice, and filling it in can't clobber anything: same
 // only-if-still-default reasoning as the two fixes above. A gate you then clear yourself
-// stays cleared, because this runs once per character.
+// stays cleared, because each gate is offered to a character once, recorded by seedKey.
+// This used to be one seedRequiresApplied boolean — the same design SEED_SCHEDULE_FIXES
+// dropped, and for the same reason: a gate added later never reached a flagged character.
+// A flagged record has already been offered every gate except the ones named here, so it
+// starts with those marked done and gets only the newcomers.
+const SEED_REQUIRES_ADDED_LATER = ['tomestone-cap'];
 function applySeedRequires(c){
+  if(!Array.isArray(c.seedRequiresDone)){
+    c.seedRequiresDone = c.seedRequiresApplied
+      ? DEFAULT_ROUTINES.filter(([,,k,req])=>req && !SEED_REQUIRES_ADDED_LATER.includes(k)).map(([,,k])=>k)
+      : [];
+  }
   DEFAULT_ROUTINES.forEach(([,,seedKey,requires])=>{
-    if(!requires) return;
+    if(!requires || c.seedRequiresDone.includes(seedKey)) return;
     const r = c.routines.find(r=>r.seedKey===seedKey);
     if(r && !r.requires) r.requires = requires;
+    c.seedRequiresDone.push(seedKey);
   });
-  c.seedRequiresApplied = true;
+  delete c.seedRequiresApplied;
 }
 // Quest totals are copied into each character when it is created, so raising a default
 // does nothing for characters that already exist — they keep whatever was current on the
@@ -1527,6 +1540,7 @@ const SEED_CLEARED_GATES = new Set([
   'will-to-resist','bozjan-frontier','faux-hollows','yorha-epilogue',  // Shadowbringers
   'cosmic-exploration','island-sanctuary','challenge-island',          // Endwalker
   'aether-everywhere','windurst','dancing-mad','aac-m4','aac-savage',  // Dawntrail
+  'tomestone-cap',
   'challenge-fieldops'                                                 // Stormblood (Eureka)
 ]);
 // A patch typed by hand is a reached figure — that's the natural reading of "where am I in
@@ -1693,9 +1707,10 @@ function noPatchReached(c){ return !!c.unlocks && !c.patch && !c.patchCleared; }
 // with "all activities must be done on a level-capped class to receive level-capped tomes".
 // Dun Scaith is a source at level 100, synced down. So a level 60 character was being told
 // to cap a currency they cannot receive by any route.
-// The other half of that page — you cannot SPEND them before finishing the Dawntrail main
-// scenario — is deliberately not a gate. Banking a capped currency you cannot spend yet is
-// still worth doing, and the row is about capping.
+// The level is only half of it. The row also carries a "7.0 finished" MSQ gate: you cannot
+// cap the current tomestone before finishing the newest expansion's main scenario. An
+// earlier version left that out on the reading that the Dawntrail quest only gates SPENDING
+// them — wrong, and corrected by the player.
 const SEED_LEVELS = {
   'duty-roulette':      15,
   'tank-you':           15,
@@ -1711,9 +1726,19 @@ function highestJobLevel(c){
   return Math.max(0, ...Object.values(c.combat || {}), ...Object.values(c.craft || {}),
                      ...Object.values(c.gather || {}));
 }
+// These rows are dungeons, trials, raids and hunt marks, so only a battle job's level
+// counts. Counting every job let a level 100 Goldsmith with no battle job above 50 clear
+// the tomestone floor, and a crafter-only character clear the roulette one. Allied
+// societies stay on any job: several of them are crafter and gatherer societies.
+const SEED_COMBAT_LEVELS = new Set(['duty-roulette','tank-you','morbid-motivation','tomestone-cap']);
+function highestCombatLevel(c){
+  return Math.max(0, ...Object.values(c.combat || {}));
+}
 function levelLock(item, c){
   const need = SEED_LEVELS[item.seedKey];
   if(!need || !hasJobData(c)) return null;
+  if(SEED_COMBAT_LEVELS.has(item.seedKey))
+    return highestCombatLevel(c) >= need ? null : { reason:'level', need:`a level ${need} battle job` };
   return highestJobLevel(c) >= need ? null : { reason:'level', need:`level ${need}` };
 }
 
@@ -1923,7 +1948,7 @@ function normalizeCharacter(c){
   applySeedGenerations(c);
   applySeedScheduleFixes(c);
   applySeedLabelFixes(c);
-  if(!c.seedRequiresApplied) applySeedRequires(c);
+  applySeedRequires(c);
   if(!c.societies || typeof c.societies !== 'object') c.societies = {};
   ALLIED_SOCIETIES.forEach(([name,exp,startRank])=>{
     const s = c.societies[name];
