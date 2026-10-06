@@ -1877,6 +1877,7 @@ function newCharacter(name){
     server: {pdc:'', ldc:'', world:''},
     societies: Object.fromEntries(ALLIED_SOCIETIES.map(([name,exp,startRank])=>[name,{rank:startRank,points:0}])),
     intersocietalDone: {},
+    customClients: {},
     societiesSynced:false,
     // Keyed by the game's own BNpcName row id, so neither reordering the table nor
     // correcting a mark's spelling can shift what is already ticked. Only slain marks
@@ -1959,6 +1960,7 @@ function normalizeCharacter(c){
     }
   });
   if(!c.intersocietalDone || typeof c.intersocietalDone !== 'object') c.intersocietalDone = {};
+  if(!c.customClients || typeof c.customClients !== 'object') c.customClients = {};
   // A key matching no mark is left in place rather than pruned — see migrateHuntKeys.
   if(!c.hunts || typeof c.hunts !== 'object') c.hunts = {};
   migrateHuntKeys(c);
@@ -4025,10 +4027,70 @@ function routineHTML(cid, item){
       <select id="${cid}-rt-sched-${item.id}" onchange="onRoutineSchedChange('${cid}','${item.id}')">${opts}</select>
       <input type="text" class="routine-req" id="${cid}-rt-req-${item.id}" value="${esc(item.requires||'')}" placeholder="any" title="Patch this unlocks in — blank means always available" oninput="onRoutineInput('${cid}','${item.id}')">
       <span class="routine-due" id="${cid}-rt-due-${item.id}"${lock?` title="needs ${esc(lock.need)}"`:''}>${gated?'locked':fmtDue(dueMs)}</span>
-      ${challengeInfoHTML(cid, item)}
+      ${challengeInfoHTML(cid, item)}${customClientsBtnHTML(cid, item)}
       <button class="hide-btn${item.hidden?' is-hidden':''}" id="${cid}-rt-hidebtn-${item.id}" title="${item.hidden?'Unhide this routine':"Hide — doesn't apply to this character"}" onclick="toggleRoutineHidden('${cid}','${item.id}')">${item.hidden?'◉':'○'}</button>
       <button class="remove-btn" title="Remove this routine" onclick="removeRoutine('${cid}','${item.id}')">&times;</button>
-    </div>${challengeInfoPanelHTML(cid, item)}`;
+    </div>${challengeInfoPanelHTML(cid, item)}${customClientsPanelHTML(cid, item)}`;
+}
+// Custom Delivery clients, ticked once their unlock quests are done. Reuses the row's
+// `infoOpen` flag and toggleChallengeInfo, which only flips the flag and re-renders.
+// `lvl` is the delivery level the wiki gives; `steps` are the quests, in order.
+const CUSTOM_DELIVERY_CLIENTS = [
+  {id:'zhloe',    exp:'Stormblood',    lvl:60, name:'Zhloe Aliapoh (Idyllshire)',
+   steps:['Inscrutable Tastes — Morgayne, Foundation, Ishgard (every other client needs this)','Go West, Craftsman — Lydirlona, Mor Dhona (22.3, 6.8)','Arms Wide Open — Geimlona, Idyllshire (5.8, 6.9)']},
+  {id:'mnaago',   exp:'Stormblood',    lvl:60, name:"M'naago (Rhalgr's Reach)",
+   steps:["None Forgotten, None Forsaken — Galiena, Rhalgr's Reach (9.8, 12.5)"]},
+  {id:'kurenai',  exp:'Stormblood',    lvl:62, name:'Kurenai (Tamamizu, the Ruby Sea)',
+   steps:['The Two Princesses of Sui-no-Sato (level 63) — Kurenai, Ruby Sea (21.2, 19.8); after The Elixir of Life','The Seaweed Is Always Greener (level 62) — Kojin Hireling, Kugane (10.1, 9.9)'],
+   note:'The prerequisite quest is level 63. A level 63 Culinarian, or another class at level 63 or higher, may be needed to accept it.'},
+  {id:'adkiragh', exp:'Stormblood',    lvl:66, name:'Adkiragh (Idyllshire)',
+   steps:['Between a Rock and the Hard Place — Geimlona, Idyllshire (5.7, 6.9); after Arms Wide Open']},
+  {id:'kaishirr', exp:'Shadowbringers', lvl:70, name:'Kai-Shirr (Eulmore)',
+   steps:['The Boutique Always Wins — Mowen, Eulmore (11.4, 10.7); one conversation completes it','Oh, Beehive Yourself — Kai-Shirr, Eulmore (11.7, 11.7)']},
+  {id:'ehlltou',  exp:'Shadowbringers', lvl:70, name:'Ehll Tou (the Firmament)',
+   steps:['O Crafter, My Crafter — Ehll Tou, the Firmament (13.5, 11.2); needs Ishgardian Restoration quest If Songs Had Wings']},
+  {id:'charlemend', exp:'Shadowbringers', lvl:70, name:'Count Charlemend (the Firmament)',
+   steps:['You Can Count on It — Francel, the Firmament (11.0, 14.5); needs Ishgardian Restoration quests Smiles Cross the Sky and The Brume Lifts']},
+  {id:'ameliance',exp:'Endwalker',     lvl:80, name:'Ameliance (Old Sharlayan)',
+   steps:['Of Mothers and Merchants — Well-dressed Attendant, Old Sharlayan (12.6, 9.7)']},
+  {id:'anden',    exp:'Endwalker',     lvl:80, name:'Anden (the Crystarium)',
+   steps:["That's So Anden — Supplicant Sheep, the Crystarium (9.3, 11.3)"]},
+  {id:'margrat',  exp:'Endwalker',     lvl:80, name:'Margrat (Labyrinthos)',
+   steps:["A Request of One's Own — Theopauldin, Old Sharlayan (13.8, 15.0)"]},
+  {id:'nitowikwe',exp:'Dawntrail',     lvl:90, name:'Nitowikwe (Shaaloani)',
+   steps:['Laying New Tracks — Railroad Employee, Tuliyollal (14.1, 12.1)']},
+  {id:'tiisolja', exp:'Dawntrail',     lvl:90, name:'Tiisol Ja (Tuliyollal)',
+   steps:['Taco Time — Hhuki, Tuliyollal (13.7, 12.1)']}
+];
+function customClientsBtnHTML(cid, item){
+  if(item.seedKey !== 'custom-deliveries') return '';
+  const c = getChar(cid);
+  const done = CUSTOM_DELIVERY_CLIENTS.filter(k=>c.customClients[k.id]).length;
+  return `<button class="hide-btn" title="Custom Delivery clients: ${done} of ${CUSTOM_DELIVERY_CLIENTS.length} unlocked" onclick="toggleChallengeInfo('${cid}','${item.id}')">${item.infoOpen?'▾':'ⓘ'}</button>`;
+}
+function customClientsPanelHTML(cid, item){
+  if(item.seedKey !== 'custom-deliveries' || !item.infoOpen) return '';
+  const c = getChar(cid);
+  const rows = CUSTOM_DELIVERY_CLIENTS.map(k=>`<div class="jq-item${c.customClients[k.id]?'':' future'}">
+      <input type="checkbox" id="${cid}-cd-${k.id}"${c.customClients[k.id]?' checked':''} onchange="toggleCustomClient('${cid}','${k.id}')">
+      <span class="jq-level">Lv.${k.lvl}</span>
+      <span class="jq-name">${esc(k.name)} <span class="jq-shared-tag">${esc(k.exp)}</span>
+        <span class="hint">${k.steps.map(esc).join(' &rarr; ')}${k.note?' &middot; '+esc(k.note):''}</span></span>
+    </div>`).join('');
+  return `<div class="jq-panel">${rows}</div>`;
+}
+function toggleCustomClient(cid, id){
+  const c = getChar(cid);
+  const chk = document.getElementById(`${cid}-cd-${id}`);
+  if(!chk) return;
+  c.customClients[id] = chk.checked;
+  const item = chk.closest('.jq-item');
+  if(item) item.classList.toggle('future', !chk.checked);
+  // The row's ⓘ tooltip carries the count, so refresh it without a full re-render.
+  const rt = c.routines.find(r=>r.seedKey==='custom-deliveries');
+  const btn = rt && document.querySelector(`#${cid}-rt-item-${rt.id} .hide-btn`);
+  if(btn) btn.title = `Custom Delivery clients: ${CUSTOM_DELIVERY_CLIENTS.filter(k=>c.customClients[k.id]).length} of ${CUSTOM_DELIVERY_CLIENTS.length} unlocked`;
+  scheduleSave();
 }
 // The info button, on Challenge Log rows only. A category name is not self-explanatory —
 // "Battles" gives no hint that the guildhest challenges live there — so the button carries
