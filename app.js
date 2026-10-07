@@ -1924,6 +1924,9 @@ function normalizeCharacter(c){
   if(!c.playtime) c.playtime = {days:0,hours:0};
   if(!c.jobQuestsDone || typeof c.jobQuestsDone !== 'object') c.jobQuestsDone = {};
   if(!c.jobQuestsOpen || typeof c.jobQuestsOpen !== 'object') c.jobQuestsOpen = {};
+  if(!c.itemJobsOff || typeof c.itemJobsOff !== 'object') c.itemJobsOff = {};
+  c.itemsAhead = !!c.itemsAhead;
+  c.itemsHq = c.itemsHq === undefined ? true : !!c.itemsHq;
   if(!c.server || typeof c.server !== 'object') c.server = {pdc:'', ldc:'', world:''};
   if(typeof c.server.pdc !== 'string') c.server.pdc = '';
   if(typeof c.server.ldc !== 'string') c.server.ldc = '';
@@ -2201,6 +2204,10 @@ function characterPageHTML(cid){
       <div class="subhead">Gathering &middot; cap 100</div>
       <table id="${cid}-gather"></table>
     </div>
+    <div data-frame="items">
+      <div class="subhead">Quest items &middot; what the job quests ask you to hand in</div>
+      <div id="${cid}-qitems"></div>
+    </div>
     <div class="gated-note" id="${cid}-jobsnote"></div>
   </div>
   </div>
@@ -2474,7 +2481,8 @@ function framesFor(section, c){
       return [
         {k:'combat', l:'Combat',    n:c.showZeroJobs ? COMBAT_JOBS.length : above(c.combat)},
         {k:'craft',  l:'Crafting',  n:c.showZeroJobs ? CRAFT_JOBS.length  : above(c.craft)},
-        {k:'gather', l:'Gathering', n:c.showZeroJobs ? GATHER_JOBS.length : above(c.gather)}
+        {k:'gather', l:'Gathering', n:c.showZeroJobs ? GATHER_JOBS.length : above(c.gather)},
+        {k:'items',  l:'Quest items'}
       ];
     }
     case 'cosmic':
@@ -3074,6 +3082,7 @@ function renderJobTables(cid){
     emptyJobRow(GATHER_JOBS.filter(show).map(name=>craftGatherRowHTML(cid,'gather',name)).join(''));
   updateJobCaps(cid);
   renderJobsNote(cid);
+  renderQuestItems(cid);
   applyFrames(cid, 'jobs');
   refreshNav(cid);
 }
@@ -3840,6 +3849,130 @@ function jqPanelHTML(cid, job){
     </div>`;
   }).join('');
   return `<div class="jq-panel">${items || '<div class="empty-hint">No quest data loaded for this job yet.</div>'}</div>`;
+}
+/* ---------- quest items: one shopping list for many job quests ---------- */
+// JOBQUEST_ITEMS (jobquest-items.js) maps a quest title to its hand-in items. The quests are
+// the same ones jqPanelHTML lists, so a ticked quest drops out of the list here too.
+//
+// A shared role quest is counted once however many jobs of that role are selected, because
+// finishing it on one job finishes it for all of them (the same rule missedJobQuests uses).
+function questItemsForJob(c, job){
+  const lvl = jobLevelOf(c, job);
+  const out = [];
+  mergedJobQuestList(job).forEach(q=>{
+    const items = JOBQUEST_ITEMS[q.name];
+    if(!items) return;
+    const key = q.src==='own' ? job : 'role:'+q.trackKey;
+    if((c.jobQuestsDone[key] || {})[q.name]) return;
+    if(q.level > lvl && !c.itemsAhead) return;
+    out.push({job, key, name:q.name, level:q.level, items});
+  });
+  return out;
+}
+// Crafters and gatherers only. A combat job quest that asks for an item asks for a drop or a
+// keepsake (Ashkin Hearts, an Aetherometer), nothing a person crafts or gathers on purpose,
+// so listing them would bury the items this view is for.
+function questItemJobs(c){
+  const show = job => !hidesZeroJobs(c) || jobLevelOf(c, job) > 0;
+  return CRAFT_JOBS.concat(GATHER_JOBS)
+    .filter(job => show(job) && questItemsForJob(c, job).length);
+}
+function questItemTotals(c, jobs){
+  const seen = new Set(), rows = new Map();
+  jobs.forEach(job => questItemsForJob(c, job).forEach(q=>{
+    const id = q.key+'|'+q.name;
+    if(seen.has(id)) return;
+    seen.add(id);
+    q.items.forEach(([qty, name, hq, key])=>{
+      const k = name+'|'+hq;
+      let row = rows.get(k);
+      if(!row){ row = {name, hq:!!hq, key:!!key, qty:0, from:[]}; rows.set(k, row); }
+      row.qty += qty;
+      row.from.push(`${q.job} ${q.level}`);
+    });
+  }));
+  return [...rows.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
+// One "Nx Name" line per item, which is the text format Allagan Tools reads in its Teamcraft
+// import. HQ is written "Name(HQ)" with no space: Allagan Tools strips the "(HQ)" marker
+// after joining the words, and a space before it leaves a trailing space that no longer
+// matches the item name.
+// Key Items are left out: the quest provides them, so there is nothing to craft or buy.
+function questItemsText(c, rows){
+  return rows.filter(r => !r.key).map(r => `${r.qty}x ${r.name}${r.hq && c.itemsHq ? '(HQ)' : ''}`).join('\n');
+}
+function renderQuestItems(cid){
+  const box = document.getElementById(cid+'-qitems');
+  if(!box) return;
+  const c = getChar(cid);
+  const jobs = questItemJobs(c);
+  const on = jobs.filter(j => !c.itemJobsOff[j]);
+  const rows = questItemTotals(c, on);
+  const chips = jobs.map(job=>{
+    const n = questItemsForJob(c, job).length;
+    return `<label class="qi-chip"><input type="checkbox" ${c.itemJobsOff[job]?'':'checked'} onchange="toggleItemJob('${cid}','${jsStr(job)}')"> ${esc(job)} <span class="qi-count">${n}</span></label>`;
+  }).join('');
+  const options = `
+    <div class="qi-options">
+      <label><input type="checkbox" ${c.itemsAhead?'checked':''} onchange="toggleItemsAhead('${cid}')"> Include quests above the job's current level</label>
+      <label><input type="checkbox" ${c.itemsHq?'checked':''} onchange="toggleItemsHq('${cid}')"> Mark items HQ where the quest asks for HQ</label>
+    </div>`;
+  if(!jobs.length){
+    box.innerHTML = options + `<div class="empty-hint">No job quest at or below your levels still needs an item. Tick the box above to look ahead.</div>`;
+    return;
+  }
+  const table = rows.length ? `
+    <table class="qi-table">
+      <tr><th style="width:56px;text-align:right">Qty</th><th>Item</th><th>For</th></tr>
+      ${rows.map(r=>`<tr${r.key?' class="qi-key-row"':''}>
+        <td class="qi-qty">${r.qty}</td>
+        <td>${esc(r.name)}${r.hq?' <span class="qi-hq">HQ</span>':''}${r.key?' <span class="qi-key" title="Item ingredients provided by the quest" aria-label="Item ingredients provided by the quest">&#128273;</span>':''}</td>
+        <td class="qi-from">${esc(r.from.join(', '))}</td>
+      </tr>`).join('')}
+    </table>
+    <div class="qi-actions">
+      <button class="add-btn" style="width:auto;margin:0" onclick="copyQuestItems('${cid}')">Copy for Allagan Tools</button>
+      <span class="hint" id="${cid}-qitems-copied"></span>
+    </div>
+    <textarea class="qi-text" id="${cid}-qitems-text" readonly rows="${Math.max(1, Math.min(rows.filter(r=>!r.key).length, 10))}">${esc(questItemsText(c, rows))}</textarea>
+    <div class="check-note ok">In Allagan Tools, open the Teamcraft import for a craft list and paste. Rows with a key icon are left out of the copied text. Allagan Tools also skips items it cannot craft, such as gathered materials.</div>`
+    : `<div class="empty-hint">No job is selected.</div>`;
+  box.innerHTML = `<div class="qi-chips">${chips}</div>${options}${table}`;
+}
+function toggleItemJob(cid, job){
+  const c = getChar(cid);
+  if(c.itemJobsOff[job]) delete c.itemJobsOff[job]; else c.itemJobsOff[job] = true;
+  renderQuestItems(cid);
+  scheduleSave();
+}
+function toggleItemsAhead(cid){
+  const c = getChar(cid);
+  c.itemsAhead = !c.itemsAhead;
+  renderQuestItems(cid);
+  scheduleSave();
+}
+function toggleItemsHq(cid){
+  const c = getChar(cid);
+  c.itemsHq = !c.itemsHq;
+  renderQuestItems(cid);
+  scheduleSave();
+}
+function copyQuestItems(cid){
+  const ta = document.getElementById(cid+'-qitems-text');
+  if(!ta) return;
+  const say = ok => {
+    const el = document.getElementById(cid+'-qitems-copied');
+    if(el) el.textContent = ok ? 'Copied.' : 'Copy failed. Select the text below and copy it.';
+  };
+  const fallback = ()=>{
+    ta.select();
+    let ok = false;
+    try{ ok = document.execCommand('copy'); }catch(e){}
+    say(ok);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(ta.value).then(()=>say(true), fallback);
+  }else fallback();
 }
 function combatRowHTML(cid, name, role, capOverride){
   const c = getChar(cid);
@@ -4843,6 +4976,10 @@ function applyTmImport(){
   const c = getChar(cid);
   if(!c) return;
 
+  // The diff has to be cut now: after the merge the character already matches the export, so
+  // the same call would answer "No changes". It is kept on screen as the record of the merge.
+  const mergedDiffHTML = computeTmDiffHTML(p, c);
+
   if(p.server && typeof p.server === 'object'){
     c.server = { pdc: p.server.pdc || '', ldc: p.server.ldc || '', world: p.server.world || '' };
   }
@@ -4956,7 +5093,16 @@ function applyTmImport(){
   c.tmSyncedAt = p.exported || new Date().toISOString();
   c.tmSyncedVersion = p.version || null;
 
-  toggleTmImportPanel();
+  // The panel stays open on what changed instead of closing and clearing, so the increases
+  // can be read once the merge is done. Close ends it, the same as the toggle always did.
+  tmImportPayload = null;
+  document.getElementById('tm-import-text').value = '';
+  document.getElementById('tm-import-error').textContent = '';
+  document.getElementById('tm-import-summary').innerHTML = `
+    <div class="tm-import-meta">Merged into ${esc(c.name || 'this character')} &mdash; ${esc(p.name)}, Time Memoria v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
+    <div id="tm-import-diff">${mergedDiffHTML}</div>
+    <button class="edit-btn tm-import-apply-btn" onclick="toggleTmImportPanel()">Close</button>
+  `;
   DATA.activeId = cid;
   rebuildPages();
   renderSwitcher();
