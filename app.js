@@ -350,7 +350,7 @@ const JOB_QUESTS = {
     {level:40,name:"Forging Ahead"},{level:45,name:"Beauty and the Bardiche"},{level:50,name:"Waiting in the Winglet"},
     {level:50,name:"Forging Northwards"},{level:53,name:"Leave It to Fremondain"},{level:55,name:"The Good Fight"},
     {level:58,name:"Blade That Was Broken"},{level:60,name:"Integrity"},{level:60,name:"A Missive from the Far East"},
-    {level:63,name:"The Client is King"},{level:65,name:"Blood Ties"},{level:68,name:"The Missing Piece"},
+    {level:63,name:"The Client Is King"},{level:65,name:"Blood Ties"},{level:68,name:"The Missing Piece"},
     {level:70,name:"The Final Face-off"}
   ],
   Armorer: [
@@ -1923,6 +1923,7 @@ function normalizeCharacter(c){
   }
   if(!c.playtime) c.playtime = {days:0,hours:0};
   if(!c.jobQuestsDone || typeof c.jobQuestsDone !== 'object') c.jobQuestsDone = {};
+  migrateJobQuestTitles(c);
   if(!c.jobQuestsOpen || typeof c.jobQuestsOpen !== 'object') c.jobQuestsOpen = {};
   if(!c.itemJobsOff || typeof c.itemJobsOff !== 'object') c.itemJobsOff = {};
   c.itemsAhead = !!c.itemsAhead;
@@ -3288,6 +3289,24 @@ const ELITE_MARK_IDS_BY_NAME = ELITE_MARKS.reduce((acc, [, marks]) => {
   marks.forEach(([, id, name]) => { acc[name.toLowerCase()] = id; });
   return acc;
 }, {});
+
+// Job quest ticks are stored by title, and a Time Memoria import matches titles exactly.
+// A title listed here was spelled differently from the game's own Quest sheet; a tick saved
+// under the old spelling moves to the new one, once, on load.
+const JOB_QUEST_TITLE_FIXES = {
+  "The Client is King": "The Client Is King",
+};
+
+function migrateJobQuestTitles(c){
+  Object.values(c.jobQuestsDone).forEach(done => {
+    if(!done || typeof done !== 'object') return;
+    Object.entries(JOB_QUEST_TITLE_FIXES).forEach(([from, to]) => {
+      if(!(from in done)) return;
+      done[to] = !!(done[to] || done[from]);
+      delete done[from];
+    });
+  });
+}
 
 function migrateHuntKeys(c){
   const keys = Object.keys(c.hunts);
