@@ -4728,6 +4728,65 @@ function tmPasteFromClipboard(){
     errEl.textContent = 'Clipboard permission denied — paste manually into the box below (Ctrl+V).';
   });
 }
+// Society names by id, as fmt 1 exports spelled them. The plugin's own names,
+// not the game sheet's ("Sylphic", not "sylphs").
+const TM_SOCIETY_NAMES = ['', "Amalj'aa", 'Sylphic', 'Kobold', 'Sahagin', 'Ixali', 'Vanu', 'Vath',
+  'Moogle', 'Kojin', 'Ananta', 'Namazu', 'Pixie', 'Qitari', 'Dwarf', 'Arkasodara', 'Omicron',
+  'Loporrit', 'Pelupelu', 'Mamool Ja', 'Yok Huy'];
+
+// Time Memoria fmt 2 is the compact export: job abbreviations, quest ids, arrays in place of
+// repeated keys, 1/0 for flags. Everything past this point was written for fmt 1, so fmt 2 is
+// turned back into fmt 1 here and nowhere else. An export without "fmt" is fmt 1 and passes
+// through untouched. Lookups come from tm-export-tables.js; an id or abbreviation it does not
+// know keeps its raw value rather than being dropped, except quest ids, which have no title to
+// match on without the table.
+function tmNormalizeExport(p){
+  if(!p || typeof p !== 'object' || p.fmt !== 2) return p;
+  const out = Object.assign({}, p);
+  const jobName = abbr => TM_JOB_NAMES[abbr] || abbr;
+  const renameJobs = block => {
+    if(!block || typeof block !== 'object') return block;
+    const named = {};
+    Object.keys(block).forEach(abbr => { named[jobName(abbr)] = block[abbr]; });
+    return named;
+  };
+
+  out.combat = renameJobs(p.combat);
+  out.craft = renameJobs(p.craft);
+  out.gather = renameJobs(p.gather);
+
+  if(p.societies && !Array.isArray(p.societies)){
+    out.societies = Object.keys(p.societies).map(Number).sort((a,b) => a - b).map(id => {
+      const [rank, points, needed] = p.societies[id];
+      return { id, name: TM_SOCIETY_NAMES[id] || `Society ${id}`, rank, points, needed };
+    });
+  }
+
+  if(Array.isArray(p.classQuests)){
+    const titles = new Set();
+    p.classQuests.forEach(q => {
+      const title = typeof q === 'number' ? TM_QUEST_TITLES[q] : q;
+      if(title) titles.add(title);
+    });
+    out.classQuests = [...titles];
+  }
+
+  if(p.unlocks && typeof p.unlocks === 'object'){
+    out.unlocks = {};
+    Object.keys(p.unlocks).forEach(k => { out.unlocks[k] = p.unlocks[k] === 1 || p.unlocks[k] === true; });
+  }
+
+  if(p.cosmicTools && p.cosmicTools.jobs){
+    const jobs = {};
+    Object.keys(p.cosmicTools.jobs).forEach(abbr => {
+      jobs[jobName(abbr)] = p.cosmicTools.jobs[abbr].map(t =>
+        Array.isArray(t) ? { type: t[0], current: t[1], needed: t[2], max: t[3] } : t);
+    });
+    out.cosmicTools = { asOf: p.cosmicTools.asOf, jobs };
+  }
+
+  return out;
+}
 function onTmPasteInput(){
   const text = document.getElementById('tm-import-text').value.trim();
   const errEl = document.getElementById('tm-import-error');
@@ -4736,7 +4795,7 @@ function onTmPasteInput(){
   summaryEl.innerHTML = '';
   if(!text){ errEl.textContent = ''; return; }
   let obj;
-  try{ obj = JSON.parse(text); }
+  try{ obj = tmNormalizeExport(JSON.parse(text)); }
   catch(e){ errEl.textContent = 'Not valid JSON.'; return; }
   if(!obj || typeof obj !== 'object' || obj.source !== 'time-memoria'){
     errEl.textContent = 'Doesn’t look like a Time Memoria export (missing or unexpected "source" field).';
