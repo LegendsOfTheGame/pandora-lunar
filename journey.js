@@ -76,7 +76,7 @@ function collectionsAsOf(c){
   return `From Time Memoria, exported ${when}${c.tmCollections.game ? ' &middot; game build ' + esc(c.tmCollections.game) : ''}.`;
 }
 function emptyCollectionsHTML(what){
-  return `<div class="jr-note">No ${what} yet. In Time Memoria press <b>Copy everything</b> (or type <code>/tm full</code>), then paste it under Backup &amp; import &rarr; Import from Time Memoria.</div>`;
+  return `<div class="jr-note">No ${what} yet. In Time Memoria press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" onclick="toggleTmImportPanel()">Import from Time Memoria</button> and paste it.</div>`;
 }
 
 /* ---- Collections ---- */

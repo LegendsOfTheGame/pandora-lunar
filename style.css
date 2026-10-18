@@ -1181,3 +1181,24 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   .route{padding:12px 14px 8px}
   .pane-top{padding:8px 14px 0}
 }
+
+/* ---- Time Memoria import dialog ---- */
+.tm-dlg{
+  width:min(640px,92vw);max-height:86vh;overflow:auto;padding:18px 20px;
+  background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:8px;
+}
+.tm-dlg::backdrop{background:rgba(5,7,12,.6)}
+.tm-dlg h2{margin:0 0 6px;font-family:var(--font-display);font-weight:400;font-size:19px;color:var(--gold)}
+.tm-dlg .hint{margin:0 0 10px;font-size:12.5px;color:var(--text-dim)}
+.tm-dlg textarea{width:100%;min-height:120px;resize:vertical;font:12px var(--font-mono)}
+.tm-dlg .tm-import-error{min-height:16px;margin-top:6px;font-size:12px}
+.tm-dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+:root[data-theme="midnight"] .tm-dlg{border-radius:3px}
+
+.rail-imports{padding:8px 10px 0}
+.rail-imports button{
+  width:100%;padding:5px 8px;font:11.5px var(--font-body);cursor:pointer;
+  background:transparent;color:var(--text-dim);border:1px solid var(--line);border-radius:5px;
+}
+.rail-imports button:hover{color:var(--gold);border-color:var(--gold-dim)}
+.rail.collapsed .rail-imports{display:none}

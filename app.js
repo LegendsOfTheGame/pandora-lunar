@@ -5036,17 +5036,23 @@ function importData(input){
 // else (routines, notes, ids, ...) is left alone.
 let tmImportPayload = null;
 
+/* The import is a modal dialog. Esc closes it too, so the reset runs on the
+   dialog's own close event rather than only in this function. */
 function toggleTmImportPanel(){
-  const panel = document.getElementById('tm-import-panel');
-  const opening = panel.style.display === 'none';
-  if(opening) openTools();
-  panel.style.display = opening ? '' : 'none';
-  if(!opening){
-    tmImportPayload = null;
-    document.getElementById('tm-import-text').value = '';
-    document.getElementById('tm-import-error').textContent = '';
-    document.getElementById('tm-import-summary').innerHTML = '';
+  const dlg = document.getElementById('tm-import-panel');
+  if(dlg.open){ dlg.close(); return; }
+  if(!dlg.dataset.wired){
+    dlg.addEventListener('close', resetTmImport);
+    dlg.dataset.wired = '1';
   }
+  dlg.showModal();
+  document.getElementById('tm-import-text').focus();
+}
+function resetTmImport(){
+  tmImportPayload = null;
+  document.getElementById('tm-import-text').value = '';
+  document.getElementById('tm-import-error').textContent = '';
+  document.getElementById('tm-import-summary').innerHTML = '';
 }
 function tmPasteFromClipboard(){
   const errEl = document.getElementById('tm-import-error');

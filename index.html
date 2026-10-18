@@ -71,6 +71,10 @@
       </div>
       <div class="foot-dots" id="foot-dots"></div>
 
+      <div class="rail-imports">
+        <button type="button" onclick="toggleTmImportPanel()" title="Paste a Time Memoria export">Import from Time Memoria</button>
+      </div>
+
       <div class="rail-icons">
         <button id="ico-tools" title="Backup and import" onclick="toggleTools()">&#11123;</button>
         <button id="instructions-toggle-btn" title="How this works" onclick="toggleInstructions()">?</button>
@@ -131,6 +135,7 @@
         <p>The note below each list gives the number of hidden routines. Click <code>Show them</code> to show all routines.</p>
 
         <h3>Import from Time Memoria</h3>
+        <p>In Time Memoria, click <code>Copy everything</code>, or type <code>/tm full</code>. Click <code>Import from Time Memoria</code> at the bottom of the rail. Paste the export into the box. Make sure that the character is correct, then click <code>Apply merge</code>.</p>
         <p>The Time Memoria plugin sends what you unlocked, quest by quest. After an import, the tracker uses that data and ignores the patch number.</p>
         <p>This is more exact, and it applies in both directions. The end of Stormblood no longer shows Eureka content if you never entered Eureka.</p>
         <p>An import also hides a routine when you have not unlocked the job it needs. The Masked Carnivale needs Blue Mage. Grand Company turn-ins need a crafting job or a gathering job. This test uses the unlock only. A low level hides nothing.</p>
@@ -181,28 +186,32 @@
           <button class="edit-btn" onclick="toggleTmImportPanel()">Import from Time Memoria</button>
         </div>
 
-        <div class="tm-import-panel" id="tm-import-panel" style="display:none">
-          <h2>Import from Time Memoria <button class="link-btn" onclick="toggleTmImportPanel()">Close</button></h2>
-          <p class="hint">Paste a Time Memoria clipboard export below. It's parsed entirely in this browser &mdash; nothing is sent anywhere, same as everywhere else on this site.</p>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0">
-            <button class="edit-btn" onclick="tmPasteFromClipboard()">Paste from clipboard</button>
-            <span class="tm-import-error" id="tm-import-error"></span>
-          </div>
-          <textarea class="note-area" id="tm-import-text" style="min-height:90px" placeholder="Or paste manually here (Ctrl+V)" oninput="onTmPasteInput()"></textarea>
-          <div id="tm-import-summary"></div>
-        </div>
       </div>
 
       <div id="pages"></div>
 
       <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
       <div class="copyright">&copy; Kaye Sharpedge</div>
-      <div class="build-stamp">Last updated 18/10/2026 @ 17:52 UTC</div>
+      <div class="build-stamp">Last updated 18/10/2026 @ 18:27 UTC</div>
 
     </div>
   </main>
 
 </div>
+
+<!-- The Time Memoria import opens over the page, so the area on screen stays
+     where it was. The ids are the same as the old inline panel. -->
+<dialog class="tm-dlg" id="tm-import-panel" aria-labelledby="tm-dlg-title">
+  <h2 id="tm-dlg-title">Import from Time Memoria</h2>
+  <p class="hint">In the plugin, press <b>Copy everything</b> (or type <code>/tm full</code>), then paste here. This browser reads the export. Nothing goes to a server.</p>
+  <textarea class="note-area" id="tm-import-text" placeholder="Paste here (Ctrl+V)" spellcheck="false" oninput="onTmPasteInput()"></textarea>
+  <div class="tm-import-error" id="tm-import-error" role="status"></div>
+  <div id="tm-import-summary"></div>
+  <div class="tm-dlg-acts">
+    <button type="button" class="edit-btn" onclick="tmPasteFromClipboard()">Paste from clipboard</button>
+    <button type="button" class="edit-btn" onclick="toggleTmImportPanel()">Close</button>
+  </div>
+</dialog>
 
 <script src="ocean.js"></script>
 <script src="jobquest-items.js"></script>
