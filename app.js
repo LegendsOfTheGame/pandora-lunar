@@ -452,9 +452,9 @@ const JOB_QUESTS = {
   // Thaumaturge→Black Mage, Arcanist→Scholar/Summoner, Pugilist→Monk, Lancer→Dragoon,
   // Archer→Bard, Rogue→Ninja) — Haven's call, since the game gates them that way regardless.
   // Scoped to level ≤70 only, same as crafting/gathering; Sage and Reaper unlock AT 70 so
-  // only their level-70 entries are in scope yet. Viper, Pictomancer, Beastmaster have no
-  // data here (Viper/Pictomancer are 80+ jobs, Beastmaster wasn't sourced) — the checklist
-  // panel already shows "No quest data loaded for this job yet" for anything missing.
+  // only their level-70 entries are in scope yet. Viper and Pictomancer are 80+ jobs and
+  // Beastmaster is at the end, from the game's own sheet — the checklist panel shows
+  // "No quest data loaded for this job yet" for anything missing.
   Paladin: [
     {level:1,name:"Way of the Gladiator"},{level:1,name:"My First Gladius"},{level:5,name:"Kicking the Hornet's Nest"},
     {level:10,name:"Ul'dah's Most Wanted"},{level:15,name:"That Old Familiar Feeling"},{level:20,name:"The Face of Thal"},
@@ -585,6 +585,9 @@ const JOB_QUESTS = {
     {level:68,name:"Sleeping Truths Lie"},{level:70,name:"Sweet Dreams Are Made of Peace"},{level:80,name:"A Harmony from the Heavens"}
   ],
   Machinist: [
+    // The unlock asks for level 50 on another job; listed at 30, where Machinist starts,
+    // so a Machinist can never show it as "missed" or "future".
+    {level:30,name:"Savior of Skysteel"},
     {level:30,name:"Master of Marksmanship"},{level:35,name:"Always the Last Place You Look"},{level:40,name:"Rook Before You Reap"},
     {level:40,name:"Securing the Locks"},{level:45,name:"A Suppressive Strategy"},{level:45,name:"Blood on the Sands"},
     {level:50,name:"Rage against the Machinists"},{level:50,name:"The Power of a Tourney"},{level:50,name:"A Joye-less Celebration"},
@@ -637,6 +640,16 @@ const JOB_QUESTS = {
     {level:60,name:"Blue Scream of Death"},{level:60,name:"Blue Cheese"},{level:65,name:"Azuro and Goliath"},
     {level:68,name:"Where the Gold Goes"},{level:70,name:"Master of Mimicry"},{level:70,name:"A Future in Blue"},
     {level:80,name:"A New Gold Standard"},{level:80,name:"The Brave and the Blue"}
+  ],
+  // From the game's Quest sheet (genre "Beastmaster Quests"), patch 7.56: the ten the journal
+  // files under Class & Job Quests. Three more Beastmaster quests sit under Other Quests and
+  // are not listed. The unlock asks for level 50 on another job; listed at 1 for the same
+  // reason as Machinist's.
+  Beastmaster: [
+    {level:1,name:"Strangers in the Wood"},{level:1,name:"The Wilds Call"},{level:8,name:"Hearts Aligned"},
+    {level:18,name:"Master of the Lhu"},{level:30,name:"Into the Crucible"},{level:30,name:"Wit as Weaponry"},
+    {level:40,name:"Gobsmacked"},{level:40,name:"Sin of Blood"},{level:50,name:"A Beastmaster's Path"},
+    {level:50,name:"Bonds Unbroken"}
   ]
 };
 // Which shared role-quest chain each combat job draws on.
@@ -666,6 +679,9 @@ const ROLE_TRACK_KEY = {
 // early, since level is all this tracker has to go on. Not fixable without tracking exact
 // MSQ position, which isn't data this app collects.
 
+// Dawntrail's role-quest prologue: one quest per character that opens all five chains, so it
+// is listed first in each and shares one completion state ("track" overrides the role's own).
+const DT_ROLE_PROLOGUE = {level:90,name:"Uncouth Customers",track:"dtPrologue"};
 const ROLE_QUESTS = {
   shb: {
     tank:   [{level:70,name:"The Man with Too Many Scars"},{level:72,name:"Shaped by Tragedy"},{level:74,name:"Defined by Loss"},{level:76,name:"The Princess and Her Knight"},{level:78,name:"The Hardened Heart"},{level:80,name:"To Have Loved and Lost"}],
@@ -682,11 +698,11 @@ const ROLE_QUESTS = {
     healer: [{level:85,name:"Far from Free"},{level:86,name:"The Butcher's Blade"},{level:87,name:"A New Battleground"},{level:88,name:"Laying the Past to Rest"},{level:89,name:"Trail of Skulls"},{level:90,name:"The Gift of Mercy"}]
   },
   dt: {
-    tank:   [{level:90,name:"The Narwhal Beckons"},{level:92,name:"Sleepless in Ishgard"},{level:94,name:"Between Sleep and Death"},{level:96,name:"Beacon in the Darkness"},{level:98,name:"Awakened, Not Stirred"},{level:100,name:"Dreams of a New Day"}],
-    melee:  [{level:90,name:"The Hunter and the Hunted"},{level:92,name:"A Sea of Blood"},{level:94,name:"Who's Who"},{level:96,name:"Cornered Prey"},{level:98,name:"Impostor Syndrome"},{level:100,name:"A Hunter True"}],
-    ranged: [{level:90,name:"To Steal a Steelhog"},{level:92,name:"Bandits Abound"},{level:94,name:"Take Me to Your Leader"},{level:96,name:"The Milk of Mamool Ja Kindness"},{level:98,name:"Ally in the Alley"},{level:100,name:"The Mightiest Shield"}],
-    caster: [{level:90,name:"Power Forgotten"},{level:92,name:"A Brand of Justice"},{level:94,name:"The Seeds of Popularity"},{level:96,name:"Floundering Fame"},{level:98,name:"Behind the Helm"},{level:100,name:"Heroes and Pretenders"}],
-    healer: [{level:90,name:"In the Sting of Things"},{level:92,name:"Causing Problems on Purpose"},{level:94,name:"Living among the Deadly"},{level:96,name:"Taste of a Toxin Paradise"},{level:98,name:"Downed by the River"},{level:100,name:"An Antidote for Anarchy"}]
+    tank:   [DT_ROLE_PROLOGUE,{level:90,name:"The Narwhal Beckons"},{level:92,name:"Sleepless in Ishgard"},{level:94,name:"Between Sleep and Death"},{level:96,name:"Beacon in the Darkness"},{level:98,name:"Awakened, Not Stirred"},{level:100,name:"Dreams of a New Day"}],
+    melee:  [DT_ROLE_PROLOGUE,{level:90,name:"The Hunter and the Hunted"},{level:92,name:"A Sea of Blood"},{level:94,name:"Who's Who"},{level:96,name:"Cornered Prey"},{level:98,name:"Impostor Syndrome"},{level:100,name:"A Hunter True"}],
+    ranged: [DT_ROLE_PROLOGUE,{level:90,name:"To Steal a Steelhog"},{level:92,name:"Bandits Abound"},{level:94,name:"Take Me to Your Leader"},{level:96,name:"The Milk of Mamool Ja Kindness"},{level:98,name:"Ally in the Alley"},{level:100,name:"The Mightiest Shield"}],
+    caster: [DT_ROLE_PROLOGUE,{level:90,name:"Power Forgotten"},{level:92,name:"A Brand of Justice"},{level:94,name:"The Seeds of Popularity"},{level:96,name:"Floundering Fame"},{level:98,name:"Behind the Helm"},{level:100,name:"Heroes and Pretenders"}],
+    healer: [DT_ROLE_PROLOGUE,{level:90,name:"In the Sting of Things"},{level:92,name:"Causing Problems on Purpose"},{level:94,name:"Living among the Deadly"},{level:96,name:"Taste of a Toxin Paradise"},{level:98,name:"Downed by the River"},{level:100,name:"An Antidote for Anarchy"}]
   }
 };
 // Every role-quest bracket that applies to a job, in level order, respecting JOB_ROLE_FLOOR.
@@ -703,7 +719,7 @@ function roleQuestsFor(job){
     // (Viper/Pictomancer skip Shadowbringers entirely) never gets access to any of it,
     // not just the entries below its floor.
     if(list[0].level < floor) return [];
-    return list.map(q => ({...q, trackKey: ROLE_TRACK_KEY[exp][role]}));
+    return list.map(q => ({...q, trackKey: q.track || ROLE_TRACK_KEY[exp][role]}));
   });
 }
 function missedJobQuests(job, level, doneMap){
@@ -4932,7 +4948,7 @@ function tmQuestKeyIndex(){
   Object.keys(JOB_QUESTS).forEach(job => JOB_QUESTS[job].forEach(q => add(q.name, job)));
   Object.keys(ROLE_QUESTS).forEach(exp =>
     Object.keys(ROLE_QUESTS[exp]).forEach(role =>
-      ROLE_QUESTS[exp][role].forEach(q => add(q.name, 'role:' + ROLE_TRACK_KEY[exp][role]))));
+      ROLE_QUESTS[exp][role].forEach(q => add(q.name, 'role:' + (q.track || ROLE_TRACK_KEY[exp][role])))));
   TM_QUEST_KEYS = index;
   return index;
 }
