@@ -8,21 +8,31 @@
 </head>
 <body>
 
+<!-- ================= site bar =================
+     The site's own places. Studio and the Ledger are live today; the two
+     challenge pages are not built yet. The theme applies to every page. -->
+<header class="sitebar">
+  <span class="domain"><b>Adventurer's Ledger</b> &middot; Pandora Lunar</span>
+  <nav aria-label="Site">
+    <a href="https://legendmemoria.org/" target="_blank" rel="noopener" title="legendmemoria.org">Studio</a><a href="./" class="on" title="This page">Adventurer's Ledger</a><span class="soon" title="Not built yet">Lunatic Pandora</span><span class="soon" title="Not built yet">Challenges</span>
+  </nav>
+  <div class="who">
+    <select id="theme-sel" aria-label="Theme" onchange="setTheme(this.value)">
+      <option value="poetic">Poetic</option><option value="midnight">Midnight</option><option value="daylight">Daylight</option>
+    </select>
+  </div>
+</header>
+
 <div class="shell">
 
   <!-- ================= rail =================
-       Navigation on the left, pinned. It never scrolls away, so every section
+       Navigation on the left, pinned. It never scrolls away, so every area
        is one click from anywhere on the page. -->
   <nav class="rail" id="rail">
-    <div class="rail-brand">
-      <h1>Adventurer's Ledger</h1>
-      <p>Pandora Lunar</p>
-    </div>
-
     <div class="rail-scroll">
       <div class="switcher" id="switcher"></div>
       <div class="cap-note" id="cap-note" style="display:none">Up to 3 characters per browser. Need more? Use a second browser (e.g. Firefox alongside Edge) &mdash; each keeps its own separate storage.</div>
-      <div id="rail-nav"></div>
+      <nav class="areas" id="rail-nav" aria-label="Areas"></nav>
     </div>
 
     <!-- The footer shows one countdown at a time and changes every 5 seconds.
@@ -61,14 +71,6 @@
       </div>
       <div class="foot-dots" id="foot-dots"></div>
 
-      <div class="rail-theme">
-        <span class="theme-switch">
-          <button data-theme="poetic" onclick="setTheme('poetic')">Poetic</button>
-          <button data-theme="midnight" onclick="setTheme('midnight')">Midnight</button>
-          <button data-theme="daylight" onclick="setTheme('daylight')">Daylight</button>
-        </span>
-      </div>
-
       <div class="rail-icons">
         <button id="ico-tools" title="Backup and import" onclick="toggleTools()">&#11123;</button>
         <button id="instructions-toggle-btn" title="How this works" onclick="toggleInstructions()">?</button>
@@ -82,8 +84,9 @@
 
   <!-- ================= pane ================= -->
   <main class="pane">
+    <nav class="route" id="route" aria-label="Expansions"></nav>
     <div class="pane-top">
-      <div class="frame-row" id="frame-row"></div>
+      <div class="frame-row" id="frame-row" role="tablist"></div>
     </div>
 
     <div class="pane-body">
@@ -93,15 +96,22 @@
         <p>This tracker is self-serve. You add your own characters. The tracker saves your data in this browser, on this device. It sends nothing to a server. No other Free Company member can read it.</p>
 
         <h3>The rail</h3>
-        <p>The rail is the column on the left. It lists your characters at the top. It lists the sections below them.</p>
-        <p>Click a section to open it. Some sections divide into frames. The frame buttons are in the row at the top of the pane. Click a frame button to change what the pane shows.</p>
+        <p>The rail is the column on the left. The active character is at the top of the rail. Below the character are seven areas: Today, Story, Jobs, Duties, Collections, World and Elsewhere.</p>
+        <p>Click an area to open it. Each area has frames. The frame buttons are in the row at the top of the pane. Click a frame button to change what the pane shows.</p>
+        <p>The bar below an area name shows a percentage. The bar shows only when the tracker has the data for it.</p>
         <p>The rail and the frame buttons stay on the screen. Only the pane scrolls.</p>
+
+        <h3>The route line</h3>
+        <p>The route line is above the frame buttons. It has one station for each expansion. The line after a station fills to the percentage of quests done in that expansion. The percentages are the same as the Overview tab in Time Memoria. The data comes from a Time Memoria import.</p>
+        <p>A station is complete when your MSQ progress reaches the next expansion.</p>
+        <p>Click a station to show that expansion only in Duties, Collections and World. Click the station again, or click <code>Show all expansions</code>, to show all expansions.</p>
         <p>Click <code>&lsaquo;</code> at the bottom of the rail to make the rail narrow. Click it again to make the rail wide.</p>
 
         <h3>Characters</h3>
-        <p>Click <code>+ Add character</code> in the rail. Type a name. Then complete the parts that apply to you. No field is mandatory.</p>
+        <p>Open the character list at the top of the rail. Select <code>+ Add a character</code>. Type a name. Then complete the parts that apply to you. No field is mandatory.</p>
+        <p>To change character, select the character in the same list.</p>
         <p>Each browser holds a maximum of 3 characters. To track more than 3 characters, use a second browser. Each browser keeps its own storage. The two sets of data stay separate.</p>
-        <p>To remove a character, click its name in the rail. Then click <code>Remove character</code> at the top of the pane.</p>
+        <p>To remove a character, select the character in the list. Then click <code>Remove character</code> at the top of the pane.</p>
 
         <h3>Backups</h3>
         <p>Click the backup icon at the bottom of the rail. The backup tools open at the top of the pane.</p>
@@ -150,11 +160,17 @@
         <p>Registration opens for 15 minutes every 2 hours, at each even UTC hour.</p>
 
         <h3>Evercold</h3>
-        <p>The second panel at the bottom of the rail counts down to the 8.0 expansion.</p>
+        <p>The panel at the bottom of the rail also counts down to the 8.0 expansion.</p>
         <p>This date is a report. Square Enix has not confirmed it. Square Enix gives the confirmed date at Tokyo Fan Fest on 1 November 2026.</p>
 
         <h3>Themes</h3>
-        <p>The tracker has three themes: Poetic, Midnight and Daylight. Click a theme name at the bottom of the rail. Each theme changes the colours and the corner shapes.</p>
+        <p>The tracker has three themes: Poetic, Midnight and Daylight. Select a theme in the list at the right of the bar at the top of the page. Each theme changes the colours and the corner shapes.</p>
+
+        <h3>Events</h3>
+        <p>Today &rarr; Events lists the seasonal events that are running. The panel at the bottom of the rail also shows one countdown for each event. Each event ends at 15:00 UTC on its last day. After that time, the event goes off both lists.</p>
+
+        <h3>Elsewhere</h3>
+        <p>The Elsewhere area has links to other sites for work that the tracker does not do. Each link opens in a new tab.</p>
       </div>
 
       <div id="tools-panel" style="display:none">
@@ -181,7 +197,7 @@
 
       <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
       <div class="copyright">&copy; Kaye Sharpedge</div>
-      <div class="build-stamp">Last updated 18/10/2026 @ 12:55 UTC</div>
+      <div class="build-stamp">Last updated 18/10/2026 @ 17:52 UTC</div>
 
     </div>
   </main>
@@ -191,6 +207,8 @@
 <script src="ocean.js"></script>
 <script src="jobquest-items.js"></script>
 <script src="tm-export-tables.js"></script>
+<script src="collection-lists.js"></script>
+<script src="journey.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

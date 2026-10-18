@@ -2097,35 +2097,36 @@ function collectCharInputs(cid){
 }
 
 /* ---------- switcher ---------- */
-function renderSwitcher(){
+/* The character block at the top of the rail: the active character's name and
+   world, and a dropdown to change character or add one. */
+function renderSwitcher(){ renderCharBlock(); }
+function renderCharBlock(){
   const box = document.getElementById('switcher');
   const capNote = document.getElementById('cap-note');
-  box.innerHTML = DATA.chars.map((c,i)=>{
-    const accent = ACCENTS[i % ACCENTS.length];
-    const seal = (c.name||'?').trim().charAt(0).toUpperCase() || '?';
-    const active = c.id === DATA.activeId ? ' active' : '';
-    return `<button class="switch-btn${active}" style="--accent:var(--${accent})" onclick="setActiveChar('${c.id}')">
-      <div class="seal">${esc(seal)}</div>
-      <div class="switch-label">
-        <span class="name">${esc(c.name || 'Unnamed')}</span>
-        <span class="role">Character ${i+1}</span>
-      </div>
-    </button>`;
-  }).join('');
-  if(DATA.chars.length < 3){
-    box.insertAdjacentHTML('beforeend', `<button class="add-char-btn" onclick="addCharacter()">+ Add character</button>`);
-    capNote.style.display = 'none';
-  }else{
-    capNote.style.display = '';
-  }
+  if(!box || !DATA) return;
+  const c = getChar(DATA.activeId);
+  const i = DATA.chars.indexOf(c);
+  const s = (c && c.server) || {};
+  const sub = [s.world, s.ldc, s.pdc].filter(Boolean).join(' · ') || `Character ${i + 1}`;
+  const opts = DATA.chars.map(x =>
+    `<option value="${x.id}"${x.id === DATA.activeId ? ' selected' : ''}>${esc(x.name || 'Unnamed')}</option>`).join('')
+    + (DATA.chars.length < 3 ? '<option value="+add">+ Add a character</option>' : '');
+  box.style.setProperty('--accent', `var(--${ACCENTS[Math.max(0, i) % ACCENTS.length]})`);
+  box.innerHTML = `<div class="char-name">${esc((c && c.name) || 'Unnamed')}</div>
+    <div class="char-sub">${esc(sub)}</div>
+    <select class="char-sel" aria-label="Character" onchange="onCharSelect(this)">${opts}</select>`;
+  capNote.style.display = DATA.chars.length >= 3 ? '' : 'none';
+}
+function onCharSelect(sel){
+  if(sel.value === '+add') addCharacter();
+  else setActiveChar(sel.value);
 }
 function setActiveChar(cid){
   collectAllInputs();
   DATA.activeId = cid;
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'page-'+cid));
-  renderSwitcher();
-  renderRail();
-  renderFrameRow();
+  applyArea(cid);
+  renderNav();
   updateResetBar();
   scheduleSave();
 }
@@ -2170,7 +2171,7 @@ function characterPageHTML(cid){
     </div>
     <button class="remove-char-btn" onclick="removeCharacter('${cid}')">Remove character</button>
   </div>
-  <div class="section">
+  <div class="section char-dash-section">
     <span class="cap" id="${cid}-tm-sync-note"></span>
     <div class="server-picker" id="${cid}-server-picker"></div>
     <div class="dash-grid" id="${cid}-dash"></div>
@@ -2241,6 +2242,18 @@ function characterPageHTML(cid){
     <div id="${cid}-redalert"></div>
   </div>
   </div>
+  <div class="tab-panel" data-tab="journey">
+  <div class="section">
+    <h2>Journey <span class="hint">via Time Memoria &mdash; questlines, duties and exploration, from Copy everything</span></h2>
+    <div id="${cid}-journey"></div>
+  </div>
+  </div>
+  <div class="tab-panel" data-tab="collections">
+  <div class="section">
+    <h2>Collections <span class="hint">via Time Memoria &mdash; totals from FFXIV Collect, refreshed daily</span></h2>
+    <div id="${cid}-coll"></div>
+  </div>
+  </div>
   <div class="tab-panel" data-tab="societies">
   <div class="section">
     <h2>Allied society relations <span class="hint-group"><span class="hint" id="${cid}-sochint">rank + points reset to 0 on every rank-up</span><button class="link-btn" id="${cid}-socmode-btn" onclick="toggleSocietiesManual('${cid}')">Edit manually</button></span></h2>
@@ -2290,6 +2303,18 @@ function characterPageHTML(cid){
     <h2>Notes</h2>
     <textarea class="note-area" id="${cid}-notes" placeholder="Anything worth remembering — GC, retainers, sync points, whatever." oninput="scheduleSave()"></textarea>
   </div>
+  </div>
+  <div class="tab-panel" data-tab="events">
+  <div class="section">
+    <h2>Events <span class="hint">read off Time Memoria&rsquo;s Active Events &middot; every event ends at 15:00 UTC</span></h2>
+    <div id="${cid}-events"></div>
+  </div>
+  </div>
+  <div class="tab-panel" data-tab="elsewhere">
+  <div class="section">
+    <h2>Other sites <span class="hint">for what the Ledger does not do &middot; each link opens in a new tab</span></h2>
+    ${elsewhereHTML()}
+  </div>
   </div>`;
 }
 
@@ -2300,9 +2325,8 @@ function rebuildPages(){
   ).join('');
   DATA.chars.forEach(c=>renderChar(c.id));
   initCollapsible();
-  DATA.chars.forEach(c=>applyTab(c.id, activeTab(c.id)));
-  renderRail();
-  renderFrameRow();
+  DATA.chars.forEach(c=>applyArea(c.id));
+  renderNav();
 }
 
 /* ---------- tabs ---------- */
@@ -2410,23 +2434,301 @@ function renderLastCompleted(cid){
 
 function refreshNav(cid){
   if(!DATA || cid !== DATA.activeId) return;
+  renderNav();
+}
+
+/* ---------- areas (Layout A, The Rail) ----------
+   The rail lists seven areas. Each area's frame row lists slices of the panels
+   that are already drawn: a frame is a (panel, frame) pair, so Story can hold
+   the quest categories from one panel and the questlines from another. The
+   panels and their inputs are unchanged; an area only picks which panel is
+   active and which of its frames is on.
+
+   A frame of '*' turns on every block in its panel. '@exp' resolves to the
+   expansion picked on the route line, or '*' when none is picked. */
+const AREAS = [
+  {key:'today', label:'Today', frames:c => framesFor('routines', c)
+      .map(f => ({tab:'routines', frame:f.k, l:f.l, n:f.n}))
+      .concat([{tab:'events', frame:'*', l:'Events', n:currentEvents().length},
+               {tab:'notes', frame:'trackers', l:'Trackers'},
+               {tab:'notes', frame:'notes', l:'Notes'}]),
+    meter:c => todayMeter(c)},
+  {key:'story', label:'Story', frames:() => [
+      {tab:'overview', frame:'progress', l:'Quest categories'},
+      {tab:'journey', frame:'questlines', l:'Questlines'},
+      {tab:'journey', frame:'relics', l:'Relics'},
+      {tab:'journey', frame:'seasonal', l:'Seasonal'},
+      {tab:'overview', frame:'session', l:'Session'}],
+    meter:c => c.questTotals && c.questTotals.overall ? Math.round(pct(c.quests.overall, c.questTotals.overall)) : null},
+  {key:'jobs', label:'Jobs', frames:c => framesFor('jobs', c)
+      .map(f => ({tab:'jobs', frame:f.k, l:f.l, n:f.n}))
+      .concat([{tab:'mentor', frame:'battle', l:'Battle Mentor'},
+               {tab:'mentor', frame:'trade', l:'Trade Mentor'},
+               {tab:'cosmic', frame:'tools', l:'Cosmic tools'},
+               {tab:'cosmic', frame:'red-alerts', l:'Red Alerts'}])},
+  {key:'duties', label:'Duties', splits:true, frames:c => [
+      {tab:'journey', frame:'duties', l:'Duty clears', n:hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null}],
+    meter:c => dutiesMeter(c)},
+  {key:'collections', label:'Collections', splits:true, frames:c => framesFor('collections', c)
+      .map(f => ({tab:'collections', frame:f.k, l:f.l, n:f.n})),
+    meter:c => collectionsMeter(c)},
+  {key:'world', label:'World', splits:true, frames:() => [
+      {tab:'societies', frame:'@exp', l:'Allied societies'},
+      {tab:'hunts', frame:'@exp', l:'Hunts'},
+      {tab:'journey', frame:'exploration', l:'Exploration'}]},
+  {key:'elsewhere', label:'Elsewhere', frames:() => [{tab:'elsewhere', frame:'*', l:'Other sites'}]}
+];
+function areaFrameId(f){ return f.tab + ':' + f.frame; }
+
+/* Meters are shown only where one honest measure exists. Jobs and World have
+   none yet, so they show no meter. */
+function todayMeter(c){
+  const now = new Date();
+  const rows = (c.routines||[]).filter(r =>
+    (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden) && schedById(r.schedId).kind !== 'cooldown');
+  return rows.length ? Math.round(rows.filter(r => isRoutineDone(r, now)).length / rows.length * 100) : null;
+}
+function dutiesMeter(c){
+  if(!hasCollections(c)) return null;
+  const done = ownedSet(c, 'dutiesDone');
+  const ids = Object.keys(TM_DUTIES).filter(id => DUTY_TYPES.indexOf(TM_DUTIES[id][1]) >= 0);
+  return ids.length ? Math.round(ids.filter(id => done.has(+id)).length / ids.length * 100) : null;
+}
+function collectionsMeter(c){
+  if(!hasCollections(c) || typeof COLLECTION_LISTS === 'undefined') return null;
+  let have = 0, all = 0;
+  COLLECTION_KINDS.forEach(k => {
+    const list = COLLECTION_LISTS.lists[k.key] || [], owned = ownedSet(c, k.key);
+    all += list.length; have += list.filter(r => owned.has(r[0])).length;
+  });
+  return all ? Math.round(have / all * 100) : null;
+}
+
+function areaState(cid){
+  DATA.ui.areas = DATA.ui.areas || {};
+  const s = DATA.ui.areas[cid] = DATA.ui.areas[cid] || {area:null, frames:{}};
+  if(!AREAS.some(a => a.key === s.area)) s.area = 'today';
+  s.frames = s.frames || {};
+  return s;
+}
+function areaOf(key){ return AREAS.find(a => a.key === key) || AREAS[0]; }
+function activeArea(cid){ return areaOf(areaState(cid).area); }
+function areaFrames(cid){
+  const c = getChar(cid);
+  try{ return activeArea(cid).frames(c) || []; }catch(e){ return []; }
+}
+function activeAreaFrame(cid){
+  const list = areaFrames(cid);
+  if(!list.length) return null;
+  const saved = areaState(cid).frames[activeArea(cid).key];
+  return list.find(f => areaFrameId(f) === saved) || list[0];
+}
+/* '@exp' becomes the slug of the expansion picked on the route line. A slug the
+   panel does not offer (a society above the MSQ progress) falls back to all. */
+function resolveFrame(cid, f){
+  if(f.frame !== '@exp') return f.frame;
+  const exp = routeExp();
+  if(exp === null) return '*';
+  const slug = frameSlug(EXPANSION_NAMES[exp]);
+  return framesFor(f.tab, getChar(cid)).some(x => x.k === slug) ? slug : '*';
+}
+/* Points the old tab and frame state at the active area frame, then shows it. */
+function applyArea(cid){
+  const f = activeAreaFrame(cid);
+  const page = document.getElementById('page-'+cid);
+  if(!f || !page) return;
+  DATA.ui.tabs = DATA.ui.tabs || {};
+  DATA.ui.tabs[cid] = f.tab;
+  DATA.ui.frames = DATA.ui.frames || {};
+  DATA.ui.frames[cid] = DATA.ui.frames[cid] || {};
+  DATA.ui.frames[cid][f.tab] = resolveFrame(cid, f);
+  applyTab(cid, f.tab);
+  // The summary metrics belong to Story; elsewhere they repeat what the area shows.
+  const dash = page.querySelector('.char-dash-section');
+  if(dash) dash.hidden = activeArea(cid).key !== 'story';
+}
+function goArea(key){
+  if(globalPageOpen()) showGlobalPage(null);
+  areaState(DATA.activeId).area = key;
+  applyArea(DATA.activeId);
+  renderNav();
+  window.scrollTo(0,0);
+  scheduleSave();
+}
+function goAreaFrame(id){
+  const s = areaState(DATA.activeId);
+  s.frames[s.area] = id;
+  applyArea(DATA.activeId);
+  renderNav();
+  window.scrollTo(0,0);
+  scheduleSave();
+}
+function renderNav(){
   renderRail();
+  renderRoute();
   renderFrameRow();
 }
 
+/* ---------- route line ----------
+   One station per expansion. A segment fills to the quests done of the
+   expansion it leaves from, so the line from ARR to HW is ARR's share.
+   A station is done when the MSQ progress reaches the next expansion. Picking
+   a station narrows the areas that split by expansion (Duties, Collections,
+   World) and is the same for every character. */
+const ROUTE_STATIONS = EXPANSION_NAMES.map((n, i) => ({i, n, patch:i + 2}));
+function routeExp(){
+  const v = DATA && DATA.ui ? DATA.ui.routeExp : null;
+  return Number.isInteger(v) && v >= 0 && v < ROUTE_STATIONS.length ? v : null;
+}
+/* Time Memoria's own per-expansion figures (quests.byExp), the same numbers as
+   its Overview tab: six journal sections, levequests included. A count made
+   here from questsDone would leave levequests out, because they are not Quest
+   rows, and would disagree with the plugin. */
+function stationQuests(c, i){
+  const r = Array.isArray(c.questsByExp) ? c.questsByExp[i] : null;
+  return r && r[1] > 0 ? {have: r[0], total: r[1]} : null;
+}
+function renderRoute(){
+  const box = document.getElementById('route');
+  if(!box || !DATA) return;
+  if(globalPageOpen()){ box.innerHTML = ''; return; }
+  const c = getChar(DATA.activeId);
+  const reached = patchValue(c.patch);
+  const sel = routeExp(), area = activeArea(DATA.activeId);
+  const st = ROUTE_STATIONS.map(s => {
+    const q = s.i < ROUTE_STATIONS.length - 1 ? stationQuests(c, s.i) : null;
+    const released = s.i < ROUTE_STATIONS.length - 1;
+    return Object.assign({}, s, {q, released, p: q ? jrPct(q.have, q.total) : 0,
+      done: released && reached !== null && reached >= s.patch + 1});
+  });
+  const open = st.find(s => s.released && !s.done);
+  const track = `<div class="track" aria-hidden="true">${st.slice(0, -1).map((s, i) =>
+    `<span class="seg${open && s.i === open.i ? ' active' : ''}" style="grid-column:${2*i+2} / span 2"><i style="width:${s.p}%"></i></span>`).join('')}</div>`;
+  const stations = st.map((s, i) => {
+    const cls = !s.released ? 'locked' : s.done ? 'done' : (open && s.i === open.i ? 'active' : '');
+    const pc = !s.released ? '8.0' : s.q ? s.p + '%' : '—';
+    const title = !s.released ? 'Expansion 8.0. The game sheets fill this in on release day.'
+      : s.q ? `${s.q.have.toLocaleString()} of ${s.q.total.toLocaleString()} quests done` : 'Import Copy everything from Time Memoria to fill this in.';
+    return `<button type="button" style="grid-column:${i+1}" class="stn ${cls}${s.i === sel ? ' sel' : ''}" title="${esc(title)}"
+      aria-pressed="${s.i === sel}" onclick="pickStation(${s.i})"><span class="dot"></span><span class="nm">${esc(s.n)}</span><span class="pc">${pc}</span></button>`;
+  }).join('');
+  const s = sel !== null ? st[sel] : null;
+  const note = s
+    ? (area.splits ? `Showing <b>${esc(s.n)}</b> only` : `<b>${esc(s.n)}</b> selected &middot; this area spans every expansion`)
+      + ` <button type="button" onclick="pickStation(null)">Show all expansions</button>`
+    : (area.splits ? 'All expansions &middot; pick a station to narrow this area'
+                   : (open ? `Now boarding: <b>${esc(open.n)}</b>` : ''));
+  box.innerHTML = track + stations + `<div class="route-note">${note}</div>`;
+  renderStationCard(st);
+}
+function pickStation(i){
+  DATA.ui.routeExp = (i === null || routeExp() === i) ? null : i;
+  DATA.chars.forEach(c => { renderCollections(c.id); renderJourney(c.id); });
+  applyArea(DATA.activeId);
+  renderNav();
+  scheduleSave();
+}
+/* Above the panels while a station is picked: that expansion's quest count. */
+function renderStationCard(st){
+  // Directly under the pinned character line of the page on screen, so the
+  // line's negative top margin cannot cover it.
+  document.querySelectorAll('.station-card').forEach(el => { el.innerHTML = ''; });
+  const head = document.querySelector(`#page-${DATA.activeId} .char-header`);
+  if(!head) return;
+  let box = head.nextElementSibling;
+  if(!box || !box.classList.contains('station-card')){
+    box = document.createElement('div');
+    box.className = 'station-card';
+    head.after(box);
+  }
+  const sel = routeExp();
+  if(sel === null || globalPageOpen() || !activeArea(DATA.activeId).splits){ box.innerHTML = ''; return; }
+  const s = st[sel];
+  if(!s.released){
+    box.innerHTML = `<div class="section"><h2>${esc(s.n)}</h2><div class="jr-note">Expansion 8.0. The game sheets fill this in on release day.</div></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="section"><h2>${esc(s.n)}</h2>${s.q
+    ? `<div class="jr-row"><span>Quests done</span><span class="jr-v">${s.q.have.toLocaleString()} / ${s.q.total.toLocaleString()} &middot; ${s.p}%</span><div class="jr-bar"><i style="width:${s.p}%"></i></div></div>
+       <div class="jr-note">The figures are the same as Time Memoria&rsquo;s Overview: main scenario, chronicles, sidequests, allied society, class and job quests, and levequests.</div>`
+    : `<div class="jr-note">No quest data yet. Import Copy everything from Time Memoria.</div>`}
+    <div class="jr-note">The lists below show ${esc(s.n)} only.</div></div>`;
+}
+
+/* ---------- events ----------
+   One list feeds Today &rarr; Events and the rail rotator, so they cannot disagree.
+   Read off Time Memoria's Active Events panel on 18 October 2026. Every event
+   ends at 15:00 UTC. An event drops off both places when it ends. Update this
+   list when Square Enix announces the next event. */
+const EVENTS = [
+  {name:'Moogle Treasure Trove: Astronomy', from:'2026-09-09', to:'2026-10-19', note:'First Hunt &middot; tomestone rewards'},
+  {name:'FINAL FANTASY XIV & Fall Guys', from:'2026-10-07', to:'2026-10-27', note:'Gold Saucer &middot; Blunderville'},
+  {name:"All Saints' Wake 2026", from:'2026-10-15', to:'2026-11-02', note:'A Grisly Affair of Mortals and Bears'}
+];
+function eventEnd(e){ return Date.parse(e.to + 'T15:00:00Z'); }
+function currentEvents(){ const t = Date.now(); return EVENTS.filter(e => eventEnd(e) > t); }
+function fmtEventDay(iso){ return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', {day:'numeric', month:'short', timeZone:'UTC'}); }
+function renderEvents(cid){
+  const box = document.getElementById(cid + '-events');
+  if(!box) return;
+  const list = currentEvents();
+  box.innerHTML = list.length ? `<div class="jr-grid">${list.map(e => `<div class="ev-card">
+      <div class="ev-name">${esc(e.name)}</div>
+      <div class="jr-note">${fmtEventDay(e.from)} &ndash; ${fmtEventDay(e.to)} &middot; ${e.note}</div>
+      <div class="jr-row"><span>Ends in</span><span class="jr-v">${fmtCountdown(eventEnd(e) - Date.now())}</span></div></div>`).join('')}</div>`
+    : '<div class="jr-note">No event is running.</div>';
+}
+/* One rotator slide per running event, added before initFootSlot counts them. */
+function addEventSlides(){
+  const slot = document.getElementById('foot-slot');
+  if(!slot) return;
+  currentEvents().forEach((e, k) => slot.insertAdjacentHTML('beforeend',
+    `<div class="foot-item" data-name="${esc(e.name)}"><div class="expac-bar">
+       <span class="ex-label">Event &middot; ends ${fmtEventDay(e.to)}</span>
+       <span class="ex-time" data-event-end="${eventEnd(e)}">&mdash;</span>
+       <span class="ex-when">&middot; ${esc(e.name)}</span></div></div>`));
+}
+function updateEventSlides(){
+  document.querySelectorAll('[data-event-end]').forEach(el => {
+    el.textContent = fmtCountdown(Number(el.dataset.eventEnd) - Date.now());
+  });
+}
+
+/* ---------- elsewhere ----------
+   Sites the Ledger does not replace. Plain links: no tracking script runs here. */
+const ELSEWHERE_LINKS = [
+  ['Teamcraft', 'https://ffxivteamcraft.com/', 'Crafting lists, simulator, rotations'],
+  ['FFXIV Collect', 'https://ffxivcollect.com/', 'Collections and relic catalogue'],
+  ['XIV ToDo', 'https://xivtodo.com/', 'Lodestone profile and duty grid (closes 3 June 2027)'],
+  ['Lalachievements', 'https://www.lalachievements.com/', 'Achievement rankings'],
+  ['Universalis', 'https://universalis.app/', 'Market board prices'],
+  ['Garland Tools', 'https://www.garlandtools.org/', 'Database and gathering timers'],
+  ['Carbuncle Plushy fish tracker', 'https://ff14fish.carbuncleplushy.com/', 'Fish windows'],
+  ['Icy Veins', 'https://www.icy-veins.com/ffxiv/', 'Guides and patch news'],
+  ['FFXIV wiki', 'https://ffxiv.consolegameswiki.com/', 'Game reference']
+];
+function elsewhereHTML(){
+  return `<div class="out">${ELSEWHERE_LINKS.map(([n, url, what]) =>
+    `<a href="${url}" target="_blank" rel="noopener"><b>${esc(n)}</b><span>${esc(what)}</span><code>${esc(url.replace(/^https:\/\/(www\.)?/, '').replace(/\/$/, ''))}</code></a>`).join('')}</div>`;
+}
+
 /* ---------- rail ----------
-   The sections are the old tabs. They moved from a bar above the page to a
-   pinned column on the left, so reaching one is a click from anywhere rather
-   than a scroll back to the top. The panels themselves are untouched. */
+   The sections are the old tabs. They are no longer listed in the rail; the
+   areas above group them. RAIL_SECTIONS stays as the list of panels, which
+   renderChar() walks to settle every panel's frames. */
 const RAIL_SECTIONS = [
   {key:'overview',  label:'Overview',  group:'Progress',    ico:'◔'},
   {key:'routines',  label:'Routines',  group:'Progress',    ico:'↻', count:visibleRoutineCount},
   {key:'jobs',      label:'Jobs',      group:'Progress',    ico:'⚔', count:visibleJobCount},
   {key:'cosmic',    label:'Cosmic',    group:'Progress',    ico:'✧', count:c=>Object.keys((c.cosmicTools||{}).jobs||{}).length},
+  {key:'journey',   label:'Journey',   group:'Progress',    ico:'⌖'},
+  {key:'collections', label:'Collections', group:'Collections', ico:'❖', count:c=>hasCollections(c) ? ownedSet(c,'mounts').size + ownedSet(c,'minions').size : ''},
   {key:'societies', label:'Societies', group:'Collections', ico:'⚬', count:()=>ALLIED_SOCIETIES.length},
   {key:'hunts',     label:'Hunts',     group:'Collections', ico:'✦', count:c=>Object.keys(c.hunts||{}).length},
   {key:'mentor',    label:'Mentor',    group:'Collections', ico:'✚'},
-  {key:'notes',     label:'Notes',     group:'Personal',    ico:'✎'}
+  {key:'notes',     label:'Notes',     group:'Personal',    ico:'✎'},
+  {key:'events',    label:'Events',    group:'Personal',    ico:'✶'},
+  {key:'elsewhere', label:'Elsewhere', group:'Personal',    ico:'↗'}
 ];
 /* Counts use the same filters the panels use, so the number beside a section
    is the number of rows that section will actually draw. */
@@ -2443,28 +2745,20 @@ function renderRail(){
   const box = document.getElementById('rail-nav');
   if(!box || !DATA) return;
   const c = getChar(DATA.activeId);
-  const current = activeTab(DATA.activeId);
-  let html = '', lastGroup = null;
-  RAIL_SECTIONS.forEach(s=>{
-    if(s.group !== lastGroup){ html += `<div class="rail-group">${esc(s.group)}</div>`; lastGroup = s.group; }
-    let n = '';
-    try{ n = (s.count && c) ? s.count(c) : ''; }catch(e){ n = ''; }
-    html += `<div class="rail-item${(s.key===current && !globalPageOpen())?' active':''}" title="${esc(s.label)}"`
-         +  ` onclick="goSection('${s.key}')">`
-         +  `<span class="ico">${s.ico}</span><span class="label">${esc(s.label)}</span>`
-         +  (n !== '' ? `<span class="n">${n}</span>` : '')
-         +  `</div>`;
-  });
-  html += `<div class="rail-group">Global</div>`
-       + `<div class="rail-item${toolsOpen()?' active':''}" title="Backup and import"`
-       + ` onclick="openTools()"><span class="ico">⭳</span>`
-       + `<span class="label">Backup &amp; import</span></div>`;
-  box.innerHTML = html;
+  const current = globalPageOpen() ? null : activeArea(DATA.activeId).key;
+  box.innerHTML = AREAS.map(a => {
+    let m = null;
+    try{ m = (a.meter && c) ? a.meter(c) : null; }catch(e){ m = null; }
+    return `<button type="button" class="area${a.key === current ? ' on' : ''}" title="${esc(a.label)}" data-short="${esc(a.label.slice(0, 2))}" onclick="goArea('${a.key}')">`
+         + `<span class="lbl">${esc(a.label)}</span><span class="pct">${m === null ? '' : m + '%'}</span>`
+         + (m === null ? '' : `<span class="meter"><i style="width:${m}%"></i></span>`)
+         + `</button>`;
+  }).join('');
+  renderCharBlock();
 }
 function goSection(key){
-  if(globalPageOpen()) showGlobalPage(null);
-  switchTab(DATA.activeId, key);
-  window.scrollTo(0,0);
+  const a = AREAS.find(x => { try{ return x.frames(getChar(DATA.activeId)).some(f => f.tab === key); }catch(e){ return false; } });
+  if(a) goArea(a.key);
 }
 
 /* ---------- frames ----------
@@ -2517,6 +2811,13 @@ function framesFor(section, c){
         ELITE_MARKS.map(([exp, marks]) => ({k:frameSlug(exp), l:exp, n:marks.length})));
     case 'mentor':
       return [{k:'battle', l:'Battle'}, {k:'trade', l:'Trade'}];
+    case 'collections':
+      return [{k:'overview', l:'Overview'}].concat(COLLECTION_KINDS.map(k => ({k:frameSlug(k.key), l:k.label,
+        n: hasCollections(c) ? ownedSet(c, k.key).size : null})));
+    case 'journey':
+      return [{k:'questlines', l:'Questlines'}, {k:'relics', l:'Relics'}, {k:'seasonal', l:'Seasonal'},
+              {k:'duties', l:'Duties', n: hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null},
+              {k:'exploration', l:'Exploration'}];
     case 'notes':
       return [{k:'trackers', l:'Trackers'}, {k:'notes', l:'Notes'}];
   }
@@ -2531,6 +2832,7 @@ function activeFrame(cid, section){
   if(!list.length) return null;
   DATA.ui.frames = DATA.ui.frames || {};
   const saved = (DATA.ui.frames[cid] || {})[section];
+  if(saved === '*') return '*';
   return list.some(f => f.k === saved) ? saved : list[0].k;
 }
 function goFrame(key){
@@ -2549,12 +2851,18 @@ function applyFrames(cid, section){
   const frame = activeFrame(cid, section);
   panel.querySelectorAll('[data-frame]').forEach(el=>{
     const keys = String(el.dataset.frame).split(/\s+/);
-    el.classList.toggle('frame-on', frame !== null && keys.includes(frame));
+    el.classList.toggle('frame-on', frame === '*' || (frame !== null && keys.includes(frame)));
   });
 }
 function syncPaneTopHeight(){
   const top = document.querySelector('.pane-top');
   if(top) document.documentElement.style.setProperty('--pane-top-h', top.offsetHeight + 'px');
+}
+/* The site bar is sticky above the rail and the pane, so both pin below it.
+   Measured, because the bar wraps to two lines in a narrow window. */
+function syncSitebarHeight(){
+  const bar = document.querySelector('.sitebar');
+  if(bar) document.documentElement.style.setProperty('--sitebar-h', bar.offsetHeight + 'px');
 }
 window.addEventListener('resize', syncPaneTopHeight);
 
@@ -2562,14 +2870,15 @@ function renderFrameRow(){
   const row = document.getElementById('frame-row');
   if(!row || !DATA) return;
   if(globalPageOpen()){ row.innerHTML = ''; syncPaneTopHeight(); return; }
-  const cid = DATA.activeId, section = activeTab(cid);
-  const list = framesFor(section, getChar(cid));
-  if(list.length < 2){ row.innerHTML = ''; syncPaneTopHeight(); return; }
-  const current = activeFrame(cid, section);
-  row.innerHTML = list.map(f =>
-    `<button class="tab-btn${f.k===current?' active':''}" onclick="goFrame('${f.k}')">${esc(f.l)}${
-      f.n != null ? ` <span style="opacity:.55">${f.n}</span>` : ''}</button>`).join('');
-  applyFrames(cid, section);
+  const cid = DATA.activeId;
+  const list = areaFrames(cid);
+  const current = activeAreaFrame(cid);
+  row.innerHTML = list.map(f => {
+    const id = areaFrameId(f), on = current && id === areaFrameId(current);
+    return `<button type="button" role="tab" aria-selected="${on}" class="frame-btn${on ? ' on' : ''}" onclick="goAreaFrame('${id}')">${esc(f.l)}${
+      f.n != null && f.n !== '' ? ` <span class="frame-n">${f.n}</span>` : ''}</button>`;
+  }).join('');
+  if(current) applyFrames(cid, current.tab);
   syncPaneTopHeight();
 }
 
@@ -2716,6 +3025,7 @@ function restartFootTimer(){
   footTimer = setInterval(()=>{ if(!footHeld) showFoot(footIndex + 1); }, FOOT_PERIOD_MS);
 }
 function initFootSlot(){
+  addEventSlides();
   const items = footItems();
   const dots = document.getElementById('foot-dots');
   if(dots){
@@ -2733,7 +3043,8 @@ function initFootSlot(){
   restartFootTimer();
   updateExpacBar();
   updateResetBar();
-  setInterval(()=>{ updateExpacBar(); updateResetBar(); }, 1000);
+  updateEventSlides();
+  setInterval(()=>{ updateExpacBar(); updateResetBar(); updateEventSlides(); }, 1000);
 }
 
 /* ---------- theme ---------- */
@@ -2756,6 +3067,8 @@ function applyTheme(){
   document.querySelectorAll('.theme-switch button').forEach(b=>{
     b.classList.toggle('active', b.dataset.theme === theme);
   });
+  const sel = document.getElementById('theme-sel');
+  if(sel) sel.value = theme;
 }
 
 function applyTab(cid, tab){
@@ -4589,6 +4902,9 @@ function renderChar(cid){
   renderSocieties(cid);
   renderHunts(cid);
   renderCosmic(cid);
+  renderCollections(cid);
+  renderJourney(cid);
+  renderEvents(cid);
   renderRedAlerts(cid);
   renderRoutines(cid);
   renderCustom(cid);
@@ -4597,6 +4913,7 @@ function renderChar(cid){
   // Every renderer above rewrites innerHTML, which takes the frame classes
   // with it. Settle them again for each section of this character.
   RAIL_SECTIONS.forEach(s => applyFrames(cid, s.key));
+  if(DATA.activeId === cid) renderNav();
 }
 function onNameInput(cid){
   collectAllInputs();
@@ -5038,6 +5355,11 @@ function computeTmDiffHTML(p, c){
       const storedOverall = c.quests.overall||0;
       if(projOverall !== storedOverall) rows.push(['Overall quests', storedOverall, projOverall]);
     }
+    if(Array.isArray(p.quests.byExp)){
+      const fmtExp = a => Array.isArray(a) ? a.map(r => Array.isArray(r) && r[1] ? Math.round(r[0] / r[1] * 100) + '%' : '—').join(' · ') : '—';
+      const from = fmtExp(c.questsByExp), to = fmtExp(p.quests.byExp);
+      if(from !== to) rows.push(['Route line (ARR → DT)', from, to]);
+    }
   }
   tmReadCountChanges(p, c).forEach(({key,label,entry,countChanged})=>{
     const shown = n => n + (entry.exact === false ? '+' : '');
@@ -5058,6 +5380,8 @@ function computeTmDiffHTML(p, c){
     const before = tmTickedCount(c);
     rows.push(['Job quest checklist', `${before} ticked`, `${before + classTicks.length} ticked`]);
   }
+  // Collections, quests done, duties and exploration: one row per list whose size changed.
+  tmCollectionsDiffRows(p, c).forEach(row => rows.push(row));
   if(!rows.length) return '<div class="tm-diff-row"><span class="tm-diff-label">No changes — this character already matches the export.</span></div>';
   return rows.map(([label,from,to])=>
     `<div class="tm-diff-row"><span class="tm-diff-label">${esc(label)}</span><span class="tm-diff-change">${esc(String(from))}<span class="tm-diff-arrow">→</span>${esc(String(to))}</span></div>`
@@ -5132,6 +5456,10 @@ function applyTmImport(){
         c.quests[key] = p.quests[key];
     });
     c.quests.overall = QUEST_SUBS.reduce((sum,key)=>sum+(c.quests[key]||0), 0);
+    // [done, total] per expansion for the route line. Replaced whole: totals grow
+    // with each patch, so the newest reading is the right one.
+    if(Array.isArray(p.quests.byExp) && p.quests.byExp.every(r => Array.isArray(r) && r.length === 2 && r.every(Number.isFinite)))
+      c.questsByExp = p.quests.byExp.map(r => r.slice());
   }
 
   // Allied societies. Matched on the game's row id rather than the name, and only
@@ -5184,6 +5512,9 @@ function applyTmImport(){
     c.jobQuestsDone[key][name] = true;
   });
 
+  // The collections payload, alone or nested in the full export (journey.js).
+  applyTmCollections(p, c);
+
   c.tmSyncedAt = p.exported || new Date().toISOString();
   c.tmSyncedVersion = p.version || null;
 
@@ -5216,5 +5547,7 @@ function applyTmImport(){
   renderSwitcher();
   updateSoundToggleUI();
   initFootSlot();
-  setInterval(()=>{ DATA.chars.forEach(c=>refreshRoutines(c.id)); checkResetSounds(); }, 30000);
+  setInterval(()=>{ DATA.chars.forEach(c=>{ refreshRoutines(c.id); renderEvents(c.id); }); checkResetSounds(); }, 30000);
+  window.addEventListener('resize', syncSitebarHeight);
+  syncSitebarHeight();
 })();

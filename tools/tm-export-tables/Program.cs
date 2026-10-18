@@ -26,6 +26,65 @@ foreach (var quest in data.GetExcelSheet<Quest>()!)
   if (section == "Class & Job Quests") quests[quest.RowId & 0xFFFF] = quest.Name.ToString();
 }
 
+// Questline genres -> short quest ids, for the collections export's questsDone. Every
+// questline the Ledger shows is one of the game's own journal genres, so the reader
+// needs no hand-kept lists: side stories, Hildibrand, raid stories (Chronicles of a New
+// Era), relic chains (Weapon Enhancement), Records of Unusual Endeavors, the crafter and
+// gatherer hubs, and each seasonal event. Location sidequests are left out on purpose.
+string[] questlineCategories =
+[
+  "Side Story Quests", "Hildibrand Sidequests", "Chronicles of Light", "Records of Unusual Endeavors",
+  "Weapon Enhancement Sidequests", "Seasonal Events", "Special Quests",
+  "Crystalline Mean Quests", "Studium Quests", "Wachumeqimeqi Quests", "YoRHa: Dark Apocalypse"
+];
+var genres = new SortedDictionary<string, (string Category, string Section, List<uint> Ids, uint Festival)>(StringComparer.Ordinal);
+foreach (var quest in data.GetExcelSheet<Quest>()!)
+{
+  if (quest.Name.IsEmpty) continue;
+  var genre = quest.JournalGenre.ValueNullable;
+  var category = genre?.JournalCategory.ValueNullable;
+  string section = category?.JournalSection.ValueNullable?.Name.ToString() ?? "";
+  string categoryName = category?.Name.ToString() ?? "";
+  bool wanted = questlineCategories.Contains(categoryName) || section == "Chronicles of a New Era";
+  if (!wanted || genre is null) continue;
+
+  string key = genre.Value.Name.ToString();
+  if (!genres.TryGetValue(key, out var entry))
+    genres[key] = entry = (categoryName, section, [], 0);
+  entry.Ids.Add(quest.RowId & 0xFFFF);
+}
+var genreOut = genres.ToDictionary(g => g.Key, g => new { category = g.Value.Category, section = g.Value.Section, ids = g.Value.Ids.Order().ToArray() });
+
+// Duties -> [name, content type, expansion (0 = ARR), level], keyed by InstanceContent id,
+// which is what the collections export's dutiesDone sends.
+var duties = new SortedDictionary<uint, object[]>();
+foreach (var cfc in data.GetExcelSheet<ContentFinderCondition>()!)
+{
+  if (cfc.ContentLinkType != 1 || cfc.Content.RowId == 0 || cfc.Name.IsEmpty) continue;
+  string name = cfc.Name.ToString();
+  name = name.Length > 0 ? char.ToUpperInvariant(name[0]) + name[1..] : name;   // the sheet lowercases "the"
+  duties.TryAdd(cfc.Content.RowId, [name, cfc.ContentType.ValueNullable?.Name.ToString() ?? "", cfc.RequiredExVersion.RowId, cfc.ClassJobLevelRequired]);
+}
+
+// World lists: totals the reader divides by, and the names of current zones.
+var currentZones = data.GetExcelSheet<AetherCurrentCompFlgSet>()!
+  .Where(r => r.RowId > 0 && r.Territory.RowId > 0)
+  .ToDictionary(r => r.RowId.ToString(), r => r.Territory.ValueNullable?.PlaceName.ValueNullable?.Name.ToString() ?? "");
+var porterIds = data.GetExcelSheet<ChocoboTaxiStand>()!
+  .Where(r => r.RowId > 0 && !r.PlaceName.IsEmpty)
+  .Select(r => (r.RowId, Name: r.PlaceName.ToString()))
+  // Not stops: an unused row named "（空き）" and the two event-only Reginald Eventman stands.
+  .Where(r => !r.Name.StartsWith("（") && !r.Name.StartsWith("Reginald Eventman"))
+  .Select(r => r.RowId).ToArray();
+var world = new
+{
+  sightseeing = data.GetExcelSheet<Adventure>()!.Count(r => !r.Name.IsEmpty),
+  currents = data.GetExcelSheet<AetherCurrent>()!.Count(r => r.RowId > 0),
+  zones = currentZones,
+  aetherytes = data.GetExcelSheet<Aetheryte>()!.Count(r => r.RowId > 0 && r.IsAetheryte && !r.Invisible && r.PlaceName.RowId > 0),
+  porters = porterIds
+};
+
 // Abbreviation -> the name the plugin used as a key in fmt 1 ("White Mage").
 var jobs = new SortedDictionary<string, string>(StringComparer.Ordinal);
 foreach (var job in data.GetExcelSheet<ClassJob>()!)
@@ -43,5 +102,11 @@ writer.WriteLine("// Short quest id -> title, Class & Job Quests only.");
 writer.WriteLine($"const TM_QUEST_TITLES = {JsonSerializer.Serialize(quests, options)};");
 writer.WriteLine("// Job abbreviation -> job name as fmt 1 exports keyed it.");
 writer.WriteLine($"const TM_JOB_NAMES = {JsonSerializer.Serialize(jobs, options)};");
+writer.WriteLine("// Questline genre -> {category, section, ids}: short quest ids, for the collections export's questsDone.");
+writer.WriteLine($"const TM_QUEST_GENRES = {JsonSerializer.Serialize(genreOut, options)};");
+writer.WriteLine("// InstanceContent id -> [name, content type, expansion (0 = ARR), level], for dutiesDone.");
+writer.WriteLine($"const TM_DUTIES = {JsonSerializer.Serialize(duties, options)};");
+writer.WriteLine("// World list totals, current zone names, and the real porter stops (unused and event rows left out).");
+writer.WriteLine($"const TM_WORLD = {JsonSerializer.Serialize(world, options)};");
 
-Console.WriteLine($"{quests.Count} quests, {jobs.Count} jobs -> {Path.GetFullPath(output)}");
+Console.WriteLine($"{quests.Count} quests, {jobs.Count} jobs, {genreOut.Count} questline genres, {duties.Count} duties, {porterIds.Length} porter stops -> {Path.GetFullPath(output)}");
