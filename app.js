@@ -2475,7 +2475,8 @@ const AREAS = [
   {key:'world', label:'World', splits:true, frames:() => [
       {tab:'societies', frame:'@exp', l:'Allied societies'},
       {tab:'hunts', frame:'@exp', l:'Hunts'},
-      {tab:'journey', frame:'exploration', l:'Exploration'}]},
+      {tab:'journey', frame:'exploration', l:'Exploration'},
+      {tab:'journey', frame:'mountspeed', l:'Mount speed'}]},
   {key:'elsewhere', label:'Elsewhere', frames:() => [{tab:'elsewhere', frame:'*', l:'Other sites'}]}
 ];
 function areaFrameId(f){ return f.tab + ':' + f.frame; }
@@ -2817,7 +2818,7 @@ function framesFor(section, c){
     case 'journey':
       return [{k:'questlines', l:'Questlines'}, {k:'relics', l:'Relics'}, {k:'seasonal', l:'Seasonal'},
               {k:'duties', l:'Duties', n: hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null},
-              {k:'exploration', l:'Exploration'}];
+              {k:'exploration', l:'Exploration'}, {k:'mountspeed', l:'Mount speed'}];
     case 'notes':
       return [{k:'trackers', l:'Trackers'}, {k:'notes', l:'Notes'}];
   }

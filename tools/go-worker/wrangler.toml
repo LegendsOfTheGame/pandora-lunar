@@ -1,0 +1,10 @@
+name = "ledger-go"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+# Fill database_id with the id that "npx wrangler d1 create ledger-go" prints.
+[[d1_databases]]
+binding = "DB"
+database_name = "ledger-go"
+database_id = ""

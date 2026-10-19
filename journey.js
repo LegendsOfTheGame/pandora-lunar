@@ -40,7 +40,10 @@ function applyTmCollections(p, c){
   if(!src) return false;
   const lists = {};
   Object.keys(src).forEach(k => { if(Array.isArray(src[k])) lists[k] = src[k].slice(); });
-  c.tmCollections = { asOf: p.exported || new Date().toISOString(), game: src.game || null, lists };
+  c.tmCollections = { asOf: p.exported || new Date().toISOString(), game: src.game || null, lists,
+    // TerritoryType id -> speed level, zones above 0 only; and bicolor gemstones held.
+    mountSpeed: src.mountSpeed && typeof src.mountSpeed === 'object' ? Object.assign({}, src.mountSpeed) : null,
+    gemstones: Number.isFinite(src.gemstones) ? src.gemstones : null };
   return true;
 }
 
@@ -59,6 +62,13 @@ function tmCollectionsDiffRows(p, c){
     if(before === src[k].length) return;
     rows.push([label[k] || k, before == null ? '—' : before, src[k].length]);
   });
+  if(src.mountSpeed && typeof src.mountSpeed === 'object'){
+    const atTop = speeds => speeds ? speedZones().filter(z => (speeds[z.id] || 0) >= z.top).length : null;
+    const before = atTop((c.tmCollections || {}).mountSpeed), after = atTop(src.mountSpeed);
+    if(before !== after) rows.push(['Zones at top mount speed', before == null ? '—' : before, after]);
+  }
+  if(Number.isFinite(src.gemstones) && src.gemstones !== (c.tmCollections || {}).gemstones)
+    rows.push(['Bicolor gemstones', (c.tmCollections || {}).gemstones ?? '—', src.gemstones]);
   return rows;
 }
 
@@ -130,10 +140,90 @@ function genreRows(c, filter){
     return {g, have, total: ids.length};
   }).sort((a, b) => (b.have > 0) - (a.have > 0) || a.g.localeCompare(b.g));
 }
-function genreListHTML(rows){
+/* Finished questlines are hidden unless the character asks for them, so the list
+   is what is left to do. The note under the list gives the count and the switch. */
+function genreListHTML(rows, c){
+  const done = rows.filter(r => r.total > 0 && r.have === r.total).length;
+  const shown = c.showDoneQuestlines ? rows : rows.filter(r => r.have !== r.total);
+  const note = done
+    ? `<div class="hidden-note"><span>${done} complete${c.showDoneQuestlines ? '' : ' &mdash; hidden'}</span><button class="link-btn" onclick="toggleDoneQuestlines('${c.id}')">${c.showDoneQuestlines ? 'hide them' : 'show them'}</button></div>`
+    : '';
+  return (shown.length ? listRowsHTML(shown) : '<div class="jr-note">Every questline here is complete.</div>') + note;
+}
+function toggleDoneQuestlines(cid){
+  const c = getChar(cid);
+  c.showDoneQuestlines = !c.showDoneQuestlines;
+  renderJourney(cid);
+  scheduleSave();
+}
+/* Each questline links to its FFXIV wiki page. The genre name is the page title for 79 of
+   the 82 genres (checked 18 October 2026 against the local wiki copy); the other three are
+   named here. A new genre from a patch links by its own name, which the wiki usually uses. */
+const WIKI_TITLE_FOR_GENRE = {
+  "Garlemald's Machinations": "Garlemald's Machinations Quests",
+  'Tales from the Calamity': 'Tales from the Calamity Quests',
+  'The Occult Crescent': 'Occult Crescent'
+};
+/* The click counter (tools/go-worker), which counts a click by page and day only and then
+   redirects to the wiki. Empty until the Worker is deployed: the links then go straight to
+   the wiki. When the DNS moves to Cloudflare this becomes https://go.legendmemoria.org. */
+const WIKI_GO_BASE = '';
+function wikiUrl(name){
+  const title = (WIKI_TITLE_FOR_GENRE[name] || name).replace(/ /g, '_');
+  return WIKI_GO_BASE
+    ? WIKI_GO_BASE + '/wiki/' + encodeURIComponent(title)
+    : 'https://ffxiv.consolegameswiki.com/mediawiki/index.php?title=' + encodeURIComponent(title);
+}
+function listRowsHTML(rows){
   return `<div class="jr-grid">${rows.map(r =>
-    `<div class="jr-row${r.have === r.total ? ' full' : ''}"><span>${esc(r.g)}</span><span class="jr-v">${r.have} / ${r.total}</span>
+    `<div class="jr-row${r.have === r.total ? ' full' : ''}"><a class="jr-link" href="${wikiUrl(r.g)}" target="_blank" rel="noopener noreferrer" title="Open the wiki page in a new tab">${esc(r.g)}</a><span class="jr-v">${r.have} / ${r.total}</span>
       <div class="jr-bar"><i style="width:${jrPct(r.have, r.total)}%"></i></div></div>`).join('')}</div>`;
+}
+
+/* ---- Mount speed ----
+   Every zone with a speed upgrade, in the order of the game's Mount Speed window
+   (TM_MOUNT_SPEED). One star for each level the character has, an empty star for each
+   level still to get. A zone with aetherytes and none attuned is "not reached", as the
+   game's window leaves it out; a zone with no aetheryte (Bozja, the Occult Crescent)
+   always shows its stars. */
+function speedZones(){
+  if(typeof TM_MOUNT_SPEED === 'undefined') return [];
+  return Object.keys(TM_MOUNT_SPEED).map(id => {
+    const [name, region, top, ex, order, aetherytes] = TM_MOUNT_SPEED[id];
+    return {id, name, region: region === '???' ? 'Other areas' : region, top, ex, order, aetherytes};
+  }).sort((a, b) => a.ex - b.ex || a.order - b.order);
+}
+function mountSpeedHTML(c){
+  const speeds = c.tmCollections.mountSpeed;
+  if(!speeds) return '<div class="jr-note">No mount speed yet. Import a newer Time Memoria export (Copy everything).</div>';
+  const attuned = ownedSet(c, 'aetherytes');
+  const zones = speedZones();
+  const reached = z => (speeds[z.id] || 0) > 0 || !z.aetherytes.length || z.aetherytes.some(a => attuned.has(a));
+  const shown = zones.filter(z => inRoute(z.ex));
+  const top = shown.filter(z => (speeds[z.id] || 0) >= z.top).length;
+  const gems = c.tmCollections.gemstones;
+
+  let html = `<div class="jr-grid">
+      <div class="jr-row"><span>Zones at top speed</span><span class="jr-v">${top} / ${shown.length}</span><div class="jr-bar"><i style="width:${jrPct(top, shown.length)}%"></i></div></div>
+      ${gems == null ? '' : `<div class="jr-row"><span>Bicolor gemstones</span><span class="jr-v">${gems.toLocaleString()} / 1,500</span><div class="jr-bar"><i style="width:${jrPct(gems, 1500)}%"></i></div></div>`}
+    </div>
+    <div class="jr-note">From Shadowbringers on, a zone's riding map is bought with bicolor gemstones from that zone's gemstone trader. In Endwalker and Dawntrail zones the map needs Shared FATE rank 2 in that zone.</div>`;
+  let lastEx = null, lastRegion = null;
+  shown.forEach(z => {
+    if(z.ex !== lastEx){
+      if(lastEx !== null) html += '</div>';
+      html += `<div class="subhead">${esc(EXPANSION_NAMES[z.ex] || 'Other')}</div><div class="ms-list">`;
+      lastEx = z.ex; lastRegion = null;
+    }
+    if(z.region !== lastRegion){ html += `<div class="ms-region">${esc(z.region)}</div>`; lastRegion = z.region; }
+    const have = speeds[z.id] || 0;
+    const stars = reached(z)
+      ? '<span class="ms-on">★</span>'.repeat(have) + '<span class="ms-off">☆</span>'.repeat(Math.max(0, z.top - have))
+      : '<span class="jr-note">not reached</span>';
+    html += `<div class="ms-row${have >= z.top ? ' full' : ''}"><span>${esc(z.name)}</span><span class="ms-stars" title="${have} of ${z.top}">${stars}</span></div>`;
+  });
+  if(lastEx !== null) html += '</div>';
+  return html;
 }
 
 function renderJourney(cid){
@@ -180,11 +270,14 @@ function renderJourney(cid){
     </div>
     <div class="subhead" style="margin-top:10px">Flying zones</div><div class="jr-duties">${zoneRows}</div>`;
 
+  const speedHTML = mountSpeedHTML(c);
+
   box.innerHTML = asOf
-    + `<div data-frame="questlines">${genreListHTML(questlines)}</div>`
-    + `<div data-frame="relics">${genreListHTML(relics)}</div>`
-    + `<div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div>${genreListHTML(seasonal)}</div>`
+    + `<div data-frame="questlines">${genreListHTML(questlines, c)}</div>`
+    + `<div data-frame="relics">${genreListHTML(relics, c)}</div>`
+    + `<div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div>${genreListHTML(seasonal, c)}</div>`
     + `<div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>${dutyHTML}</div>`
-    + `<div data-frame="exploration">${explore}</div>`;
+    + `<div data-frame="exploration">${explore}</div>`
+    + `<div data-frame="mountspeed">${speedHTML}</div>`;
   if(DATA.activeId === cid && activeTab(cid) === 'journey') applyFrames(cid, 'journey');
 }
