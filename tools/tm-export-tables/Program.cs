@@ -105,11 +105,18 @@ foreach (var zone in data.GetExcelSheet<TerritoryType>()!
            .OrderBy(t => t.MountSpeed.RowId))
 {
   var row = zone.MountSpeed.Value;
+  // Window order 0: not in the Mount Speed window. These are the Cosmic Exploration
+  // zones (whose level I and level II name the same quest) and Zirgorteh.
+  if (row.Unknown1 == 0) continue;
   uint first = row.Quest.RowId;
   if (first is > 0 and < 65536 && !seenLinks.Add(first)) continue;
   int top = (first != 0 ? 1 : 0) + (row.Unknown0 != 0 ? 1 : 0);
+  // Housing districts carry ExVersion 0 (Empyreum, Shirogane would sit under A Realm
+  // Reborn), so a zone unlocked by a quest takes that quest's expansion.
+  uint expansion = first >= 65536 && data.GetExcelSheet<Quest>()!.TryGetRow(first, out var unlock)
+    ? unlock.Expansion.RowId : zone.ExVersion.RowId;
   speedZones[zone.RowId] = [zone.PlaceName.Value.Name.ToString(), zone.PlaceNameRegion.ValueNullable?.Name.ToString() ?? "",
-    top, zone.ExVersion.RowId, row.Unknown1, aetherytesByZone.GetValueOrDefault(zone.RowId, [])];
+    top, expansion, row.Unknown1, aetherytesByZone.GetValueOrDefault(zone.RowId, [])];
 }
 
 // Abbreviation -> the name the plugin used as a key in fmt 1 ("White Mage").
