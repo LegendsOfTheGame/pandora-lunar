@@ -2117,11 +2117,35 @@ function renderCharBlock(){
     <select class="char-sel" aria-label="Character" onchange="onCharSelect(this)">${opts}</select>`;
   capNote.style.display = DATA.chars.length >= 3 ? '' : 'none';
 }
+function setMobileRailOpen(open){
+  const rail = document.getElementById('rail');
+  const toggle = document.getElementById('mobile-menu-toggle');
+  const backdrop = document.getElementById('rail-backdrop');
+  if(!rail || !toggle || !backdrop) return;
+  const wasOpen = rail.classList.contains('mobile-open');
+  const shouldOpen = typeof open === 'boolean' ? open : !wasOpen;
+  if(shouldOpen === wasOpen) return;
+  rail.classList.toggle('mobile-open', shouldOpen);
+  backdrop.hidden = !shouldOpen;
+  document.body.classList.toggle('mobile-menu-open', shouldOpen);
+  toggle.setAttribute('aria-expanded', String(shouldOpen));
+  toggle.setAttribute('aria-label', shouldOpen ? 'Close navigation' : 'Open navigation');
+  if(shouldOpen) rail.querySelector('.area')?.focus();
+  else toggle.focus({preventScroll:true});
+}
+function toggleMobileRail(){ setMobileRailOpen(); }
+window.matchMedia('(max-width:820px), (orientation:portrait)').addEventListener('change', event => {
+  if(!event.matches) setMobileRailOpen(false);
+});
+document.addEventListener('keydown', event => {
+  if(event.key === 'Escape') setMobileRailOpen(false);
+});
 function onCharSelect(sel){
   if(sel.value === '+add') addCharacter();
   else setActiveChar(sel.value);
 }
 function setActiveChar(cid){
+  setMobileRailOpen(false);
   collectAllInputs();
   DATA.activeId = cid;
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'page-'+cid));
@@ -2553,6 +2577,7 @@ function goArea(key){
   areaState(DATA.activeId).area = key;
   applyArea(DATA.activeId);
   renderNav();
+  setMobileRailOpen(false);
   window.scrollTo(0,0);
   scheduleSave();
 }
@@ -2619,7 +2644,7 @@ function renderRoute(){
       + ` <button type="button" onclick="pickStation(null)">Show all expansions</button>`
     : (area.splits ? 'All expansions &middot; pick a station to narrow this area'
                    : (open ? `Now boarding: <b>${esc(open.n)}</b>` : ''));
-  box.innerHTML = track + stations + `<div class="route-note">${note}</div>`;
+  box.innerHTML = `<div class="route-stations" tabindex="0" aria-label="Scroll expansion timeline">${track}${stations}</div><div class="route-note">${note}</div>`;
   renderStationCard(st);
 }
 function pickStation(i){

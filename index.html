@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Adventurer's Ledger &mdash; Pandora Lunar</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -12,6 +12,9 @@
      The site's own places. Studio and the Ledger are live today; the two
      challenge pages are not built yet. The theme applies to every page. -->
 <header class="sitebar">
+  <button type="button" class="mobile-menu-toggle" id="mobile-menu-toggle"
+    aria-label="Open navigation" aria-expanded="false" aria-controls="rail"
+    onclick="toggleMobileRail()">&#9776;</button>
   <span class="domain"><b>Adventurer's Ledger</b> &middot; Pandora Lunar</span>
   <nav aria-label="Site">
     <a href="https://legendmemoria.org/" target="_blank" rel="noopener" title="legendmemoria.org">Studio</a><a href="./" class="on" title="This page">Adventurer's Ledger</a><span class="soon" title="Not built yet">Lunatic Pandora</span><span class="soon" title="Not built yet">Challenges</span>
@@ -22,6 +25,8 @@
     </select>
   </div>
 </header>
+<button type="button" class="rail-backdrop" id="rail-backdrop"
+  aria-label="Close navigation" onclick="setMobileRailOpen(false)" hidden></button>
 
 <div class="shell">
 
@@ -192,7 +197,7 @@
 
       <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
       <div class="copyright">&copy; Kaye Sharpedge</div>
-      <div class="build-stamp">Last updated 19/10/2026 @ 02:10 UTC</div>
+      <div class="build-stamp">Last updated 20/10/2026 @ 23:00 UTC</div>
 
     </div>
   </main>

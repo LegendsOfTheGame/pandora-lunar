@@ -876,7 +876,7 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 /* Only on a row whose zone differs from the heading, which happens across a
    daylight saving change. */
 .done-item .dn-zone{font-size:10px;color:var(--text-faint);margin-left:5px}
-@media (max-width:820px){
+@media (max-width:600px){
   .done-head{display:none}
   .done-item{grid-template-columns:1fr 100px;gap:4px 10px;font-size:12px}
   .done-item .dn-frame{grid-row:2}
@@ -999,10 +999,10 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .rail.collapsed .rail-icons{flex-direction:column;padding:6px 4px}
 .rail.collapsed .rail-icons .spacer{margin-left:0}
 
-/* ---- narrow windows ----
+/* ---- phone layout ----
    Below this width a 224px rail leaves too little for the pane, so the rail
    becomes a bar across the top and the page runs as one column again. */
-@media (max-width:820px){
+@media (max-width:600px){
   .shell{display:block}
   .rail{
     position:static;width:auto;flex-basis:auto;height:auto;
@@ -1076,6 +1076,13 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .sitebar nav .soon{font-size:12.5px;padding:4px 10px;color:var(--text-faint);cursor:help}
 .sitebar nav .soon::after{content:" · soon";font-size:10.5px}
 .sitebar .who{margin-left:auto}
+.mobile-menu-toggle{
+  display:none;align-items:center;justify-content:center;
+  width:40px;height:40px;padding:0;border:1px solid var(--line);
+  border-radius:5px;background:transparent;color:var(--text);
+  cursor:pointer;font:20px/1 var(--font-body);
+}
+.mobile-menu-toggle:hover{border-color:var(--gold-dim);color:var(--gold)}
 .sitebar select,.char-sel{
   font:12.5px var(--font-body);background:var(--ink);color:var(--text);
   border:1px solid var(--line);border-radius:5px;padding:4px 8px;
@@ -1111,12 +1118,17 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 /* ---- route line ----
    The track shares the stations' grid row and splits into 14 half-columns,
    so segment i runs from the centre of station i to the centre of i+1. */
-.route{
+.route{border-bottom:1px solid var(--line-soft)}
+.route:empty{display:none}
+.route-stations{
   position:relative;display:grid;grid-template-columns:repeat(7,minmax(68px,1fr));
-  padding:14px 26px 8px;border-bottom:1px solid var(--line-soft);overflow-x:auto;
+  padding:14px 26px 8px;overflow-x:auto;
   scrollbar-width:thin;scrollbar-color:var(--line) transparent;
 }
-.route:empty{display:none}
+.route-stations:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+.route-stations::-webkit-scrollbar{height:6px}
+.route-stations::-webkit-scrollbar-track{background:transparent}
+.route-stations::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
 .route .track{grid-row:1;grid-column:1/-1;display:grid;grid-template-columns:repeat(14,minmax(0,1fr));align-self:start;margin-top:8px;height:3px;pointer-events:none}
 .route .seg{height:3px;background:var(--line);overflow:hidden}
 .route .seg i{display:block;height:100%;background:var(--teal)}
@@ -1134,7 +1146,7 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .route .stn.sel .nm{color:var(--gold)}
 .route .stn.sel .dot{outline:2px solid var(--gold-dim);outline-offset:3px}
 .route .stn.locked .nm,.route .stn.locked .pc{color:var(--text-faint)}
-.route-note{grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-dim);padding-top:6px}
+.route-note{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--text-dim);padding:6px 26px 8px}
 .route-note button{border:none;background:transparent;padding:0;cursor:pointer;color:var(--teal);font:12px var(--font-body)}
 .station-card:empty{display:none}
 
@@ -1178,7 +1190,7 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   .rail .areas{flex-direction:row;flex-wrap:wrap;gap:4px}
   .areas .area{grid-template-columns:auto auto;padding:6px 10px}
   .areas .meter{display:none}
-  .route{padding:12px 14px 8px}
+  .route-stations{padding:12px 14px 8px}
   .pane-top{padding:8px 14px 0}
 }
 
@@ -1214,3 +1226,154 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .ms-on{color:var(--gold)}
 .ms-off{color:var(--text-faint)}
 .ms-row .jr-note{margin:0;font-size:11.5px}
+
+/* At narrow widths or in portrait orientation, move the rail into a drawer so
+   the timeline and content keep the full viewport width. */
+@media (max-width:820px), (orientation:portrait){
+  :root{--zoom:1}
+  body{zoom:1}
+  .shell,.rail,.pane,.pane-body,.page,.section{min-width:0}
+  .sitebar{
+    position:sticky;top:0;z-index:50;margin:0 -20px;
+    display:grid;grid-template-columns:40px minmax(0,1fr) auto;
+    gap:8px 12px;align-items:center;
+  }
+  .mobile-menu-toggle{display:inline-flex;grid-column:1;grid-row:1}
+  .sitebar .domain{grid-column:2;grid-row:1;min-width:0;line-height:1.3}
+  .sitebar .who{grid-column:3;grid-row:1;margin-left:0}
+  .sitebar select{min-height:40px}
+  .sitebar nav{
+    grid-column:2/-1;grid-row:2;display:flex;flex-wrap:wrap;gap:4px;
+  }
+  .sitebar nav a,.sitebar nav .soon{min-height:40px;padding:7px 10px}
+  .rail{
+    position:fixed;inset:var(--sitebar-h,0px) auto env(safe-area-inset-bottom) 0;
+    display:flex;width:min(300px,calc(100vw - 52px));height:auto;
+    flex:0 0 auto;z-index:60;overflow:hidden;
+    border-right:1px solid var(--line);border-bottom:none;
+    box-shadow:4px 0 18px rgba(0,0,0,.35);
+    transform:translateX(-101%);visibility:hidden;pointer-events:none;
+    transition:transform .18s ease;
+  }
+  .rail.mobile-open{transform:translateX(0);visibility:visible;pointer-events:auto}
+  .rail-scroll{overflow-y:auto;min-height:0}
+  .rail .areas{display:flex;flex-direction:column;flex-wrap:nowrap;gap:2px;padding:6px 8px}
+  .rail #rail-nav{display:flex;flex-direction:column;flex-wrap:nowrap;gap:2px;padding:6px 8px}
+  .rail .rail-item{width:100%;min-height:44px;border-left:2px solid transparent;border-bottom:none}
+  .rail-item.active{border-left-color:var(--accent,var(--gold));border-bottom-color:transparent}
+  .areas .meter{display:block}
+  .areas .area{min-height:44px;padding:8px 10px}
+  .rail-foot{display:block;flex:0 0 auto}
+  .rail #ico-collapse{display:none}
+  .rail.collapsed{width:min(300px,calc(100vw - 52px));flex-basis:auto}
+  .rail.collapsed .switcher .char-sub,
+  .rail.collapsed .switcher .char-sel,
+  .rail.collapsed .areas .lbl,
+  .rail.collapsed .areas .pct{display:block}
+  .rail.collapsed .switcher{padding:14px 16px 12px;text-align:left}
+  .rail.collapsed .switcher .char-name{font-size:18px}
+  .rail.collapsed .areas{padding:6px 8px}
+  .rail.collapsed .areas .area{grid-template-columns:1fr auto;justify-items:stretch;padding:8px 10px}
+  .rail.collapsed .areas .area::before{content:none}
+  .rail-backdrop{
+    position:fixed;inset:var(--sitebar-h,0px) 0 env(safe-area-inset-bottom);
+    z-index:55;border:0;padding:0;background:rgba(5,7,12,.62);cursor:pointer;
+  }
+  .rail-backdrop[hidden]{display:none}
+  body.mobile-menu-open{overflow:hidden}
+  .pane{flex:1 1 0}
+  .pane-top{top:var(--sitebar-h,0px);padding-left:14px;padding-right:14px}
+  .pane-body{padding-left:14px;padding-right:14px}
+  .pane-body .char-header{top:calc(var(--sitebar-h,0px) + var(--pane-top-h,48px) - 1px)}
+  .route-stations{
+    grid-template-columns:repeat(7,minmax(88px,1fr));
+    padding-left:14px;padding-right:14px;
+    scroll-snap-type:x proximity;
+  }
+  .route .stn{scroll-snap-align:center;min-height:48px}
+  .route-note{padding-left:14px;padding-right:14px}
+  .frame-btn{min-height:40px;padding-left:9px;padding-right:9px}
+  .section{padding:16px}
+  .section h2{gap:8px;flex-wrap:wrap}
+  .section h2 .hint-group{flex-wrap:wrap}
+  .char-header{align-items:flex-start}
+  .char-name-group{min-width:0;flex-wrap:wrap}
+  .routine-item:not(.hunt-compact){
+    display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+    padding:10px 0;
+  }
+  .routine-item:not(.hunt-compact) > input[type=checkbox]{width:20px;height:20px;flex:0 0 20px}
+  .routine-item:not(.hunt-compact) .routine-label{flex:1 1 calc(100% - 36px);min-width:0}
+  .routine-item:not(.hunt-compact) select{flex:1 1 150px;min-width:0;min-height:40px}
+  .routine-item:not(.hunt-compact) .routine-req{flex:0 1 64px;min-height:40px}
+  .routine-item:not(.hunt-compact) .routine-due{flex:1 1 74px;text-align:left}
+  .routine-item:not(.hunt-compact) .remove-btn,
+  .routine-item:not(.hunt-compact) .hide-btn{width:36px;height:36px;flex:0 0 36px}
+}
+
+@media (max-width:600px){
+  body{
+    padding:0 max(12px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  }
+  .sitebar{
+    grid-template-columns:40px minmax(0,1fr) auto;
+    gap:8px 10px;padding:8px 12px;margin:0 -12px;
+  }
+  .sitebar .domain{grid-column:2;grid-row:1;text-align:center}
+  .sitebar .who{grid-column:3;grid-row:1}
+  .sitebar select{min-height:40px}
+  .sitebar nav{
+    grid-column:1/-1;grid-row:2;
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;
+  }
+  .sitebar nav a,.sitebar nav .soon{
+    display:flex;align-items:center;justify-content:center;
+    min-height:40px;padding:6px;text-align:center;line-height:1.25;
+  }
+  .rail .switcher{padding:12px 12px 10px}
+  .rail .char-sel{min-height:42px}
+  .rail-foot{
+    display:block;padding:0 10px 8px;
+  }
+  .foot-slot{min-width:0;min-height:64px;border:1px solid var(--line-soft);border-radius:5px}
+  .rail-foot .ocean-bar,.reset-bar,.expac-bar{padding:8px 10px}
+  .rail-imports{padding:0}
+  .rail-imports button{min-height:40px}
+  .rail-icons{justify-content:center;gap:8px;padding:0}
+  .rail-icons button,.rail-icons .rail-kofi{width:40px;height:40px}
+  .pane-top{position:sticky;top:var(--sitebar-h,0px);padding:6px 10px 0}
+  .pane-body{padding:12px 10px 0}
+  .route-stations{
+    grid-template-columns:repeat(7,minmax(96px,1fr));
+    padding:12px 10px 8px;scroll-snap-type:x mandatory;
+    scrollbar-width:thin;
+  }
+  .route .stn{min-height:58px}
+  .route .stn .nm{font-size:12px}
+  .route-note{padding:7px 10px 9px;line-height:1.4}
+  .frame-row{gap:2px}
+  .frame-btn{min-height:42px;padding:8px 9px;font-size:12.5px}
+  .pane-body .char-header{
+    position:static;top:auto;display:flex;flex-direction:column;
+    align-items:stretch;gap:8px;margin:0 0 12px;padding:10px 0;
+  }
+  .char-name-group{width:100%;gap:8px}
+  .char-name-input{flex:1 1 100%;width:100%;max-width:none;min-width:0;font-size:20px}
+  .patch-box{min-height:40px}
+  .patch-input{min-height:40px}
+  .remove-char-btn{min-height:40px;align-self:flex-start}
+  .section,.instructions-panel,.tm-import-panel{padding:14px;border-radius:7px}
+  .section h2{align-items:flex-start;line-height:1.35}
+  .section h2 .hint-group{gap:6px}
+  .tabbar{gap:4px;margin-bottom:12px}
+  .tab-btn{min-height:42px;padding:8px 10px;font-size:12.5px}
+  .routine-item.hunt-compact{grid-template-columns:24px minmax(0,1fr) 72px;gap:6px}
+  .hunt-ticks{gap:5px}
+  .hunt-tick{min-height:36px}
+  .custom-row{grid-template-columns:minmax(0,1fr) 72px auto 72px 54px 36px;gap:5px}
+  .custom-row input,.custom-row select{min-width:0}
+  .server-picker{gap:6px}
+  .server-picker select{max-width:100%;min-height:40px}
+  .two-col{grid-template-columns:minmax(0,1fr)}
+  .quest-grid{grid-template-columns:minmax(0,1.2fr) minmax(46px,.8fr) minmax(40px,.6fr) minmax(48px,.7fr);gap:5px;font-size:11.5px}
+}
