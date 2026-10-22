@@ -2516,13 +2516,20 @@ function areaFrameId(f){ return f.tab + ':' + f.frame; }
    use count: ticked at least once, and last ticked within 30 days, so a routine
    never started or given up does not hold the figure down. A stop-gap, from a
    player's suggestion on 22 Oct 2026, until Evercold's reset changes are known. */
-const ACTIVE_WINDOW_MS = 30 * DAY_MS;
+/* The 30 days are game days: the window starts at the daily reset (15:00 UTC)
+   30 resets back, so a routine leaves the figures at a reset, the way the game
+   counts days, and never in the middle of one (user's call, 22 Oct 2026). */
+const ACTIVE_RESETS = 30;
+function activeWindowStart(now){
+  return lastResetInstant(schedById('daily15'), now) - (ACTIVE_RESETS - 1) * DAY_MS;
+}
 function sectionMeter(c, sections){
   const now = new Date();
+  const since = activeWindowStart(now);
   const rows = (c.routines||[]).filter(r =>
     (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden)
     && sections.includes(routineSection(r))
-    && r.lastDone && now.getTime() - r.lastDone <= ACTIVE_WINDOW_MS);
+    && r.lastDone && r.lastDone >= since);
   return rows.length ? Math.round(rows.filter(r => isRoutineDone(r, now)).length / rows.length * 100) : null;
 }
 function todayMeter(c){ return sectionMeter(c, ['Daily']); }
