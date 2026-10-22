@@ -1,0 +1,42 @@
+# Rebuilds events-feed.js from ffxiv-latest-news, so Today > Events and the rail
+# rotator show the same events as Time Memoria's Active Events, without anyone
+# editing a list. The page never calls the feed itself: visitors only ever load
+# this repo's file.
+name: Events feed
+
+on:
+  schedule:
+    - cron: "10 */6 * * *"   # 10 minutes after the feed's own 6-hourly run
+  workflow_dispatch:          # run by hand from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: events-feed
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Rebuild the events file
+        run: python tools/build_events_feed.py events-feed.js
+
+      - name: Commit if anything changed
+        run: |
+          if git diff --quiet -- events-feed.js && git ls-files --error-unmatch events-feed.js >/dev/null 2>&1; then
+            echo "No change."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add events-feed.js
+          git commit -m "data: refresh events from ffxiv-latest-news"
+          git push

@@ -2330,7 +2330,7 @@ function characterPageHTML(cid){
   </div>
   <div class="tab-panel" data-tab="events">
   <div class="section">
-    <h2>Events <span class="hint">read off Time Memoria&rsquo;s Active Events &middot; every event ends at 15:00 UTC</span></h2>
+    <h2>Events <span class="hint">from the Lodestone, the same feed as Time Memoria&rsquo;s Active Events &middot; checked every 6 hours</span></h2>
     <div id="${cid}-events"></div>
   </div>
   </div>
@@ -2689,36 +2689,59 @@ function renderStationCard(st){
 }
 
 /* ---------- events ----------
-   One list feeds Today &rarr; Events and the rail rotator, so they cannot disagree.
-   Read off Time Memoria's Active Events panel on 18 October 2026. Every event
-   ends at 15:00 UTC. An event drops off both places when it ends. Update this
-   list when Square Enix announces the next event. */
-const EVENTS = [
-  {name:'Moogle Treasure Trove: Astronomy', from:'2026-09-09', to:'2026-10-19', note:'First Hunt &middot; tomestone rewards'},
-  {name:'FINAL FANTASY XIV & Fall Guys', from:'2026-10-07', to:'2026-10-27', note:'Gold Saucer &middot; Blunderville'},
-  {name:"All Saints' Wake 2026", from:'2026-10-15', to:'2026-11-02', note:'A Grisly Affair of Mortals and Bears'}
-];
-function eventEnd(e){ return Date.parse(e.to + 'T15:00:00Z'); }
-function currentEvents(){ const t = Date.now(); return EVENTS.filter(e => eventEnd(e) > t); }
-function fmtEventDay(iso){ return new Date(iso + 'T00:00:00Z').toLocaleDateString('en-GB', {day:'numeric', month:'short', timeZone:'UTC'}); }
+   events-feed.js, rebuilt every 6 hours by .github/workflows/events-feed.yml from
+   ffxiv-latest-news: the same feed as Time Memoria's Active Events, so the plugin
+   and the Ledger cannot disagree. One list feeds Today &rarr; Events and the rail
+   rotator. Feed times are UTC seconds. An event with no end runs until a patch
+   (note "Until Patch 8.0"); "estimated" marks an end taken from a reported patch
+   date. Replaced the hand-written list of 18 October 2026, which went stale. */
+function feedEvents(){
+  const list = typeof EVENTS_FEED !== 'undefined' && Array.isArray(EVENTS_FEED.events) ? EVENTS_FEED.events : [];
+  return list.map(e => ({name: e.title, url: e.url || '', from: e.start * 1000,
+    to: Number.isFinite(e.end) ? e.end * 1000 : null, note: e.endNote || '',
+    estimated: !!e.endEstimated, broadcast: e.category === 'broadcast'}));
+}
+function eventEnd(e){ return e.to === null ? Infinity : e.to; }
+/* Running and announced events, soonest first. */
+function currentEvents(){ const t = Date.now(); return feedEvents().filter(e => eventEnd(e) > t); }
+function runningEvents(){ const t = Date.now(); return currentEvents().filter(e => e.from <= t); }
+function fmtEventDay(ms){ return new Date(ms).toLocaleDateString('en-GB', {day:'numeric', month:'short', timeZone:'UTC'}); }
+function fmtEventTime(ms){ return new Date(ms).toISOString().slice(11, 16); }
+/* "7 Oct – 27 Oct", "31 Oct 02:00–04:00 UTC" for a broadcast, "From 28 Oct ·
+   until Patch 8.0 (about 19 Jan)" for an event that runs until a patch. */
+function eventWhen(e){
+  if(e.broadcast && e.to !== null)
+    return `${fmtEventDay(e.from)} ${fmtEventTime(e.from)}&ndash;${fmtEventTime(e.to)} UTC`;
+  if(e.note)
+    return `From ${fmtEventDay(e.from)} &middot; ${esc(e.note.replace(/^Until/, 'until'))}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)}, not confirmed)` : ''}`;
+  return `${fmtEventDay(e.from)} &ndash; ${e.to !== null ? fmtEventDay(e.to) : '?'}`;
+}
 function renderEvents(cid){
   const box = document.getElementById(cid + '-events');
   if(!box) return;
+  const now = Date.now();
   const list = currentEvents();
-  box.innerHTML = list.length ? `<div class="jr-grid">${list.map(e => `<div class="ev-card">
-      <div class="ev-name">${esc(e.name)}</div>
-      <div class="jr-note">${fmtEventDay(e.from)} &ndash; ${fmtEventDay(e.to)} &middot; ${e.note}</div>
-      <div class="jr-row"><span>Ends in</span><span class="jr-v">${fmtCountdown(eventEnd(e) - Date.now())}</span></div></div>`).join('')}</div>`
-    : '<div class="jr-note">No event is running.</div>';
+  box.innerHTML = list.length ? `<div class="jr-grid">${list.map(e => {
+      const running = e.from <= now;
+      const name = e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.name)}</a>` : esc(e.name);
+      const row = running
+        ? (e.to === null ? '' : `<div class="jr-row"><span>Ends in${e.estimated ? ' (estimated)' : ''}</span><span class="jr-v">${fmtCountdown(e.to - now)}</span></div>`)
+        : `<div class="jr-row"><span>Starts in</span><span class="jr-v">${fmtCountdown(e.from - now)}</span></div>`;
+      return `<div class="ev-card"><div class="ev-name">${name}</div><div class="jr-note">${eventWhen(e)}</div>${row}</div>`;
+    }).join('')}</div>`
+    : '<div class="jr-note">No event is running or announced.</div>';
 }
-/* One rotator slide per running event, added before initFootSlot counts them. */
+/* One rotator slide per running event, added before initFootSlot counts them.
+   Announced events stay in Today &rarr; Events only, so the rotator is not
+   crowded by a week of upcoming stream slots. */
 function addEventSlides(){
   const slot = document.getElementById('foot-slot');
   if(!slot) return;
-  currentEvents().forEach((e, k) => slot.insertAdjacentHTML('beforeend',
+  runningEvents().forEach(e => slot.insertAdjacentHTML('beforeend',
     `<div class="foot-item" data-name="${esc(e.name)}"><div class="expac-bar">
-       <span class="ex-label">Event &middot; ends ${fmtEventDay(e.to)}</span>
-       <span class="ex-time" data-event-end="${eventEnd(e)}">&mdash;</span>
+       <span class="ex-label">Event &middot; ${e.to === null ? esc(e.note || 'no end date')
+         : `ends ${e.estimated ? 'about ' : ''}${fmtEventDay(e.to)}`}</span>
+       <span class="ex-time"${e.to === null ? '' : ` data-event-end="${e.to}"`}>&mdash;</span>
        <span class="ex-when">&middot; ${esc(e.name)}</span></div></div>`));
 }
 function updateEventSlides(){
