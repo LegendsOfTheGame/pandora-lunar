@@ -2738,9 +2738,11 @@ function addEventSlides(){
   const slot = document.getElementById('foot-slot');
   if(!slot) return;
   runningEvents().forEach(e => slot.insertAdjacentHTML('beforeend',
-    `<div class="foot-item" data-name="${esc(e.name)}"><div class="expac-bar">
-       <span class="ex-label">Event &middot; ${e.to === null ? esc(e.note || 'no end date')
-         : `ends ${e.estimated ? 'about ' : ''}${fmtEventDay(e.to)}`}</span>
+    `<div class="foot-item ev-slide" data-name="${esc(e.name)}"><div class="expac-bar">
+       <span class="ex-label">${e.broadcast && e.to !== null
+         ? `Live now &middot; until ${fmtEventTime(e.to)} UTC`
+         : `Event &middot; ${e.to === null ? esc(e.note || 'no end date')
+           : `ends ${e.estimated ? 'about ' : ''}${fmtEventDay(e.to)}`}`}</span>
        <span class="ex-time"${e.to === null ? '' : ` data-event-end="${e.to}"`}>&mdash;</span>
        <span class="ex-when">&middot; ${esc(e.name)}</span></div></div>`));
 }
@@ -3080,14 +3082,38 @@ function restartFootTimer(){
   clearInterval(footTimer);
   footTimer = setInterval(()=>{ if(!footHeld) showFoot(footIndex + 1); }, FOOT_PERIOD_MS);
 }
-function initFootSlot(){
-  addEventSlides();
-  const items = footItems();
+function buildFootDots(){
   const dots = document.getElementById('foot-dots');
   if(dots){
-    dots.innerHTML = items.map((el,k)=>
+    dots.innerHTML = footItems().map((el,k)=>
       `<button title="${esc(el.dataset.name || ('View ' + (k+1)))}" onclick="pickFoot(${k})"></button>`).join('');
   }
+}
+/* The running events as one string, to notice when one starts or ends. */
+let footEventKey = '';
+function runningEventKey(){ return runningEvents().map(e => e.name).join('\n'); }
+/* Rebuilds the event slides when the set of running events changes, so an event
+   that starts while the page is open (Keybound Brawler, 28 Oct 2026 08:00 UTC)
+   gets its slide without a reload. The slide on screen stays where it is when
+   it still exists. */
+function refreshEventSlides(){
+  const key = runningEventKey();
+  if(key === footEventKey) return;
+  footEventKey = key;
+  const current = footItems()[footIndex];
+  const name = current ? current.dataset.name : null;
+  document.querySelectorAll('#foot-slot .ev-slide').forEach(el => el.remove());
+  addEventSlides();
+  buildFootDots();
+  const items = footItems();
+  const keep = name ? items.findIndex(el => el.dataset.name === name) : -1;
+  showFoot(keep >= 0 ? keep : 0);
+  updateEventSlides();
+}
+function initFootSlot(){
+  addEventSlides();
+  footEventKey = runningEventKey();
+  buildFootDots();
   const slot = document.getElementById('foot-slot');
   if(slot){
     // The rotation stops while the pointer is over the slot, so a countdown
@@ -3100,8 +3126,25 @@ function initFootSlot(){
   updateExpacBar();
   updateResetBar();
   updateEventSlides();
-  setInterval(()=>{ updateExpacBar(); updateResetBar(); updateEventSlides(); }, 1000);
+  setInterval(()=>{ refreshEventSlides(); updateExpacBar(); updateResetBar(); updateEventSlides(); }, 1000);
 }
+
+/* A page left open for days never sees a new events-feed.js or a new Ledger
+   build, which only arrive with a load. So after 24 hours it reloads, but only
+   while the tab is hidden, so nobody watches it happen or loses what they are
+   typing, and never with the import dialog open. It saves first. */
+const PAGE_LOADED_AT = Date.now();
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+function reloadIfStaleAndHidden(){
+  if(!document.hidden || Date.now() - PAGE_LOADED_AT < STALE_AFTER_MS) return;
+  const dlg = document.getElementById('tm-import-panel');
+  if(dlg && dlg.open) return;
+  clearTimeout(saveTimer);
+  save();
+  location.reload();
+}
+document.addEventListener('visibilitychange', reloadIfStaleAndHidden);
+setInterval(reloadIfStaleAndHidden, 60 * 1000);
 
 /* ---------- theme ---------- */
 /* Every colour in the stylesheet resolves through a custom property, so a theme
