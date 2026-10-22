@@ -20,8 +20,25 @@ const COLLECTION_KINDS = [
   {key:'ttNpcs',      label:'Triple Triad NPCs'},
   {key:'emotes',      label:'Emotes', note:'Collectable emotes only; the starting ones are left out.'},
   {key:'accessories', label:'Fashion accessories'},
-  {key:'facewear',    label:'Facewear', note:'Counted by style, the way the game’s Facewear window counts.'}
+  {key:'facewear',    label:'Facewear', note:'Counted by style, the way the game’s Facewear window counts.'},
+  // Not on FFXIV Collect: the list comes from the game's own sheets
+  // (tm-export-tables.js), so "game" swaps the source and the column headings.
+  {key:'fish',        label:'Fish', game:'TM_FISH', note:'The fish the game’s Fish Guide lists.'},
+  {key:'spearfish',   label:'Spearfish', game:'TM_SPEARFISH', note:'The game gives no place for spearfish, only the expansion.'}
 ];
+/* [id, name, expansion name, place, ''] rows from a game table, in the shape the
+   collection tables use for FFXIV Collect's lists. Index 5 keeps the expansion
+   number for the route filter. */
+function gameCollectionRows(table){
+  // A top-level const is not a property of globalThis, so look the table up here.
+  const src = table === 'TM_FISH' ? (typeof TM_FISH !== 'undefined' ? TM_FISH : null)
+            : table === 'TM_SPEARFISH' ? (typeof TM_SPEARFISH !== 'undefined' ? TM_SPEARFISH : null)
+            : null;
+  return src ? Object.keys(src).map(id => {
+    const [name, place, ex] = src[id];
+    return [+id, name, EXPANSION_NAMES[ex] || '', place, '', ex];
+  }) : [];
+}
 const EXPANSION_NAMES = ['A Realm Reborn','Heavensward','Stormblood','Shadowbringers','Endwalker','Dawntrail','Evercold'];
 const DUTY_TYPES = ['Dungeons','Trials','Raids','Alliance Raids','Ultimate Raids','Guildhests','V&C Dungeon Finder'];
 
@@ -101,6 +118,7 @@ function renderCollections(cid){
   const source = (typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.lists) || {};
   const lists = {};
   Object.keys(source).forEach(k => lists[k] = source[k].filter(r => inRoute(patchExpansion(r[2]))));
+  COLLECTION_KINDS.filter(k => k.game).forEach(k => lists[k.key] = gameCollectionRows(k.game).filter(r => inRoute(r[5])));
 
   const overview = COLLECTION_KINDS.map(k => {
     const all = lists[k.key] || [], owned = ownedSet(c, k.key);
@@ -108,7 +126,7 @@ function renderCollections(cid){
     return `<div class="jr-row"><span>${esc(k.label)}</span><span class="jr-v">${have} / ${all.length}</span>
       <div class="jr-bar"><i style="width:${jrPct(have, all.length)}%"></i></div></div>`;
   }).join('');
-  const fish = ownedSet(c, 'fish').size, spear = ownedSet(c, 'spearfish').size, curios = ownedSet(c, 'curios').size;
+  const curios = ownedSet(c, 'curios').size;
 
   const chips = ['all','owned','missing'].map(v =>
     `<button class="tab-btn${collOwnFilter===v?' active':''}" onclick="setCollFilter('${cid}','${v}')">${v[0].toUpperCase()+v.slice(1)}</button>`).join('');
@@ -117,17 +135,17 @@ function renderCollections(cid){
     const all = lists[k.key] || [], owned = ownedSet(c, k.key);
     const rows = all.filter(r => collOwnFilter === 'all' || (collOwnFilter === 'owned') === owned.has(r[0]));
     return `<div data-frame="${frameSlug(k.key)}">
-      <div class="subhead">${esc(k.label)} &middot; ${all.filter(r => owned.has(r[0])).length} of ${all.length} owned${k.note ? ' &middot; ' + esc(k.note) : ''}</div>
+      <div class="subhead">${esc(k.label)} &middot; ${all.filter(r => owned.has(r[0])).length} of ${all.length} ${k.game ? 'caught' : 'owned'}${k.note ? ' &middot; ' + esc(k.note) : ''}</div>
       <div class="jr-chips">${chips}</div>
-      <div class="jr-scroll"><table class="jr-table"><tr><th></th><th>Name</th><th>Patch</th><th>How to get it</th></tr>${
-        rows.map(r => `<tr class="${owned.has(r[0]) ? 'have' : ''}"><td>${owned.has(r[0]) ? '&#10003;' : ''}</td><td>${esc(r[1])}</td><td class="jr-v">${esc(r[2])}</td><td class="jr-note">${esc(r[3] ? r[3] + ' · ' + r[4] : r[4])}</td></tr>`).join('')
+      <div class="jr-scroll"><table class="jr-table"><tr><th></th><th>Name</th><th>${k.game ? 'Expansion' : 'Patch'}</th><th>${k.game ? 'Where' : 'How to get it'}</th></tr>${
+        rows.map(r => `<tr class="${owned.has(r[0]) ? 'have' : ''}"><td>${owned.has(r[0]) ? '&#10003;' : ''}</td><td>${esc(r[1])}</td><td class="jr-v">${esc(r[2])}</td><td class="jr-note">${esc([r[3], r[4]].filter(Boolean).join(' · '))}</td></tr>`).join('')
       }</table></div></div>`;
   }).join('');
 
   box.innerHTML = `<div data-frame="overview">
-      <div class="jr-note">${collectionsAsOf(c)} Totals are FFXIV Collect&rsquo;s obtainable items (list built ${esc((typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.built) || '?')}).</div>
+      <div class="jr-note">${collectionsAsOf(c)} Totals are FFXIV Collect&rsquo;s obtainable items (list built ${esc((typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.built) || '?')}). Fish and spearfish totals come from the game&rsquo;s own tables.</div>
       <div class="jr-grid">${overview}</div>
-      <div class="jr-note" style="margin-top:8px">Not on Collect: ${fish} fish &middot; ${spear} spearfish &middot; ${curios} curiosities.</div>
+      <div class="jr-note" style="margin-top:8px">Not on Collect: ${curios} curiosities.</div>
     </div>${tables}`;
   if(DATA.activeId === cid && activeTab(cid) === 'collections') applyFrames(cid, 'collections');
 }

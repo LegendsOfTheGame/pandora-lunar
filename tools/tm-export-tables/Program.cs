@@ -128,6 +128,37 @@ foreach (var job in data.GetExcelSheet<ClassJob>()!)
   jobs[abbreviation] = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(job.Name.ToString());
 }
 
+// Fish Guide fish: FishParameter row -> [name, place, expansion (0 = ARR)]. Only
+// rows with IsInLog, the ones the game's own Fish Guide counts; ClientStructs'
+// IsFishCaught is documented for those rows only. The export sends caught
+// FishParameter rows, so the reader joins on the row id. Added 22 Oct 2026: the
+// Ledger had a bare count and the mockup a total of every row (1,517).
+var items = data.GetExcelSheet<Item>()!;
+var fish = new SortedDictionary<uint, object[]>();
+foreach (var row in data.GetExcelSheet<FishParameter>()!)
+{
+  if (row.RowId == 0 || !row.IsInLog || row.Item.RowId == 0) continue;
+  if (!items.TryGetRow(row.Item.RowId, out var item) || item.Name.IsEmpty) continue;
+  // The zone comes through the fishing spot; FishParameter has none of its own.
+  var zone = row.FishingSpot.ValueNullable?.TerritoryType.ValueNullable;
+  fish[row.RowId] = [item.Name.ToString(), zone?.PlaceName.ValueNullable?.Name.ToString() ?? "", (int)(zone?.ExVersion.RowId ?? 0)];
+}
+
+// Spearfish: SpearfishingItem row -> [name, place, expansion]. Rows the game
+// shows (IsVisible) with an item; the export sends caught rows (20001 and up).
+var spearfish = new SortedDictionary<uint, object[]>();
+foreach (var row in data.GetExcelSheet<SpearfishingItem>()!)
+{
+  if (row.RowId == 0 || !row.IsVisible || row.Item.RowId == 0) continue;
+  if (!items.TryGetRow(row.Item.RowId, out var item) || item.Name.IsEmpty) continue;
+  // TerritoryType reads empty on every row (checked 22 Oct 2026), so there is
+  // no place, and the expansion comes from the gathering level instead: the
+  // level caps are 50, 60, 70, 80, 90, then Dawntrail.
+  int level = row.GatheringItemLevel.ValueNullable?.GatheringItemLevel ?? 0;
+  int expansion = level <= 50 ? 0 : level <= 60 ? 1 : level <= 70 ? 2 : level <= 80 ? 3 : level <= 90 ? 4 : 5;
+  spearfish[row.RowId] = [item.Name.ToString(), "", expansion];
+}
+
 var options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
 using var writer = new StreamWriter(output);
@@ -144,5 +175,9 @@ writer.WriteLine("// TerritoryType id -> [zone, region, top speed level, expansi
 writer.WriteLine($"const TM_MOUNT_SPEED = {JsonSerializer.Serialize(speedZones.ToDictionary(k => k.Key.ToString(), k => k.Value), options)};");
 writer.WriteLine("// World list totals, current zone names, and the real porter stops (unused and event rows left out).");
 writer.WriteLine($"const TM_WORLD = {JsonSerializer.Serialize(world, options)};");
+writer.WriteLine("// Fish Guide fish (IsInLog rows): FishParameter row -> [name, place, expansion].");
+writer.WriteLine($"const TM_FISH = {JsonSerializer.Serialize(fish.ToDictionary(k => k.Key.ToString(), k => k.Value), options)};");
+writer.WriteLine("// Spearfish shown in the game (IsVisible rows): SpearfishingItem row -> [name, place, expansion].");
+writer.WriteLine($"const TM_SPEARFISH = {JsonSerializer.Serialize(spearfish.ToDictionary(k => k.Key.ToString(), k => k.Value), options)};");
 
-Console.WriteLine($"{quests.Count} quests, {jobs.Count} jobs, {genreOut.Count} questline genres, {duties.Count} duties, {porterIds.Length} porter stops -> {Path.GetFullPath(output)}");
+Console.WriteLine($"{quests.Count} quests, {jobs.Count} jobs, {genreOut.Count} questline genres, {duties.Count} duties, {porterIds.Length} porter stops, {fish.Count} fish, {spearfish.Count} spearfish -> {Path.GetFullPath(output)}");
