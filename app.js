@@ -2644,7 +2644,14 @@ function renderRoute(){
       + ` <button type="button" onclick="pickStation(null)">Show all expansions</button>`
     : (area.splits ? 'All expansions &middot; pick a station to narrow this area'
                    : (open ? `Now boarding: <b>${esc(open.n)}</b>` : ''));
-  box.innerHTML = `<div class="route-stations" tabindex="0" aria-label="Scroll expansion timeline">${track}${stations}</div><div class="route-note">${note}</div>`;
+  // No per-expansion figures at all: a character last imported before Time
+  // Memoria 3.8.0.15 shows a dash on every station, which reads as broken unless
+  // the line says why. The tooltip alone was not enough (22 Oct 2026).
+  const noFigures = st.every(x => !x.released || !x.q);
+  const hint = noFigures
+    ? `<span class="route-hint">Import <b>Copy everything</b> from Time Memoria 3.8 or later to fill in these percentages.</span>`
+    : '';
+  box.innerHTML = `<div class="route-stations" tabindex="0" aria-label="Scroll expansion timeline">${track}${stations}</div><div class="route-note">${note}${hint}</div>`;
   renderStationCard(st);
 }
 function pickStation(i){
