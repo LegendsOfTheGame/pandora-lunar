@@ -71,7 +71,8 @@ function tmCollectionsDiffRows(p, c){
   const old = (c.tmCollections || {}).lists || {};
   const rows = [];
   const label = {questsDone:'Quests done', dutiesDone:'Duties cleared', sightseeing:'Sightseeing vistas', currents:'Aether currents',
-                 currentZones:'Current zones complete', aetherytes:'Aetherytes', porters:'Porter stops', fish:'Fish', spearfish:'Spearfish', curios:'Curiosities'};
+                 currentZones:'Current zones complete', aetherytes:'Aetherytes', porters:'Porter stops', fish:'Fish', spearfish:'Spearfish', curios:'Curiosities',
+                 bestiary:'Master’s Bestiary', folklore:'Folklore tomes'};
   COLLECTION_KINDS.forEach(k => label[k.key] = k.label);
   Object.keys(src).forEach(k => {
     if(!Array.isArray(src[k])) return;
