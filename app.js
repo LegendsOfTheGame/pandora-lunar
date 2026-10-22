@@ -2471,12 +2471,17 @@ function refreshNav(cid){
    A frame of '*' turns on every block in its panel. '@exp' resolves to the
    expansion picked on the route line, or '*' when none is picked. */
 const AREAS = [
-  {key:'today', label:'Today', frames:c => framesFor('routines', c)
-      .map(f => ({tab:'routines', frame:f.k, l:f.l, n:f.n}))
-      .concat([{tab:'events', frame:'*', l:'Events', n:currentEvents().length},
+  // "Daily" in the rail, with Weekly and Seasonal as extra rows into this same
+  // area (stop-gap until Evercold, 22 Oct 2026). The key stays 'today' so saved
+  // navigation state keeps working.
+  {key:'today', label:'Daily', frames:c => framesFor('routines', c)
+      .map(f => ({tab:'routines', frame:f.k, l:f.l, n:f.n, p:f.p}))
+      .concat([{tab:'events', frame:'*', l:'Events', n:currentEvents().length, p:seasonalMeter(c)},
                {tab:'notes', frame:'trackers', l:'Trackers'},
                {tab:'notes', frame:'notes', l:'Notes'}]),
-    meter:c => todayMeter(c)},
+    meter:c => todayMeter(c),
+    extra:[{label:'Weekly', frame:'routines:weekly', meter:c => weeklyMeter(c)},
+           {label:'Seasonal', frame:'events:*', meter:c => seasonalMeter(c)}]},
   {key:'story', label:'Story', frames:() => [
       {tab:'overview', frame:'progress', l:'Quest categories'},
       {tab:'journey', frame:'questlines', l:'Questlines'},
@@ -2507,11 +2512,50 @@ function areaFrameId(f){ return f.tab + ':' + f.frame; }
 
 /* Meters are shown only where one honest measure exists. Jobs and World have
    none yet, so they show no meter. */
-function todayMeter(c){
+/* Share of routines done this period, for the given sections. Only routines in
+   use count: ticked at least once, and last ticked within 30 days, so a routine
+   never started or given up does not hold the figure down. A stop-gap, from a
+   player's suggestion on 22 Oct 2026, until Evercold's reset changes are known. */
+const ACTIVE_WINDOW_MS = 30 * DAY_MS;
+function sectionMeter(c, sections){
   const now = new Date();
   const rows = (c.routines||[]).filter(r =>
-    (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden) && schedById(r.schedId).kind !== 'cooldown');
+    (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden)
+    && sections.includes(routineSection(r))
+    && r.lastDone && now.getTime() - r.lastDone <= ACTIVE_WINDOW_MS);
   return rows.length ? Math.round(rows.filter(r => isRoutineDone(r, now)).length / rows.length * 100) : null;
+}
+function todayMeter(c){ return sectionMeter(c, ['Daily']); }
+function weeklyMeter(c){ return sectionMeter(c, ['Weekly', CHALLENGE_SECTION]); }
+
+/* Seasonal: of the running seasonal events that have quests, how many have every
+   quest of this run done. Broadcasts (Fan Fest stage events) have none and are
+   left out. A yearly event's run is the newest festival of its quest group;
+   a returning collaboration reuses its first run, so it is named here
+   (Fall Guys = 148, quest 4801; Keybound Brawler = 257, quest 5466; FFXV
+   crossover = 84, quests 3158-3160, under either title the feed has used,
+   the same two Time Memoria's Active Events maps). A collaboration that
+   returns under a new name needs one more line here. */
+const FEED_FESTIVAL_ALIASES = [['Fall Guys', 148], ['Keybound', 257],
+  ['FINAL FANTASY XV', 84], ['Nocturne for Heroes', 84]];
+function eventFestival(e){
+  if(typeof TM_FESTIVAL_QUESTS === 'undefined') return null;
+  const alias = FEED_FESTIVAL_ALIASES.find(([word]) => e.name.includes(word));
+  if(alias) return TM_FESTIVAL_QUESTS[alias[1]] ? alias[1] : null;
+  const flat = s => s.replace(/['’‘]/g, '').toLowerCase();
+  const title = flat(e.name);
+  const ids = Object.keys(TM_FESTIVAL_QUESTS).filter(id => {
+    const stem = flat(TM_FESTIVAL_QUESTS[id][0].replace(/ Events$/, ''));
+    return stem.length >= 4 && title.includes(stem);
+  }).map(Number);
+  return ids.length ? Math.max(...ids) : null;
+}
+function seasonalMeter(c){
+  if(!hasCollections(c)) return null;
+  const done = ownedSet(c, 'questsDone');
+  const runs = [...new Set(runningEvents().filter(e => !e.broadcast).map(eventFestival).filter(Boolean))];
+  if(!runs.length) return null;
+  return Math.round(runs.filter(f => TM_FESTIVAL_QUESTS[f][1].every(id => done.has(id))).length / runs.length * 100);
 }
 function dutiesMeter(c){
   if(!hasCollections(c)) return null;
@@ -2588,6 +2632,11 @@ function goAreaFrame(id){
   renderNav();
   window.scrollTo(0,0);
   scheduleSave();
+}
+/* A rail row that opens one frame of an area (Weekly, Seasonal). */
+function goAreaToFrame(key, frameId){
+  goArea(key);
+  goAreaFrame(frameId);
 }
 function renderNav(){
   renderRail();
@@ -2804,13 +2853,19 @@ function renderRail(){
   if(!box || !DATA) return;
   const c = getChar(DATA.activeId);
   const current = globalPageOpen() ? null : activeArea(DATA.activeId).key;
+  const frameNow = current ? areaFrameId(activeAreaFrame(DATA.activeId) || {}) : null;
+  const button = (label, m, on, onclick) =>
+    `<button type="button" class="area${on ? ' on' : ''}" title="${esc(label)}" data-short="${esc(label.slice(0, 2))}" onclick="${onclick}">`
+    + `<span class="lbl">${esc(label)}</span><span class="pct">${m === null ? '' : m + '%'}</span>`
+    + (m === null ? '' : `<span class="meter"><i style="width:${m}%"></i></span>`)
+    + `</button>`;
+  const meter = f => { try{ return (f && c) ? f(c) : null; }catch(e){ return null; } };
   box.innerHTML = AREAS.map(a => {
-    let m = null;
-    try{ m = (a.meter && c) ? a.meter(c) : null; }catch(e){ m = null; }
-    return `<button type="button" class="area${a.key === current ? ' on' : ''}" title="${esc(a.label)}" data-short="${esc(a.label.slice(0, 2))}" onclick="goArea('${a.key}')">`
-         + `<span class="lbl">${esc(a.label)}</span><span class="pct">${m === null ? '' : m + '%'}</span>`
-         + (m === null ? '' : `<span class="meter"><i style="width:${m}%"></i></span>`)
-         + `</button>`;
+    const extras = a.extra || [];
+    const extraOn = a.key === current && extras.some(x => x.frame === frameNow);
+    return button(a.label, meter(a.meter), a.key === current && !extraOn, `goArea('${a.key}')`)
+      + extras.map(x => button(x.label, meter(x.meter), a.key === current && x.frame === frameNow,
+          `goAreaToFrame('${a.key}','${x.frame}')`)).join('');
   }).join('');
   renderCharBlock();
 }
@@ -2840,7 +2895,8 @@ function framesFor(section, c){
         .filter(sec => visible.some(r => routineSection(r) === sec)
                     || (sec === CHALLENGE_SECTION && challengeRowsExist(c)))
         .map(sec => ({k:frameSlug(sec), l:sec,
-                      n:visible.filter(r => routineSection(r) === sec).length}));
+                      n:visible.filter(r => routineSection(r) === sec).length,
+                      p:sectionMeter(c, sec === COOLDOWN_SECTION ? [COOLDOWN_SECTION, 'Monthly'] : [sec])}));
       out.push({k:'last-completed', l:'Last completed',
                 n:(c.routines||[]).filter(r => r.lastDone).length});
       return out;
@@ -2934,7 +2990,8 @@ function renderFrameRow(){
   row.innerHTML = list.map(f => {
     const id = areaFrameId(f), on = current && id === areaFrameId(current);
     return `<button type="button" role="tab" aria-selected="${on}" class="frame-btn${on ? ' on' : ''}" onclick="goAreaFrame('${id}')">${esc(f.l)}${
-      f.n != null && f.n !== '' ? ` <span class="frame-n">${f.n}</span>` : ''}</button>`;
+      f.n != null && f.n !== '' ? ` <span class="frame-n">${f.n}</span>` : ''}${
+      f.p != null ? ` <span class="frame-n">&middot; ${f.p}%</span>` : ''}</button>`;
   }).join('');
   if(current) applyFrames(cid, current.tab);
   syncPaneTopHeight();

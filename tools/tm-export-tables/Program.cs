@@ -55,6 +55,21 @@ foreach (var quest in data.GetExcelSheet<Quest>()!)
 }
 var genreOut = genres.ToDictionary(g => g.Key, g => new { category = g.Value.Category, section = g.Value.Section, ids = g.Value.Ids.Order().ToArray() });
 
+// Festival id -> [questline genre, short quest ids]: one entry per run of a
+// seasonal event, because each year's run gets a new Festival row (All Saints'
+// Wake 2026 is 176, Keybound Brawler 257; checked 22 Oct 2026). The Ledger's
+// Seasonal meter uses the newest run of a running event's genre.
+var festivalQuests = new SortedDictionary<uint, (string Genre, List<uint> Ids)>();
+foreach (var quest in data.GetExcelSheet<Quest>()!)
+{
+  if (quest.Name.IsEmpty || quest.Festival.RowId == 0) continue;
+  string cat = quest.JournalGenre.ValueNullable?.JournalCategory.ValueNullable?.Name.ToString() ?? "";
+  if (cat != "Seasonal Events" && cat != "Special Quests") continue;
+  if (!festivalQuests.TryGetValue(quest.Festival.RowId, out var run))
+    festivalQuests[quest.Festival.RowId] = run = (quest.JournalGenre.ValueNullable?.Name.ToString() ?? "", []);
+  run.Ids.Add(quest.RowId & 0xFFFF);
+}
+
 // Duties -> [name, content type, expansion (0 = ARR), level], keyed by InstanceContent id,
 // which is what the collections export's dutiesDone sends.
 var duties = new SortedDictionary<uint, object[]>();
@@ -175,6 +190,8 @@ writer.WriteLine("// TerritoryType id -> [zone, region, top speed level, expansi
 writer.WriteLine($"const TM_MOUNT_SPEED = {JsonSerializer.Serialize(speedZones.ToDictionary(k => k.Key.ToString(), k => k.Value), options)};");
 writer.WriteLine("// World list totals, current zone names, and the real porter stops (unused and event rows left out).");
 writer.WriteLine($"const TM_WORLD = {JsonSerializer.Serialize(world, options)};");
+writer.WriteLine("// Festival id -> [questline genre, short quest ids]: one entry per run of a seasonal event.");
+writer.WriteLine($"const TM_FESTIVAL_QUESTS = {JsonSerializer.Serialize(festivalQuests.ToDictionary(k => k.Key.ToString(), k => new object[] { k.Value.Genre, k.Value.Ids.Order().ToArray() }), options)};");
 writer.WriteLine("// Fish Guide fish (IsInLog rows): FishParameter row -> [name, place, expansion].");
 writer.WriteLine($"const TM_FISH = {JsonSerializer.Serialize(fish.ToDictionary(k => k.Key.ToString(), k => k.Value), options)};");
 writer.WriteLine("// Spearfish shown in the game (IsVisible rows): SpearfishingItem row -> [name, place, expansion].");
