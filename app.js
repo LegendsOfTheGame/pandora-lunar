@@ -5091,6 +5091,10 @@ function importData(input){
 // field is merge-only: only keys actually present in the payload are touched, everything
 // else (routines, notes, ids, ...) is left alone.
 let tmImportPayload = null;
+/* Set by a merge. Closing the dialog then saves and reloads the page, so every
+   part of it (the rail rotator included) starts from the imported data. Not at
+   the merge itself: the dialog stays open on what changed, to be read first. */
+let tmReloadOnClose = false;
 
 /* The import is a modal dialog. Esc closes it too, so the reset runs on the
    dialog's own close event rather than only in this function. */
@@ -5109,6 +5113,14 @@ function resetTmImport(){
   document.getElementById('tm-import-text').value = '';
   document.getElementById('tm-import-error').textContent = '';
   document.getElementById('tm-import-summary').innerHTML = '';
+  if(tmReloadOnClose){
+    tmReloadOnClose = false;
+    // Save now rather than after the usual half-second wait, which the reload
+    // would cut short. save() writes localStorage synchronously.
+    clearTimeout(saveTimer);
+    save();
+    location.reload();
+  }
 }
 function tmPasteFromClipboard(){
   const errEl = document.getElementById('tm-import-error');
@@ -5594,6 +5606,7 @@ function applyTmImport(){
   rebuildPages();
   renderSwitcher();
   scheduleSave();
+  tmReloadOnClose = true;
   document.getElementById('save-status').textContent = 'Imported from Time Memoria';
 }
 
