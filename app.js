@@ -3268,6 +3268,21 @@ function reloadIfStaleAndHidden(){
 document.addEventListener('visibilitychange', reloadIfStaleAndHidden);
 setInterval(reloadIfStaleAndHidden, 60 * 1000);
 
+/* Every tab holds its own copy of DATA and save() writes the whole of it, so a
+   second Ledger tab left open used to put its older copy back over anything the
+   first one saved — a Time Memoria import included, on 24/10/2026. The storage
+   event fires only in the OTHER tabs, so each of them drops its pending save and
+   reloads from what was just written. A tab with the import dialog open waits
+   for the dialog to close, so a paste in progress is not thrown away. */
+let otherTabSaved = false;
+window.addEventListener('storage', e => {
+  if(e.key !== 'ledger-data' || e.storageArea !== localStorage) return;
+  clearTimeout(saveTimer);
+  const dlg = document.getElementById('tm-import-panel');
+  if(dlg && dlg.open){ otherTabSaved = true; return; }
+  location.reload();
+});
+
 /* ---------- theme ---------- */
 /* Every colour in the stylesheet resolves through a custom property, so a theme
    is a variable swap on the root element rather than a second set of rules.
@@ -5284,6 +5299,8 @@ function resetTmImport(){
     // would cut short. save() writes localStorage synchronously.
     clearTimeout(saveTimer);
     save();
+    location.reload();
+  }else if(otherTabSaved){
     location.reload();
   }
 }
