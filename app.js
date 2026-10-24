@@ -323,8 +323,8 @@ function validRanksFor(name){
 // not from memory). All 11 DoH/DoL jobs share the same level pattern through level 70:
 // 1, 1, 5, 10, 15, ..., 50, 50, 53, ..., 70. Two entries share level 1 (class unlock, then
 // first job quest) and level 50/60 (class capstone, then the next expansion's opener) —
-// that's real, not a data error. DoH/DoL stop at 70 — their post-70 hub questlines
-// (Crystalline Mean/The Studium/Wachumeqimeqi) aren't sourced yet.
+// that's real, not a data error. DoH/DoL stop at 70 here; their post-70 hub questlines
+// (Crystalline Mean/The Studium/Wachumeqimeqi) are shared per job group, in HUB_QUESTS.
 //
 // Combat jobs go all the way to 100. Past level 70 each job still has its own handful of
 // private "capstone" quests (one at the top of each bracket, e.g. Paladin's "Worth Fighting
@@ -705,13 +705,71 @@ const ROLE_QUESTS = {
     healer: [DT_ROLE_PROLOGUE,{level:90,name:"In the Sting of Things"},{level:92,name:"Causing Problems on Purpose"},{level:94,name:"Living among the Deadly"},{level:96,name:"Taste of a Toxin Paradise"},{level:98,name:"Downed by the River"},{level:100,name:"An Antidote for Anarchy"}]
   }
 };
+
+// DoH/DoL past 70: the delivery hubs that replace class quests — the Crystalline Mean (ShB),
+// the Studium (EW) and Wachumeqimeqi (DT). Sourced from the local wiki dump's per-facet quest
+// lists; every id is in TM's quest-patches.json under Class & Job Quests, so the classQuests
+// export already carries them. Same shape as ROLE_QUESTS: one chain per job group, done once
+// for every job in it, so the hub quests ride the role-quest storage keys ("role:hubForging").
+//
+// Each hub opens with one quest for every crafter and gatherer, shared like DT_ROLE_PROLOGUE.
+// Dawntrail also closes with one: Appreciated Value (7.15) wants all five shop chains and the
+// MSQ's Crossroads, so it sits at 100 on every DoH/DoL job.
+const HUB_OPENER = {
+  shb: {level:70, name:"The Crystalline Mean",       track:"hubShbOpener"},
+  ew:  {level:80, name:"The Faculty",                track:"hubEwOpener"},
+  dt:  {level:90, name:"Wrought in Wachumeqimeqi",   track:"hubDtOpener"}
+};
+const HUB_DT_FINALE = {level:100, name:"Appreciated Value", track:"hubDtFinale"};
+const JOB_HUB = {
+  Blacksmith:"forging", Armorer:"forging", Goldsmith:"forging",
+  Carpenter:"crafting", Leatherworker:"crafting", Weaver:"crafting",
+  Alchemist:"nourishing", Culinarian:"nourishing",
+  Miner:"gathering", Botanist:"gathering",
+  Fisher:"fishing"
+};
+const HUB_TRACK_KEY = { forging:"hubForging", crafting:"hubCrafting", nourishing:"hubNourishing", gathering:"hubGathering", fishing:"hubFishing" };
+const HUB_QUESTS = {
+  shb: {  // Crystalline Mean facets
+    forging:    [{level:70,name:"Iola, Forgemaster"},{level:75,name:"To Struggle Nu Mou"},{level:80,name:"The Iron Bellows"}],
+    crafting:   [{level:70,name:"Cherished Memories"},{level:75,name:"For Sentimental Reasons"},{level:80,name:"The Notes of Bond Restoring"}],
+    nourishing: [{level:70,name:"Friends of a Feather"},{level:75,name:"Where We Belong"},{level:80,name:"Healing Old Wounds"}],
+    gathering:  [{level:70,name:"On the Trail of a Myth"},{level:75,name:"Shedding Light on the Myth"},{level:80,name:"The Myth Takes Form"}],
+    fishing:    [{level:70,name:"Well Eel Be Damned"},{level:75,name:"Fishing for Confidence"},{level:80,name:"Morsel of the Deep"}]
+  },
+  ew: {  // Studium faculties
+    forging:    [{level:80,name:"Professor Rurusha's New Friend"},{level:80,name:"The Dormant Dhyata"},{level:83,name:"Gears of Gold"},{level:85,name:"Rubbished Research"},{level:85,name:"Boric's Choice"},{level:88,name:"A Friend in Need"},{level:90,name:"Wayback Machine"}],
+    crafting:   [{level:80,name:"In Search of the Azure Star"},{level:80,name:"The World without You"},{level:83,name:"Poetry Recital"},{level:85,name:"One Step Forward"},{level:85,name:"A Ten-year Promise"},{level:88,name:"An Astronomical Growth"},{level:90,name:"The Promised Star"}],
+    nourishing: [{level:80,name:"Perfectly Awful"},{level:80,name:"Make It Sweeter"},{level:83,name:"Remember the Texture"},{level:85,name:"Aroma Is Key"},{level:85,name:"Long Live the Gourmet"},{level:88,name:"Perfectly Delectable"},{level:90,name:"Sharlayan Cuisine"}],
+    gathering:  [{level:80,name:"Cultured Pursuits"},{level:80,name:"Cooking Up a Culture"},{level:83,name:"The Culture of Ceruleum"},{level:85,name:"The Culture of Carrots"},{level:85,name:"Hinageshi in Hingashi"},{level:88,name:"The Culture of the Past"},{level:90,name:"The Culture of Love"}],
+    fishing:    [{level:80,name:"Fear the Thesis"},{level:80,name:"Go with the Flow"},{level:83,name:"Data across the Decades"},{level:85,name:"History Lesson"},{level:85,name:"The Wandering Whale"},{level:88,name:"Fish Time Forgot"},{level:90,name:"Pastures New"}]
+  },
+  dt: {  // Wachumeqimeqi shops
+    forging:    [{level:90,name:"Your Friendly Neighborhood Metalworker"},{level:90,name:"Hard to Reed"},{level:93,name:"Hey, Aunt Tii"},{level:95,name:"A Job Quickly Done"},{level:95,name:"Teamwork Makes the Craftwork"},{level:98,name:"A New Kind of Metalware"},{level:100,name:"A Dream Come True"}],
+    crafting:   [{level:90,name:"Pameka, the Scrivener"},{level:90,name:"Hanu Opportunities"},{level:93,name:"This Little Pelu"},{level:95,name:"Oldton Roads"},{level:95,name:"Written in Stone"},{level:98,name:"Reaching for the Sky"},{level:100,name:"A Place in the Sun"}],
+    nourishing: [{level:90,name:"Blame It on My Juice"},{level:90,name:"Mon Cherimoya"},{level:93,name:"A Drink for Everymobbie"},{level:95,name:"Halnaruk the Helphand"},{level:95,name:"The Missing Drink"},{level:98,name:"Good Hydrations"},{level:100,name:"Three Cheers for Sweet Juice"}],
+    gathering:  [{level:90,name:"Hands for Hire"},{level:90,name:"Test of Talents"},{level:93,name:"A Discerning Eye"},{level:95,name:"As Nature Intends"},{level:95,name:"The Cycle of Life"},{level:98,name:"Digging Up the Truth"},{level:100,name:"Wellspring of Tears"}],
+    fishing:    [{level:90,name:"Fishmonger Blues"},{level:90,name:"When Wishes Are Fishes"},{level:93,name:"Scaling Up Demand"},{level:95,name:"Big Body, Big Beauty"},{level:95,name:"Donuhanu's Devotion"},{level:98,name:"Catching Breath"},{level:100,name:"An Odd Fish Odyssey"}]
+  }
+};
+// Every hub quest a DoH/DoL job draws on, opener first and the Dawntrail finale last, each
+// tagged with the trackKey its completion state lives under.
+function hubQuestsFor(job){
+  const hub = JOB_HUB[job];
+  if(!hub) return [];
+  return ['shb','ew','dt'].flatMap(exp => {
+    const list = [HUB_OPENER[exp], ...HUB_QUESTS[exp][hub]];
+    if(exp === 'dt') list.push(HUB_DT_FINALE);
+    return list.map(q => ({...q, trackKey: q.track || HUB_TRACK_KEY[hub]}));
+  });
+}
 // Every role-quest bracket that applies to a job, in level order, respecting JOB_ROLE_FLOOR.
 // Each returned quest carries its own trackKey — melee/ranged quests in the Shadowbringers
 // bracket both come back tagged "physDPS" so their completion state is shared; the same
 // quests in Endwalker/Dawntrail come back tagged "melee"/"ranged" since those don't share.
 function roleQuestsFor(job){
   const role = JOB_ROLE[job];
-  if(!role) return [];
+  if(!role) return hubQuestsFor(job);
   const floor = JOB_ROLE_FLOOR[job] || 1;
   return ['shb','ew','dt'].flatMap(exp => {
     const list = ROLE_QUESTS[exp][role];
@@ -5447,6 +5505,9 @@ function tmQuestKeyIndex(){
   Object.keys(ROLE_QUESTS).forEach(exp =>
     Object.keys(ROLE_QUESTS[exp]).forEach(role =>
       ROLE_QUESTS[exp][role].forEach(q => add(q.name, 'role:' + (q.track || ROLE_TRACK_KEY[exp][role])))));
+  [...new Set(Object.values(JOB_HUB))].forEach(hub =>
+    hubQuestsFor(Object.keys(JOB_HUB).find(job => JOB_HUB[job] === hub))
+      .forEach(q => add(q.name, 'role:' + q.trackKey)));
   TM_QUEST_KEYS = index;
   return index;
 }
