@@ -3161,45 +3161,57 @@ const ExpacBar = {
 /* Only a routine you have ticked is waiting on a reset. An unticked one needs
    no clock, because you can do it now. So this scans the ticked routines of
    the active character, takes the soonest reset among them, and names it —
-   a bare countdown does not say what is about to happen. */
-function updateResetBar(){
-  const bar = document.getElementById('reset-bar');
-  if(!bar || !DATA) return;
-  const label = document.getElementById('rs-label');
-  const time  = document.getElementById('rs-time');
-  const what  = document.getElementById('rs-what');
-  const c = getChar(DATA.activeId);
-  if(!c) return;
+   a bare countdown does not say what is about to happen.
 
-  const now = new Date();
-  const visible = (c.routines||[]).filter(r =>
-    (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden) && isRoutineDone(r, now));
+   Drawn by Vue. DATA is not reactive, so the bar reads it again whenever
+   resetTick moves: once a second, and at once when updateResetBar() is called
+   after a tick or a character switch. A counter, not a timestamp: two calls in
+   the same millisecond would set the same value and Vue would skip the second. */
+const resetTick = Vue.ref(0);
+function updateResetBar(){ resetTick.value++; }
+const ResetBar = {
+  setup(){
+    let timer;
+    Vue.onMounted(() => { timer = setInterval(updateResetBar, 1000); });
+    Vue.onUnmounted(() => clearInterval(timer));
+    const st = Vue.computed(() => {
+      resetTick.value;
+      const now = new Date();
+      const c = DATA && getChar(DATA.activeId);
+      const visible = c ? (c.routines||[]).filter(r =>
+        (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden) && isRoutineDone(r, now)) : [];
 
-  let soonest = null;
-  visible.forEach(r=>{
-    const at = nextResetInstant(schedById(r.schedId), now, r.lastDone);
-    if(soonest === null || at < soonest) soonest = at;
-  });
+      let soonest = null;
+      visible.forEach(r=>{
+        const at = nextResetInstant(schedById(r.schedId), now, r.lastDone);
+        if(soonest === null || at < soonest) soonest = at;
+      });
+      if(soonest === null) return null;
 
-  if(soonest === null){
-    bar.classList.add('idle');
-    label.textContent = 'Next reset';
-    time.textContent = '—';
-    what.textContent = '· nothing is waiting on a reset';
-    bar.title = 'A countdown appears when you tick a routine. Until then there is nothing to wait for.';
-    return;
-  }
-  const due = visible.filter(r =>
-    nextResetInstant(schedById(r.schedId), now, r.lastDone) === soonest);
-  bar.classList.remove('idle');
-  const name = String(schedById(due[0].schedId).label).split(' — ')[0];
-  label.innerHTML = 'Next reset · <em>' + esc(name) + '</em>';
-  time.textContent = fmtCountdown(soonest - now.getTime());
-  what.textContent = due.length === 1
-    ? '· ' + esc(due[0].label)
-    : '· ' + due.length + ' routines return';
-  bar.title = 'Returns at ' + new Date(soonest).toUTCString();
-}
+      const due = visible.filter(r =>
+        nextResetInstant(schedById(r.schedId), now, r.lastDone) === soonest);
+      return {
+        name: String(schedById(due[0].schedId).label).split(' — ')[0],
+        time: fmtCountdown(soonest - now.getTime()),
+        what: due.length === 1 ? '· ' + due[0].label : '· ' + due.length + ' routines return',
+        title: 'Returns at ' + new Date(soonest).toUTCString()
+      };
+    });
+    return {st};
+  },
+  template: `
+    <div v-if="st" class="reset-bar" id="reset-bar" :title="st.title">
+      <span class="rs-label">Next reset · <em>{{ st.name }}</em></span>
+      <span class="rs-time">{{ st.time }}</span>
+      <span class="rs-what">{{ st.what }}</span>
+    </div>
+    <div v-else class="reset-bar idle" id="reset-bar"
+         title="A countdown appears when you tick a routine. Until then there is nothing to wait for.">
+      <span class="rs-label">Next reset</span>
+      <span class="rs-time">—</span>
+      <span class="rs-what">· nothing is waiting on a reset</span>
+    </div>`
+};
 
 const FOOT_PERIOD_MS = 5000;
 let footIndex = 0, footHeld = false, footTimer = null;
@@ -3259,9 +3271,9 @@ function initFootSlot(){
   showFoot(0);
   restartFootTimer();
   if(document.getElementById('expac-app')) Vue.createApp(ExpacBar).mount('#expac-app');
-  updateResetBar();
+  if(document.getElementById('reset-app')) Vue.createApp(ResetBar).mount('#reset-app');
   updateEventSlides();
-  setInterval(()=>{ refreshEventSlides(); updateResetBar(); updateEventSlides(); }, 1000);
+  setInterval(()=>{ refreshEventSlides(); updateEventSlides(); }, 1000);
 }
 
 /* A page left open for days never sees a new events-feed.js or a new Ledger
