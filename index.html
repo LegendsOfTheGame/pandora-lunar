@@ -56,11 +56,7 @@
 
         <div class="foot-item" data-name="Ocean Fishing">
           <div class="oc-wrap">
-            <div class="ocean-bar" id="ocean-bar">
-              <span class="oc-label" id="oc-label">Ocean Fishing</span>
-              <span class="oc-time" id="oc-time">&mdash;</span>
-              <span class="oc-npc" id="oc-npc"></span>
-            </div>
+            <div id="ocean-app"></div>
             <button class="oc-mute" id="oc-mute-btn" onclick="toggleResetSound()" title="Reset sounds on &mdash; click to mute">&#128276;</button>
           </div>
         </div>
@@ -77,7 +73,7 @@
       <div class="foot-dots" id="foot-dots"></div>
 
       <div class="rail-imports">
-        <button type="button" onclick="toggleTmImportPanel()" title="Paste a Time Memoria export">Import from Time Memoria</button>
+        <button type="button" onclick="toggleTmImportPanel()" title="Paste a Tales of Milestones export">Import from Tales of Milestones</button>
       </div>
 
       <div class="rail-icons">
@@ -111,7 +107,7 @@
         <p>The rail and the frame buttons stay on the screen. Only the pane scrolls.</p>
 
         <h3>The route line</h3>
-        <p>The route line is above the frame buttons. It has one station for each expansion. The line after a station fills to the percentage of quests done in that expansion. The percentages are the same as the Overview tab in Time Memoria. The data comes from a Time Memoria import.</p>
+        <p>The route line is above the frame buttons. It has one station for each expansion. The line after a station fills to the percentage of quests done in that expansion. The percentages are the same as the Overview tab in Tales of Milestones. The data comes from a Tales of Milestones import.</p>
         <p>A station is complete when your MSQ progress reaches the next expansion.</p>
         <p>Click a station to show that expansion only in Duties, Collections and World. Click the station again, or click <code>Show all expansions</code>, to show all expansions.</p>
         <p>Click <code>&lsaquo;</code> at the bottom of the rail to make the rail narrow. Click it again to make the rail wide.</p>
@@ -139,15 +135,15 @@
         <p>You can change or clear any <code>requires</code> value. The tracker never overwrites your value.</p>
         <p>The note below each list gives the number of hidden routines. Click <code>Show them</code> to show all routines.</p>
 
-        <h3>Import from Time Memoria</h3>
-        <p>In Time Memoria, click <code>Copy everything</code>, or type <code>/tm full</code>. Click <code>Import from Time Memoria</code> at the bottom of the rail. Paste the export into the box. Make sure that the character is correct, then click <code>Apply merge</code>.</p>
-        <p>The Time Memoria plugin sends what you unlocked, quest by quest. After an import, the tracker uses that data and ignores the patch number.</p>
+        <h3>Import from Tales of Milestones</h3>
+        <p>In Tales of Milestones, click <code>Copy everything</code>, or type <code>/tm full</code>. Click <code>Import from Tales of Milestones</code> at the bottom of the rail. Paste the export into the box. Make sure that the character is correct, then click <code>Apply merge</code>.</p>
+        <p>The Tales of Milestones plugin sends what you unlocked, quest by quest. After an import, the tracker uses that data and ignores the patch number.</p>
         <p>This is more exact, and it applies in both directions. The end of Stormblood no longer shows Eureka content if you never entered Eureka.</p>
         <p>An import also hides a routine when you have not unlocked the job it needs. The Masked Carnivale needs Blue Mage. Grand Company turn-ins need a crafting job or a gathering job. This test uses the unlock only. A low level hides nothing.</p>
 
         <h3>Cosmic tools</h3>
-        <p>The Cosmic section shows the research data for each crafting class and gathering class. The data comes from a Time Memoria import only. You cannot type it in.</p>
-        <p>Time Memoria reads the data only when your character is in a Cosmic Exploration zone. The time at the top of the section is the time of that reading. It can be earlier than the export.</p>
+        <p>The Cosmic section shows the research data for each crafting class and gathering class. The data comes from a Tales of Milestones import only. You cannot type it in.</p>
+        <p>Tales of Milestones reads the data only when your character is in a Cosmic Exploration zone. The time at the top of the section is the time of that reading. It can be earlier than the export.</p>
         <p>For each class, the section shows the tool, its item level, and the next stage. For each data type, it shows the current data, the data that the next upgrade needs, and the shortfall. The data values are cumulative.</p>
         <p>Each stage has a storage limit for each data type. When the current data is at the limit, the game does not keep more data of that type until you upgrade the tool.</p>
         <p>A class with no research data does not appear in the export. The section lists these classes at the top.</p>
@@ -178,7 +174,7 @@
         <p>The tracker has three themes: Poetic, Midnight and Daylight. Select a theme in the list at the right of the bar at the top of the page. Each theme changes the colours and the corner shapes.</p>
 
         <h3>Events</h3>
-        <p>Today &rarr; Events lists the events that are running and the events that the Lodestone has announced. The list comes from the same feed as Time Memoria&rsquo;s Active Events, and the Ledger checks the feed every 6 hours. The panel at the bottom of the rail shows one countdown for each running event. When an event ends, it goes off both lists.</p>
+        <p>Today &rarr; Events lists the events that are running and the events that the Lodestone has announced. The list comes from the same feed as Tales of Milestones&rsquo;s Active Events, and the Ledger checks the feed every 6 hours. The panel at the bottom of the rail shows one countdown for each running event. When an event ends, it goes off both lists.</p>
 
         <h3>Elsewhere</h3>
         <p>The Elsewhere area has links to other sites for work that the tracker does not do. Each link opens in a new tab.</p>
@@ -189,7 +185,7 @@
           <button class="edit-btn" onclick="exportData()">Download backup</button>
           <button class="edit-btn" onclick="document.getElementById('import-file').click()">Restore from file</button>
           <input type="file" id="import-file" accept="application/json,.json" style="display:none" onchange="importData(this)">
-          <button class="edit-btn" onclick="toggleTmImportPanel()">Import from Time Memoria</button>
+          <button class="edit-btn" onclick="toggleTmImportPanel()">Import from Tales of Milestones</button>
         </div>
 
       </div>
@@ -197,8 +193,8 @@
       <div id="pages"></div>
 
       <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
-      <div class="copyright">&copy; Kaye Sharpedge</div>
-      <div class="build-stamp">Last updated 01/11/2026 @ 22:57 UTC</div>
+      <div class="copyright">&copy; Legends of the Game</div>
+      <div class="build-stamp">Last updated 01/11/2026 @ 23:08 UTC</div>
 
     </div>
   </main>
@@ -208,7 +204,7 @@
 <!-- The Time Memoria import opens over the page, so the area on screen stays
      where it was. The ids are the same as the old inline panel. -->
 <dialog class="tm-dlg" id="tm-import-panel" aria-labelledby="tm-dlg-title">
-  <h2 id="tm-dlg-title">Import from Time Memoria</h2>
+  <h2 id="tm-dlg-title">Import from Tales of Milestones</h2>
   <p class="hint">In the plugin, press <b>Copy everything</b> (or type <code>/tm full</code>), then paste here. This browser reads the export. Nothing goes to a server.</p>
   <textarea class="note-area" id="tm-import-text" placeholder="Paste here (Ctrl+V)" spellcheck="false" oninput="onTmPasteInput()"></textarea>
   <div class="tm-import-error" id="tm-import-error" role="status"></div>
@@ -219,13 +215,15 @@
   </div>
 </dialog>
 
-<script src="ocean.js"></script>
 <script src="jobquest-items.js"></script>
 <script src="tm-export-tables.js"></script>
 <script src="collection-lists.js"></script>
 <script src="relic-stages.js"></script>
 <script src="events-feed.js"></script>
+<script src="vendor/vue.global.prod.js"></script>
+<script src="ocean.js"></script>
 <script src="journey.js"></script>
+<script src="relics-vue.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
