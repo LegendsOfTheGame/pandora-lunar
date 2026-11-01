@@ -826,7 +826,7 @@ const MSQ_EXPANSIONS = [
 ];
 
 // Every reset is a fixed instant in UTC (SE's own convention: GMT reference regardless of
-// player DST). Edit/extend this list when 8.0 reworks resets (2027-01-19) — no other code
+// player DST). Edit/extend this list when 8.0 reworks resets (2027-02-23) — no other code
 // changes needed, every routine just points at whichever schedule id you pick.
 const RESET_SCHEDULES = [
   { id:'daily15',   kind:'daily',    hour:15,            label:'Daily · 15:00 UTC — roulettes, Allied Society' },
@@ -2825,12 +2825,12 @@ function runningEvents(){ const t = Date.now(); return currentEvents().filter(e 
 function fmtEventDay(ms){ return new Date(ms).toLocaleDateString('en-GB', {day:'numeric', month:'short', timeZone:'UTC'}); }
 function fmtEventTime(ms){ return new Date(ms).toISOString().slice(11, 16); }
 /* "7 Oct – 27 Oct", "31 Oct 02:00–04:00 UTC" for a broadcast, "From 28 Oct ·
-   until Patch 8.0 (about 19 Jan)" for an event that runs until a patch. */
+   until Patch 8.0 (about 23 Feb)" for an event that runs until a patch. */
 function eventWhen(e){
   if(e.broadcast && e.to !== null)
     return `${fmtEventDay(e.from)} ${fmtEventTime(e.from)}&ndash;${fmtEventTime(e.to)} UTC`;
   if(e.note)
-    return `From ${fmtEventDay(e.from)} &middot; ${esc(e.note.replace(/^Until/, 'until'))}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)}, not confirmed)` : ''}`;
+    return `From ${fmtEventDay(e.from)} &middot; ${esc(e.note.replace(/^Until/, 'until'))}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)})` : ''}`;
   return `${fmtEventDay(e.from)} &ndash; ${e.to !== null ? fmtEventDay(e.to) : '?'}`;
 }
 function renderEvents(cid){
@@ -3129,12 +3129,14 @@ function fmtCountdown(ms){
   return d ? `${d}d ${pad(h)}:${rest}` : `${h}:${rest}`;
 }
 
-/* 8.0 Evercold. 07:00 UTC on 19 January 2027 is the reported date, not a
-   confirmed one — Square Enix states it at Tokyo Fan Fest on 1 November 2026,
-   so the strip says "unconfirmed" until then. The same date is written into
-   the comment above RESET_SCHEDULES, because 8.0 reworks the reset clocks.
-   Keep the two in step when the real date lands. */
-const EVERCOLD_UTC = Date.UTC(2027, 0, 19, 7, 0, 0);
+/* 8.0 Evercold. The date is confirmed: public release 23 February 2027
+   (Tokyo Fan Fest keynote, 31 October 2026). Early access (19 February) is
+   not the target. The time is ours: SE never publishes one for the public
+   release. Early access for SB/ShB/EW/DT opened at 09:00 UTC; players report
+   EW and DT opened to the public at daily reset, 15:00 UTC. 12:00 UTC is the
+   midpoint, so the strip says the time is estimated. Keep in step with the
+   comment above RESET_SCHEDULES and PATCH_RELEASES in ffxiv-latest-news. */
+const EVERCOLD_UTC = Date.UTC(2027, 1, 23, 12, 0, 0);
 function updateExpacBar(){
   const bar = document.getElementById('expac-bar');
   if(!bar) return;
@@ -3147,7 +3149,7 @@ function updateExpacBar(){
     return;
   }
   time.textContent = fmtCountdown(ms);
-  when.textContent = '· 19 Jan 2027, 07:00 UTC';
+  when.textContent = '· 23 Feb 2027, about 12:00 UTC';
 }
 
 /* Only a routine you have ticked is waiting on a reset. An unticked one needs
