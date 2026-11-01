@@ -91,10 +91,17 @@ var porterIds = data.GetExcelSheet<ChocoboTaxiStand>()!
   // Not stops: an unused row named "（空き）" and the two event-only Reginald Eventman stands.
   .Where(r => !r.Name.StartsWith("（") && !r.Name.StartsWith("Reginald Eventman"))
   .Select(r => r.RowId).ToArray();
+// Only currents a zone still lists. The AetherCurrent sheet also keeps 145 old field
+// currents that no zone uses any more (no quest, no zone set), so counting every row
+// gave 448 when a player with all 31 zones done holds 303.
+int currentCount = data.GetExcelSheet<AetherCurrentCompFlgSet>()!
+  .Where(r => r.RowId > 0 && r.Territory.RowId > 0)
+  .SelectMany(r => r.AetherCurrents.Select(a => a.RowId))
+  .Where(id => id > 0).Distinct().Count();
 var world = new
 {
   sightseeing = data.GetExcelSheet<Adventure>()!.Count(r => !r.Name.IsEmpty),
-  currents = data.GetExcelSheet<AetherCurrent>()!.Count(r => r.RowId > 0),
+  currents = currentCount,
   zones = currentZones,
   aetherytes = data.GetExcelSheet<Aetheryte>()!.Count(r => r.RowId > 0 && r.IsAetheryte && !r.Invisible && r.PlaceName.RowId > 0),
   porters = porterIds
