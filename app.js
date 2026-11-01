@@ -3137,20 +3137,26 @@ function fmtCountdown(ms){
    midpoint, so the strip says the time is estimated. Keep in step with the
    comment above RESET_SCHEDULES and PATCH_RELEASES in ffxiv-latest-news. */
 const EVERCOLD_UTC = Date.UTC(2027, 1, 23, 12, 0, 0);
-function updateExpacBar(){
-  const bar = document.getElementById('expac-bar');
-  if(!bar) return;
-  const time = document.getElementById('ex-time'), when = document.getElementById('ex-when');
-  const ms = EVERCOLD_UTC - Date.now();
-  if(ms <= 0){
-    bar.classList.add('released');
-    time.textContent = 'live';
-    when.textContent = '· released';
-    return;
-  }
-  time.textContent = fmtCountdown(ms);
-  when.textContent = '· 23 Feb 2027, about 12:00 UTC';
-}
+/* Drawn by Vue, like the Ocean Fishing bar. It keeps its own one-second clock,
+   so the footer's shared setInterval no longer calls it. index.html leaves an
+   empty #expac-app inside the Evercold foot-item. */
+const ExpacBar = {
+  setup(){
+    const now = Vue.ref(Date.now());
+    let timer;
+    Vue.onMounted(() => { timer = setInterval(() => { now.value = Date.now(); }, 1000); });
+    Vue.onUnmounted(() => clearInterval(timer));
+    const ms = Vue.computed(() => EVERCOLD_UTC - now.value);
+    return {ms, fmtCountdown};
+  },
+  template: `
+    <div class="expac-bar" id="expac-bar" :class="{released: ms <= 0}"
+         title="Public release 23 February 2027 (confirmed). Square Enix gives no time, so 12:00 UTC is an estimate.">
+      <span class="ex-label">Evercold &middot; <em>time estimated</em></span>
+      <span class="ex-time">{{ ms <= 0 ? 'live' : fmtCountdown(ms) }}</span>
+      <span class="ex-when">{{ ms <= 0 ? '· released' : '· 23 Feb 2027, about 12:00 UTC' }}</span>
+    </div>`
+};
 
 /* Only a routine you have ticked is waiting on a reset. An unticked one needs
    no clock, because you can do it now. So this scans the ticked routines of
@@ -3252,10 +3258,10 @@ function initFootSlot(){
   }
   showFoot(0);
   restartFootTimer();
-  updateExpacBar();
+  if(document.getElementById('expac-app')) Vue.createApp(ExpacBar).mount('#expac-app');
   updateResetBar();
   updateEventSlides();
-  setInterval(()=>{ refreshEventSlides(); updateExpacBar(); updateResetBar(); updateEventSlides(); }, 1000);
+  setInterval(()=>{ refreshEventSlides(); updateResetBar(); updateEventSlides(); }, 1000);
 }
 
 /* A page left open for days never sees a new events-feed.js or a new Ledger
