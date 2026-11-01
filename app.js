@@ -826,7 +826,7 @@ const MSQ_EXPANSIONS = [
 ];
 
 // Every reset is a fixed instant in UTC (SE's own convention: GMT reference regardless of
-// player DST). Edit/extend this list when 8.0 reworks resets (2027-01-19) — no other code
+// player DST). Edit/extend this list when 8.0 reworks resets (2027-02-23) — no other code
 // changes needed, every routine just points at whichever schedule id you pick.
 const RESET_SCHEDULES = [
   { id:'daily15',   kind:'daily',    hour:15,            label:'Daily · 15:00 UTC — roulettes, Allied Society' },
@@ -2261,7 +2261,7 @@ function characterPageHTML(cid){
 
   <div class="tab-panel" data-tab="overview">
   <div class="section" data-frame="progress">
-    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via Time Memoria</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
+    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via Tales of Milestones</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
     <div class="quest-grid" id="${cid}-quests"></div>
     <div class="check-note" id="${cid}-overall-check"></div>
   </div>
@@ -2313,7 +2313,7 @@ function characterPageHTML(cid){
   </div>
   <div class="tab-panel" data-tab="cosmic">
   <div class="section" data-frame="tools">
-    <h2>Cosmic tools <span class="hint">via Time Memoria &mdash; research data per class</span></h2>
+    <h2>Cosmic tools <span class="hint">via Tales of Milestones &mdash; research data per class</span></h2>
     <div id="${cid}-cosmic-meta"></div>
     <div id="${cid}-cosmic" class="cosmic-columns"></div>
   </div>
@@ -2326,13 +2326,13 @@ function characterPageHTML(cid){
   </div>
   <div class="tab-panel" data-tab="journey">
   <div class="section">
-    <h2>Journey <span class="hint">via Time Memoria &mdash; questlines, duties and exploration, from Copy everything</span></h2>
+    <h2>Journey <span class="hint">via Tales of Milestones &mdash; questlines, duties and exploration, from Copy everything</span></h2>
     <div id="${cid}-journey"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="collections">
   <div class="section">
-    <h2>Collections <span class="hint">via Time Memoria &mdash; totals from FFXIV Collect, refreshed daily</span></h2>
+    <h2>Collections <span class="hint">via Tales of Milestones &mdash; totals from FFXIV Collect, refreshed daily</span></h2>
     <div id="${cid}-coll"></div>
   </div>
   </div>
@@ -2388,7 +2388,7 @@ function characterPageHTML(cid){
   </div>
   <div class="tab-panel" data-tab="events">
   <div class="section">
-    <h2>Events <span class="hint">from the Lodestone, the same feed as Time Memoria&rsquo;s Active Events &middot; checked every 6 hours</span></h2>
+    <h2>Events <span class="hint">from the Lodestone, the same feed as Tales of Milestones&rsquo;s Active Events &middot; checked every 6 hours</span></h2>
     <div id="${cid}-events"></div>
   </div>
   </div>
@@ -2751,7 +2751,7 @@ function renderRoute(){
     const cls = !s.released ? 'locked' : s.done ? 'done' : (open && s.i === open.i ? 'active' : '');
     const pc = !s.released ? '8.0' : s.q ? s.p + '%' : '—';
     const title = !s.released ? 'Expansion 8.0. The game sheets fill this in on release day.'
-      : s.q ? `${s.q.have.toLocaleString()} of ${s.q.total.toLocaleString()} quests done` : 'Import Copy everything from Time Memoria to fill this in.';
+      : s.q ? `${s.q.have.toLocaleString()} of ${s.q.total.toLocaleString()} quests done` : 'Import Copy everything from Tales of Milestones to fill this in.';
     return `<button type="button" style="grid-column:${i+1}" class="stn ${cls}${s.i === sel ? ' sel' : ''}" title="${esc(title)}"
       aria-pressed="${s.i === sel}" onclick="pickStation(${s.i})"><span class="dot"></span><span class="nm">${esc(s.n)}</span><span class="pc">${pc}</span></button>`;
   }).join('');
@@ -2766,7 +2766,7 @@ function renderRoute(){
   // the line says why. The tooltip alone was not enough (22 Oct 2026).
   const noFigures = st.every(x => !x.released || !x.q);
   const hint = noFigures
-    ? `<span class="route-hint">Import <b>Copy everything</b> from Time Memoria 3.8 or later to fill in these percentages.</span>`
+    ? `<span class="route-hint">Import <b>Copy everything</b> from Tales of Milestones 3.8 or later to fill in these percentages.</span>`
     : '';
   box.innerHTML = `<div class="route-stations" tabindex="0" aria-label="Scroll expansion timeline">${track}${stations}</div><div class="route-note">${note}${hint}</div>`;
   renderStationCard(st);
@@ -2800,8 +2800,8 @@ function renderStationCard(st){
   }
   box.innerHTML = `<div class="section"><h2>${esc(s.n)}</h2>${s.q
     ? `<div class="jr-row"><span>Quests done</span><span class="jr-v">${s.q.have.toLocaleString()} / ${s.q.total.toLocaleString()} &middot; ${s.p}%</span><div class="jr-bar"><i style="width:${s.p}%"></i></div></div>
-       <div class="jr-note">The figures are the same as Time Memoria&rsquo;s Overview: main scenario, chronicles, sidequests, allied society, class and job quests, and levequests.</div>`
-    : `<div class="jr-note">No quest data yet. Import Copy everything from Time Memoria.</div>`}
+       <div class="jr-note">The figures are the same as Tales of Milestones&rsquo;s Overview: main scenario, chronicles, sidequests, allied society, class and job quests, and levequests.</div>`
+    : `<div class="jr-note">No quest data yet. Import Copy everything from Tales of Milestones.</div>`}
     <div class="jr-note">The lists below show ${esc(s.n)} only.</div></div>`;
 }
 
@@ -2825,12 +2825,12 @@ function runningEvents(){ const t = Date.now(); return currentEvents().filter(e 
 function fmtEventDay(ms){ return new Date(ms).toLocaleDateString('en-GB', {day:'numeric', month:'short', timeZone:'UTC'}); }
 function fmtEventTime(ms){ return new Date(ms).toISOString().slice(11, 16); }
 /* "7 Oct – 27 Oct", "31 Oct 02:00–04:00 UTC" for a broadcast, "From 28 Oct ·
-   until Patch 8.0 (about 19 Jan)" for an event that runs until a patch. */
+   until Patch 8.0 (about 23 Feb)" for an event that runs until a patch. */
 function eventWhen(e){
   if(e.broadcast && e.to !== null)
     return `${fmtEventDay(e.from)} ${fmtEventTime(e.from)}&ndash;${fmtEventTime(e.to)} UTC`;
   if(e.note)
-    return `From ${fmtEventDay(e.from)} &middot; ${esc(e.note.replace(/^Until/, 'until'))}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)}, not confirmed)` : ''}`;
+    return `From ${fmtEventDay(e.from)} &middot; ${esc(e.note.replace(/^Until/, 'until'))}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)})` : ''}`;
   return `${fmtEventDay(e.from)} &ndash; ${e.to !== null ? fmtEventDay(e.to) : '?'}`;
 }
 function renderEvents(cid){
@@ -3129,12 +3129,14 @@ function fmtCountdown(ms){
   return d ? `${d}d ${pad(h)}:${rest}` : `${h}:${rest}`;
 }
 
-/* 8.0 Evercold. 07:00 UTC on 19 January 2027 is the reported date, not a
-   confirmed one — Square Enix states it at Tokyo Fan Fest on 1 November 2026,
-   so the strip says "unconfirmed" until then. The same date is written into
-   the comment above RESET_SCHEDULES, because 8.0 reworks the reset clocks.
-   Keep the two in step when the real date lands. */
-const EVERCOLD_UTC = Date.UTC(2027, 0, 19, 7, 0, 0);
+/* 8.0 Evercold. The date is confirmed: public release 23 February 2027
+   (Tokyo Fan Fest keynote, 31 October 2026). Early access (19 February) is
+   not the target. The time is ours: SE never publishes one for the public
+   release. Early access for SB/ShB/EW/DT opened at 09:00 UTC; players report
+   EW and DT opened to the public at daily reset, 15:00 UTC. 12:00 UTC is the
+   midpoint, so the strip says the time is estimated. Keep in step with the
+   comment above RESET_SCHEDULES and PATCH_RELEASES in ffxiv-latest-news. */
+const EVERCOLD_UTC = Date.UTC(2027, 1, 23, 12, 0, 0);
 function updateExpacBar(){
   const bar = document.getElementById('expac-bar');
   if(!bar) return;
@@ -3147,7 +3149,7 @@ function updateExpacBar(){
     return;
   }
   time.textContent = fmtCountdown(ms);
-  when.textContent = '· 19 Jan 2027, 07:00 UTC';
+  when.textContent = '· 23 Feb 2027, about 12:00 UTC';
 }
 
 /* Only a routine you have ticked is waiting on a reset. An unticked one needs
@@ -3452,7 +3454,7 @@ function renderTmSyncNote(cid){
   const c = getChar(cid);
   const el = document.getElementById(cid+'-tm-sync-note');
   if(!el) return;
-  el.textContent = c.tmSyncedAt ? `Synced from Time Memoria v${c.tmSyncedVersion||'?'} · ${fmtTmTimestamp(c.tmSyncedAt)}` : '';
+  el.textContent = c.tmSyncedAt ? `Synced from Tales of Milestones v${c.tmSyncedVersion||'?'} · ${fmtTmTimestamp(c.tmSyncedAt)}` : '';
 }
 function fmtTmTimestamp(iso){
   const d = new Date(iso);
@@ -3532,8 +3534,8 @@ function renderPluginMode(cid){
   const c = getChar(cid);
   const hint = document.getElementById(`${cid}-pluginhint`);
   const btn = document.getElementById(`${cid}-pluginmode-btn`);
-  if(hint) hint.textContent = c.noPlugin ? 'manual entry — no plugin' : 'via Time Memoria';
-  if(btn) btn.textContent = c.noPlugin ? 'I use Time Memoria' : "I don't use the plugin";
+  if(hint) hint.textContent = c.noPlugin ? 'manual entry — no plugin' : 'via Tales of Milestones';
+  if(btn) btn.textContent = c.noPlugin ? 'I use Tales of Milestones' : "I don't use the plugin";
 }
 function toggleNoPlugin(cid){
   collectAllInputs();
@@ -3805,11 +3807,11 @@ function updateSocietyModeUi(cid){
   const btn = document.getElementById(`${cid}-socmode-btn`);
 
   if(hint) hint.textContent = c.societiesSynced
-    ? 'via Time Memoria'
+    ? 'via Tales of Milestones'
     : 'rank + points reset to 0 on every rank-up';
 
   if(btn){
-    btn.textContent = c.societiesSynced ? 'Edit manually' : 'Use Time Memoria';
+    btn.textContent = c.societiesSynced ? 'Edit manually' : 'Use Tales of Milestones';
     // Nothing to go back to until an import has actually happened.
     btn.style.display = (c.societiesSynced || c.tmSyncedAt) ? '' : 'none';
   }
@@ -4165,12 +4167,12 @@ function renderCosmic(cid){
 
   if(!reading){
     meta.innerHTML = '';
-    box.innerHTML = `<div class="empty-hint">No Cosmic tool data. Import a Time Memoria export to fill in this section. Time Memoria reads the research data only when your character is in a Cosmic Exploration zone.</div>`;
+    box.innerHTML = `<div class="empty-hint">No Cosmic tool data. Import a Tales of Milestones export to fill in this section. Tales of Milestones reads the research data only when your character is in a Cosmic Exploration zone.</div>`;
     return;
   }
   const missing = COSMIC_CLASSES.filter(j => !have.includes(j));
   meta.innerHTML = `
-    <div class="check-note ok">Research data as of ${esc(reading.asOf ? fmtTmTimestamp(reading.asOf) : 'an unknown time')}. Time Memoria reads it only in a Cosmic Exploration zone, so this time can be earlier than the export.</div>
+    <div class="check-note ok">Research data as of ${esc(reading.asOf ? fmtTmTimestamp(reading.asOf) : 'an unknown time')}. Tales of Milestones reads it only in a Cosmic Exploration zone, so this time can be earlier than the export.</div>
     ${missing.length ? `<div class="check-note ok">No research data in the export for ${esc(missing.join(', '))}.</div>` : ''}`;
   box.innerHTML = have.concat(extra).map(j => cosmicClassHTML(j, jobs[j])).join('')
     || '<div class="empty-hint">The export has no research data for any class.</div>';
@@ -5392,7 +5394,7 @@ function onTmPasteInput(){
   try{ obj = tmNormalizeExport(JSON.parse(text)); }
   catch(e){ errEl.textContent = 'Not valid JSON.'; return; }
   if(!obj || typeof obj !== 'object' || obj.source !== 'time-memoria'){
-    errEl.textContent = 'Doesn’t look like a Time Memoria export (missing or unexpected "source" field).';
+    errEl.textContent = 'Doesn’t look like a Tales of Milestones export (missing or unexpected "source" field).';
     return;
   }
   if(typeof obj.name !== 'string' || !obj.name.trim()){
@@ -5411,7 +5413,7 @@ function renderTmImportSummary(){
     `<option value="${c.id}">${esc(c.name || `Character ${i+1}`)}</option>`
   ).join('');
   summaryEl.innerHTML = `
-    <div class="tm-import-meta">${esc(p.name)} &middot; ${esc((p.server&&p.server.world)||'?')} &mdash; Time Memoria v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
+    <div class="tm-import-meta">${esc(p.name)} &middot; ${esc((p.server&&p.server.world)||'?')} &mdash; Tales of Milestones v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
     <select class="tm-import-select" id="tm-import-target" onchange="onTmTargetChange()">
       <option value="">&mdash; Link to which tracked character? &mdash;</option>
       ${options}
@@ -5788,7 +5790,7 @@ function applyTmImport(){
   document.getElementById('tm-import-text').value = '';
   document.getElementById('tm-import-error').textContent = '';
   document.getElementById('tm-import-summary').innerHTML = `
-    <div class="tm-import-meta">Merged into ${esc(c.name || 'this character')} &mdash; ${esc(p.name)}, Time Memoria v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
+    <div class="tm-import-meta">Merged into ${esc(c.name || 'this character')} &mdash; ${esc(p.name)}, Tales of Milestones v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
     <div id="tm-import-diff">${mergedDiffHTML}</div>
     <button class="edit-btn tm-import-apply-btn" onclick="toggleTmImportPanel()">Close</button>
   `;
@@ -5797,7 +5799,7 @@ function applyTmImport(){
   renderSwitcher();
   scheduleSave();
   tmReloadOnClose = true;
-  document.getElementById('save-status').textContent = 'Imported from Time Memoria';
+  document.getElementById('save-status').textContent = 'Imported from Tales of Milestones';
 }
 
 /* ---------- init ---------- */

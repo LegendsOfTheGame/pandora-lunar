@@ -1,4 +1,7 @@
-/* ---------- ocean fishing (global, character-independent) ---------- */
+/* ---------- ocean fishing (global, character-independent) ----------
+   Drawn by Vue, like the Relics panel. It shows the same text with the same classes
+   as the old textContent version, so style.css needs no change. It loads after
+   vendor/vue.global.prod.js; index.html leaves an empty #ocean-app for it. */
 const OCEAN_INTERVAL_MS = 2 * 3600000;
 const OCEAN_WINDOW_MS = 15 * 60000;
 function oceanState(now){
@@ -15,24 +18,27 @@ function fmtClock(ms){
   const pad = n => String(n).padStart(2,'0');
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
-function updateOceanBar(){
-  const bar = document.getElementById('ocean-bar');
-  if(!bar) return;
-  const st = oceanState(new Date());
-  bar.classList.toggle('registering', st.open);
-  const label = document.getElementById('oc-label');
-  const time  = document.getElementById('oc-time');
-  const npc   = document.getElementById('oc-npc');
-  if(st.open){
-    label.textContent = 'Ocean Fishing · registration open';
-    time.textContent  = fmtClock(st.msLeft) + ' left';
-    npc.textContent   = '· Dryskthota, Limsa Lominsa Lower Decks (3.0, 12.7)';
-  }else{
-    label.textContent = 'Ocean Fishing · next boarding';
-    time.textContent  = fmtClock(st.msLeft);
-    npc.textContent   = '· ' + new Date(st.at).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
-  }
-}
 
-updateOceanBar();
-setInterval(updateOceanBar, 1000);
+const OceanBar = {
+  setup(){
+    const now = Vue.ref(new Date());
+    let timer;
+    Vue.onMounted(() => { timer = setInterval(() => { now.value = new Date(); }, 1000); });
+    Vue.onUnmounted(() => clearInterval(timer));
+    const st = Vue.computed(() => oceanState(now.value));
+    const label = Vue.computed(() => st.value.open ? 'Ocean Fishing · registration open' : 'Ocean Fishing · next boarding');
+    const time = Vue.computed(() => fmtClock(st.value.msLeft) + (st.value.open ? ' left' : ''));
+    const npc = Vue.computed(() => st.value.open
+      ? '· Dryskthota, Limsa Lominsa Lower Decks (3.0, 12.7)'
+      : '· ' + new Date(st.value.at).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}));
+    return {st, label, time, npc};
+  },
+  template: `
+    <div class="ocean-bar" id="ocean-bar" :class="{registering: st.open}">
+      <span class="oc-label">{{ label }}</span>
+      <span class="oc-time">{{ time }}</span>
+      <span class="oc-npc">{{ npc }}</span>
+    </div>`
+};
+
+Vue.createApp(OceanBar).mount('#ocean-app');

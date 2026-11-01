@@ -107,10 +107,10 @@ function jrPct(n, d){ return d ? Math.round(n / d * 100) : 0; }
 function collectionsAsOf(c){
   if(!hasCollections(c)) return '';
   const when = c.tmCollections.asOf ? fmtTmTimestamp(c.tmCollections.asOf) : 'an earlier import';
-  return `From Time Memoria, exported ${when}${c.tmCollections.game ? ' &middot; game build ' + esc(c.tmCollections.game) : ''}.`;
+  return `From Tales of Milestones, exported ${when}${c.tmCollections.game ? ' &middot; game build ' + esc(c.tmCollections.game) : ''}.`;
 }
 function emptyCollectionsHTML(what){
-  return `<div class="jr-note">No ${what} yet. In Time Memoria press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" onclick="toggleTmImportPanel()">Import from Time Memoria</button> and paste it.</div>`;
+  return `<div class="jr-note">No ${what} yet. In Tales of Milestones press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" onclick="toggleTmImportPanel()">Import from Tales of Milestones</button> and paste it.</div>`;
 }
 
 /* ---- Collections ---- */
@@ -220,7 +220,7 @@ function speedZones(){
 }
 function mountSpeedHTML(c){
   const speeds = c.tmCollections.mountSpeed;
-  if(!speeds) return '<div class="jr-note">No mount speed yet. Import a newer Time Memoria export (Copy everything).</div>';
+  if(!speeds) return '<div class="jr-note">No mount speed yet. Import a newer Tales of Milestones export (Copy everything).</div>';
   const attuned = ownedSet(c, 'aetherytes');
   const zones = speedZones();
   const reached = z => (speeds[z.id] || 0) > 0 || !z.aetherytes.length || z.aetherytes.some(a => attuned.has(a));
@@ -305,40 +305,13 @@ function relicStageName(code, job, stage){
   return RELIC_STAGES[code].stages[stage] ? RELIC_STAGES[code].stages[stage][0] : 'Stage ' + (stage + 1);
 }
 
-function relicLineHTML(code, c, held){
-  const line = RELIC_STAGES[code], total = line.stages.length;
-  const done = ownedSet(c, 'questsDone');
-  const genre = RELIC_GENRE[code];
-  const ids = genre && TM_QUEST_GENRES[genre] ? TM_QUEST_GENRES[genre].ids : null;
-  const quests = ids ? listRowsHTML([{g: genre, have: ids.filter(id => done.has(id)).length, total: ids.length}]) : '';
-
-  const jobs = held && held[code] ? Object.keys(held[code]).sort((a, b) => (TM_JOB_NAMES[a] || a).localeCompare(TM_JOB_NAMES[b] || b)) : [];
-  const rows = held === null
-    ? '<div class="jr-note">Import a newer Time Memoria export (Copy everything) to see the stage of each job.</div>'
-    : jobs.length
-      ? `<div class="jr-grid">${jobs.map(j => {
-          const s = held[code][j], il = line.stages[s] && line.stages[s][1];
-          return `<div class="jr-row${s === total - 1 ? ' full' : ''}" title="${il ? 'Item level ' + il : ''}"><span>${esc(TM_JOB_NAMES[j] || j)} &middot; ${esc(relicStageName(code, j, s))}</span><span class="jr-v">${s + 1} / ${total}</span>
-            <div class="jr-bar"><i style="width:${jrPct(s + 1, total)}%"></i></div></div>`;
-        }).join('')}</div>`
-      : '<div class="jr-note">None held.</div>';
-
-  const ladder = line.stages.map(([s, il], i) =>
-    `<span title="Stage ${i + 1}${il ? ' · item level ' + il : ''}">${String.fromCharCode(65 + i)}. ${esc(s)}${il ? ' <i class="faint">' + il + '</i>' : ''}</span>`).join('');
-  return `<div class="subhead">${esc(line.name)}</div>${rows}${quests}
-    <details class="relic-stages"><summary class="jr-note">All ${total} stages</summary><div class="jr-duties relic-ladder">${ladder}</div></details>`;
-}
-
-function relicExpHTML(ex, c){
-  const held = heldRelics(c);
-  return relicLineCodes().filter(k => RELIC_STAGES[k].ex === ex).map(k => relicLineHTML(k, c, held)).join('')
-    + '<div class="jr-note" style="margin-top:10px">The highest stage held for each job: armoury chest, bags, saddlebag, retainers and glamour dresser. A job with none is not listed. What a retainer has equipped and the Armoire are not read.</div>';
-}
+// Each expansion's relic lines are drawn by Vue: see relics-vue.js.
 
 function renderJourney(cid){
   const c = getChar(cid);
   const box = document.getElementById(cid + '-journey');
   if(!box) return;
+  unmountRelics(cid);
   if(!hasCollections(c)){ box.innerHTML = emptyCollectionsHTML('journey data'); return; }
   const L = c.tmCollections.lists;
   const asOf = `<div class="jr-note">${collectionsAsOf(c)}</div>`;
@@ -383,10 +356,11 @@ function renderJourney(cid){
   box.innerHTML = asOf
     + `<div data-frame="questlines">${genreListHTML(questlines, c)}</div>`
     + `<div data-frame="relics">${genreListHTML(relics, c)}</div>`
-    + relicExpansions().map(ex => `<div data-frame="${relicFrameKey(ex)}">${relicExpHTML(ex, c)}</div>`).join('')
+    + relicExpansions().map(ex => `<div data-frame="${relicFrameKey(ex)}"><div data-relic-ex="${ex}"></div></div>`).join('')
     + `<div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div>${genreListHTML(seasonal, c)}</div>`
     + `<div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>${dutyHTML}</div>`
     + `<div data-frame="exploration">${explore}</div>`
     + `<div data-frame="mountspeed">${speedHTML}</div>`;
+  mountRelics(cid, box);
   if(DATA.activeId === cid && activeTab(cid) === 'journey') applyFrames(cid, 'journey');
 }
