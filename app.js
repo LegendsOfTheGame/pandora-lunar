@@ -2822,27 +2822,49 @@ function fmtEventDay(ms){ return new Date(ms).toLocaleDateString('en-GB', {day:'
 function fmtEventTime(ms){ return new Date(ms).toISOString().slice(11, 16); }
 /* "7 Oct – 27 Oct", "31 Oct 02:00–04:00 UTC" for a broadcast, "From 28 Oct ·
    until Patch 8.0 (about 23 Feb)" for an event that runs until a patch. */
+/* Plain text: Vue escapes it. */
 function eventWhen(e){
   if(e.broadcast && e.to !== null)
-    return `${fmtEventDay(e.from)} ${fmtEventTime(e.from)}&ndash;${fmtEventTime(e.to)} UTC`;
+    return `${fmtEventDay(e.from)} ${fmtEventTime(e.from)}–${fmtEventTime(e.to)} UTC`;
   if(e.note)
-    return `From ${fmtEventDay(e.from)} &middot; ${esc(e.note.replace(/^Until/, 'until'))}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)})` : ''}`;
-  return `${fmtEventDay(e.from)} &ndash; ${e.to !== null ? fmtEventDay(e.to) : '?'}`;
+    return `From ${fmtEventDay(e.from)} · ${e.note.replace(/^Until/, 'until')}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)})` : ''}`;
+  return `${fmtEventDay(e.from)} – ${e.to !== null ? fmtEventDay(e.to) : '?'}`;
 }
+/* Today &rarr; Events, drawn by Vue. The list is the same for every character,
+   so each character's box gets its own small app with its own one-second clock;
+   the countdowns tick instead of moving every 30 seconds. */
+const EventList = {
+  setup(){
+    const now = Vue.ref(Date.now());
+    let timer;
+    Vue.onMounted(() => { timer = setInterval(() => { now.value = Date.now(); }, 1000); });
+    Vue.onUnmounted(() => clearInterval(timer));
+    const list = Vue.computed(() => { now.value; return currentEvents(); });
+    return {now, list, eventWhen, fmtCountdown};
+  },
+  template: `
+    <div v-if="list.length" class="jr-grid">
+      <div v-for="e in list" :key="e.name + e.from" class="ev-card">
+        <div class="ev-name"><a v-if="e.url" :href="e.url" target="_blank" rel="noopener">{{ e.name }}</a><template v-else>{{ e.name }}</template></div>
+        <div class="jr-note">{{ eventWhen(e) }}</div>
+        <div v-if="e.from > now" class="jr-row"><span>Starts in</span><span class="jr-v">{{ fmtCountdown(e.from - now) }}</span></div>
+        <div v-else-if="e.to !== null" class="jr-row"><span>Ends in{{ e.estimated ? ' (estimated)' : '' }}</span><span class="jr-v">{{ fmtCountdown(e.to - now) }}</span></div>
+      </div>
+    </div>
+    <div v-else class="jr-note">No event is running or announced.</div>`
+};
+/* Mounts the list once per box. When the pages are rebuilt (characterPageHTML),
+   the box is a new element: it gets a new app and the old one is unmounted. */
+const eventApps = {};
 function renderEvents(cid){
   const box = document.getElementById(cid + '-events');
   if(!box) return;
-  const now = Date.now();
-  const list = currentEvents();
-  box.innerHTML = list.length ? `<div class="jr-grid">${list.map(e => {
-      const running = e.from <= now;
-      const name = e.url ? `<a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.name)}</a>` : esc(e.name);
-      const row = running
-        ? (e.to === null ? '' : `<div class="jr-row"><span>Ends in${e.estimated ? ' (estimated)' : ''}</span><span class="jr-v">${fmtCountdown(e.to - now)}</span></div>`)
-        : `<div class="jr-row"><span>Starts in</span><span class="jr-v">${fmtCountdown(e.from - now)}</span></div>`;
-      return `<div class="ev-card"><div class="ev-name">${name}</div><div class="jr-note">${eventWhen(e)}</div>${row}</div>`;
-    }).join('')}</div>`
-    : '<div class="jr-note">No event is running or announced.</div>';
+  const had = eventApps[cid];
+  if(had && had.box === box) return;
+  if(had) had.app.unmount();
+  const app = Vue.createApp(EventList);
+  app.mount(box);
+  eventApps[cid] = {app, box};
 }
 
 /* ---------- elsewhere ----------
@@ -5819,7 +5841,7 @@ function applyTmImport(){
   renderSwitcher();
   updateSoundToggleUI();
   initFootSlot();
-  setInterval(()=>{ DATA.chars.forEach(c=>{ refreshRoutines(c.id); renderEvents(c.id); }); checkResetSounds(); }, 30000);
+  setInterval(()=>{ DATA.chars.forEach(c=>{ refreshRoutines(c.id); }); checkResetSounds(); }, 30000);
   window.addEventListener('resize', syncSitebarHeight);
   syncSitebarHeight();
 })();
