@@ -1,7 +1,7 @@
 /* ---------- ocean fishing (global, character-independent) ----------
    Drawn by Vue, like the Relics panel. It shows the same text with the same classes
    as the old textContent version, so style.css needs no change. It loads after
-   vendor/vue.global.prod.js; index.html leaves an empty #ocean-app for it. */
+   vendor/vue.global.prod.js. The footer carousel (FootSlot in app.js) draws it. */
 const OCEAN_INTERVAL_MS = 2 * 3600000;
 const OCEAN_WINDOW_MS = 15 * 60000;
 function oceanState(now){
@@ -40,5 +40,3 @@ const OceanBar = {
       <span class="oc-npc">{{ npc }}</span>
     </div>`
 };
-
-Vue.createApp(OceanBar).mount('#ocean-app');

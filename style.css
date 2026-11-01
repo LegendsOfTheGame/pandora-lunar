@@ -915,6 +915,9 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 
 /* ---- pinned rail footer ---- */
 .rail-foot{flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel)}
+/* Vue's mount point for the footer. display:contents keeps .foot-slot and .foot-dots
+   as direct children of .rail-foot, which is a flex row on mid-width screens. */
+.foot-app{display:contents}
 .foot-slot{position:relative;min-height:80px;border-bottom:1px solid var(--line-soft)}
 .rail-foot .foot-item{display:none}
 .rail-foot .foot-item.on{display:block}

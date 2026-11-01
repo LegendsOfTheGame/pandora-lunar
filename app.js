@@ -1571,13 +1571,9 @@ function toggleResetSound(){
   updateSoundToggleUI();
   scheduleSave();
 }
-function updateSoundToggleUI(){
-  const btn = document.getElementById('oc-mute-btn');
-  if(!btn) return;
-  btn.textContent = DATA.ui.soundEnabled ? '🔔' : '🔕';
-  btn.classList.toggle('muted', !DATA.ui.soundEnabled);
-  btn.title = DATA.ui.soundEnabled ? 'Reset sounds on — click to mute' : 'Reset sounds muted — click to unmute';
-}
+/* The mute button is drawn by the footer carousel (FootSlot), which reads this. */
+const soundOn = Vue.ref(true);
+function updateSoundToggleUI(){ soundOn.value = !!DATA.ui.soundEnabled; }
 
 /* ---------- patch gating ---------- */
 // FFXIV patch numbers compare correctly as plain decimals (x.0 ... x.5, x.55, x.56, x.58,
@@ -2848,26 +2844,6 @@ function renderEvents(cid){
     }).join('')}</div>`
     : '<div class="jr-note">No event is running or announced.</div>';
 }
-/* One rotator slide per running event, added before initFootSlot counts them.
-   Announced events stay in Today &rarr; Events only, so the rotator is not
-   crowded by a week of upcoming stream slots. */
-function addEventSlides(){
-  const slot = document.getElementById('foot-slot');
-  if(!slot) return;
-  runningEvents().forEach(e => slot.insertAdjacentHTML('beforeend',
-    `<div class="foot-item ev-slide" data-name="${esc(e.name)}"><div class="expac-bar">
-       <span class="ex-label">${e.broadcast && e.to !== null
-         ? `Live now &middot; until ${fmtEventTime(e.to)} UTC`
-         : `Event &middot; ${e.to === null ? esc(e.note || 'no end date')
-           : `ends ${e.estimated ? 'about ' : ''}${fmtEventDay(e.to)}`}`}</span>
-       <span class="ex-time"${e.to === null ? '' : ` data-event-end="${e.to}"`}>&mdash;</span>
-       <span class="ex-when">&middot; ${esc(e.name)}</span></div></div>`));
-}
-function updateEventSlides(){
-  document.querySelectorAll('[data-event-end]').forEach(el => {
-    el.textContent = fmtCountdown(Number(el.dataset.eventEnd) - Date.now());
-  });
-}
 
 /* ---------- elsewhere ----------
    Sites the Ledger does not replace. Plain links: no tracking script runs here. */
@@ -3138,8 +3114,7 @@ function fmtCountdown(ms){
    comment above RESET_SCHEDULES and PATCH_RELEASES in ffxiv-latest-news. */
 const EVERCOLD_UTC = Date.UTC(2027, 1, 23, 12, 0, 0);
 /* Drawn by Vue, like the Ocean Fishing bar. It keeps its own one-second clock,
-   so the footer's shared setInterval no longer calls it. index.html leaves an
-   empty #expac-app inside the Evercold foot-item. */
+   so nothing outside needs to call it. FootSlot draws it in the Evercold slide. */
 const ExpacBar = {
   setup(){
     const now = Vue.ref(Date.now());
@@ -3213,67 +3188,79 @@ const ResetBar = {
     </div>`
 };
 
+/* The rail footer: one Vue app for the three fixed panels, one slide per running
+   event, the dots and the rotation. It shows one panel at a time and moves on
+   every 5 seconds; every panel keeps counting while hidden.
+
+   Running events only. Announced events stay in Today &rarr; Events, so the
+   rotator is not crowded by a week of upcoming stream slots. The event list is
+   read again every second, so an event that starts while the page is open
+   (Keybound Brawler, 28 Oct 2026 08:00 UTC) gets its slide without a reload.
+   When the list changes, the panel on screen stays where it is if it still
+   exists. */
 const FOOT_PERIOD_MS = 5000;
-let footIndex = 0, footHeld = false, footTimer = null;
-function footItems(){ return Array.from(document.querySelectorAll('.foot-slot .foot-item')); }
-function showFoot(i){
-  const items = footItems();
-  if(!items.length) return;
-  footIndex = ((i % items.length) + items.length) % items.length;
-  items.forEach((el,k)=> el.classList.toggle('on', k === footIndex));
-  const dots = document.getElementById('foot-dots');
-  if(dots) Array.from(dots.children).forEach((d,k)=> d.classList.toggle('on', k === footIndex));
-}
-function pickFoot(i){ showFoot(i); restartFootTimer(); }
-function restartFootTimer(){
-  clearInterval(footTimer);
-  footTimer = setInterval(()=>{ if(!footHeld) showFoot(footIndex + 1); }, FOOT_PERIOD_MS);
-}
-function buildFootDots(){
-  const dots = document.getElementById('foot-dots');
-  if(dots){
-    dots.innerHTML = footItems().map((el,k)=>
-      `<button title="${esc(el.dataset.name || ('View ' + (k+1)))}" onclick="pickFoot(${k})"></button>`).join('');
-  }
-}
-/* The running events as one string, to notice when one starts or ends. */
-let footEventKey = '';
-function runningEventKey(){ return runningEvents().map(e => e.name).join('\n'); }
-/* Rebuilds the event slides when the set of running events changes, so an event
-   that starts while the page is open (Keybound Brawler, 28 Oct 2026 08:00 UTC)
-   gets its slide without a reload. The slide on screen stays where it is when
-   it still exists. */
-function refreshEventSlides(){
-  const key = runningEventKey();
-  if(key === footEventKey) return;
-  footEventKey = key;
-  const current = footItems()[footIndex];
-  const name = current ? current.dataset.name : null;
-  document.querySelectorAll('#foot-slot .ev-slide').forEach(el => el.remove());
-  addEventSlides();
-  buildFootDots();
-  const items = footItems();
-  const keep = name ? items.findIndex(el => el.dataset.name === name) : -1;
-  showFoot(keep >= 0 ? keep : 0);
-  updateEventSlides();
-}
+const FOOT_FIXED = ['Next reset', 'Ocean Fishing', 'Evercold'];
+const FootSlot = {
+  components: {ResetBar, OceanBar, ExpacBar},
+  setup(){
+    const now = Vue.ref(Date.now());
+    const index = Vue.ref(0);
+    let held = false, clock, rotor;
+    const events = Vue.computed(() => { now.value; return runningEvents(); });
+    const names = Vue.computed(() => FOOT_FIXED.concat(events.value.map(e => e.name)));
+
+    let prev = names.value;
+    Vue.watch(() => names.value.join('\n'), () => {
+      const name = prev[index.value];
+      prev = names.value;
+      const k = prev.indexOf(name);
+      index.value = k >= 0 ? k : 0;
+    });
+
+    const restart = () => {
+      clearInterval(rotor);
+      rotor = setInterval(() => { if(!held) index.value = (index.value + 1) % names.value.length; }, FOOT_PERIOD_MS);
+    };
+    Vue.onMounted(() => { clock = setInterval(() => { now.value = Date.now(); }, 1000); restart(); });
+    Vue.onUnmounted(() => { clearInterval(clock); clearInterval(rotor); });
+
+    const label = e => e.broadcast && e.to !== null
+      ? `Live now · until ${fmtEventTime(e.to)} UTC`
+      : `Event · ${e.to === null ? (e.note || 'no end date') : `ends ${e.estimated ? 'about ' : ''}${fmtEventDay(e.to)}`}`;
+    const left = e => e.to === null ? '—' : fmtCountdown(e.to - now.value);
+    return {
+      index, names, events, label, left, soundOn, toggleResetSound,
+      pick: k => { index.value = k; restart(); },
+      // The rotation stops while the pointer is over the slot, so a countdown
+      // being read does not move.
+      hold: v => { held = v; }
+    };
+  },
+  template: `
+    <div class="foot-slot" id="foot-slot" @mouseenter="hold(true)" @mouseleave="hold(false)">
+      <div class="foot-item" :class="{on: index === 0}" data-name="Next reset"><reset-bar></reset-bar></div>
+      <div class="foot-item" :class="{on: index === 1}" data-name="Ocean Fishing">
+        <div class="oc-wrap">
+          <ocean-bar></ocean-bar>
+          <button class="oc-mute" id="oc-mute-btn" :class="{muted: !soundOn}" @click="toggleResetSound()"
+                  :title="soundOn ? 'Reset sounds on — click to mute' : 'Reset sounds muted — click to unmute'">{{ soundOn ? '🔔' : '🔕' }}</button>
+        </div>
+      </div>
+      <div class="foot-item" :class="{on: index === 2}" data-name="Evercold"><expac-bar></expac-bar></div>
+      <div v-for="(e, k) in events" :key="e.name" class="foot-item ev-slide" :class="{on: index === k + 3}" :data-name="e.name">
+        <div class="expac-bar">
+          <span class="ex-label">{{ label(e) }}</span>
+          <span class="ex-time">{{ left(e) }}</span>
+          <span class="ex-when">· {{ e.name }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="foot-dots" id="foot-dots">
+      <button v-for="(n, k) in names" :key="n" :title="n" :class="{on: index === k}" @click="pick(k)"></button>
+    </div>`
+};
 function initFootSlot(){
-  addEventSlides();
-  footEventKey = runningEventKey();
-  buildFootDots();
-  const slot = document.getElementById('foot-slot');
-  if(slot){
-    // The rotation stops while the pointer is over the slot, so a countdown
-    // being read does not move.
-    slot.addEventListener('mouseenter', ()=>{ footHeld = true; });
-    slot.addEventListener('mouseleave', ()=>{ footHeld = false; });
-  }
-  showFoot(0);
-  restartFootTimer();
-  if(document.getElementById('expac-app')) Vue.createApp(ExpacBar).mount('#expac-app');
-  if(document.getElementById('reset-app')) Vue.createApp(ResetBar).mount('#reset-app');
-  updateEventSlides();
-  setInterval(()=>{ refreshEventSlides(); updateEventSlides(); }, 1000);
+  if(document.getElementById('foot-app')) Vue.createApp(FootSlot).mount('#foot-app');
 }
 
 /* A page left open for days never sees a new events-feed.js or a new Ledger
