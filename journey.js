@@ -104,11 +104,13 @@ function patchExpansion(patch){ return parseInt(patch, 10) - 2; }
 function ownedSet(c, key){ return new Set(((c.tmCollections || {}).lists || {})[key] || []); }
 function hasCollections(c){ return !!(c.tmCollections && c.tmCollections.lists); }
 function jrPct(n, d){ return d ? Math.round(n / d * 100) : 0; }
-function collectionsAsOf(c){
+/* Plain text for Vue; collectionsAsOf is the escaped form for HTML strings. */
+function collectionsAsOfText(c){
   if(!hasCollections(c)) return '';
   const when = c.tmCollections.asOf ? fmtTmTimestamp(c.tmCollections.asOf) : 'an earlier import';
-  return `From Tales of Milestones, exported ${when}${c.tmCollections.game ? ' &middot; game build ' + esc(c.tmCollections.game) : ''}.`;
+  return `From Tales of Milestones, exported ${when}${c.tmCollections.game ? ' · game build ' + c.tmCollections.game : ''}.`;
 }
+function collectionsAsOf(c){ return esc(collectionsAsOfText(c)); }
 function emptyCollectionsHTML(what){
   return `<div class="jr-note">No ${what} yet. In Tales of Milestones press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" onclick="toggleTmImportPanel()">Import from Tales of Milestones</button> and paste it.</div>`;
 }
@@ -117,44 +119,59 @@ function emptyCollectionsHTML(what){
 let collOwnFilter = 'all';
 function setCollFilter(cid, v){ collOwnFilter = v; renderCollections(cid); }
 
+/* Drawn by Vue (boxState in app.js). DATA is not reactive, so renderCollections
+   bumps state.tick and the panel works its lists out again. applyFrames still
+   hides the [data-frame] blocks, so it runs after Vue has drawn them. */
+const CollectionsPanel = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      if(!c || !hasCollections(c)) return null;
+      const source = (typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.lists) || {};
+      const lists = {};
+      Object.keys(source).forEach(k => lists[k] = source[k].filter(r => inRoute(patchExpansion(r[2]))));
+      COLLECTION_KINDS.filter(k => k.game).forEach(k => lists[k.key] = gameCollectionRows(k.game).filter(r => inRoute(r[5])));
+      const kinds = COLLECTION_KINDS.map(k => {
+        const all = lists[k.key] || [], owned = ownedSet(c, k.key);
+        const have = all.filter(r => owned.has(r[0])).length;
+        const rows = all.filter(r => collOwnFilter === 'all' || (collOwnFilter === 'owned') === owned.has(r[0]))
+          .map(r => ({id: r[0], name: r[1], when: r[2], how: [r[3], r[4]].filter(Boolean).join(' · '), own: owned.has(r[0])}));
+        return {key: k.key, frame: frameSlug(k.key), label: k.label, note: k.note, game: !!k.game,
+                have, total: all.length, pct: jrPct(have, all.length), rows};
+      });
+      return {kinds, filter: collOwnFilter, asOf: collectionsAsOfText(c), curios: ownedSet(c, 'curios').size,
+              built: (typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.built) || '?'};
+    });
+    return {view, toggleTmImportPanel, setFilter: v => setCollFilter(props.state.cid, v)};
+  },
+  template: `
+    <div v-if="!view" class="jr-note">No collections yet. In Tales of Milestones press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" @click="toggleTmImportPanel()">Import from Tales of Milestones</button> and paste it.</div>
+    <template v-else>
+      <div data-frame="overview">
+        <div class="jr-note">{{ view.asOf }} Totals are FFXIV Collect’s obtainable items (list built {{ view.built }}). Fish and spearfish totals come from the game’s own tables.</div>
+        <div class="jr-grid">
+          <div v-for="k in view.kinds" :key="k.key" class="jr-row"><span>{{ k.label }}</span><span class="jr-v">{{ k.have }} / {{ k.total }}</span>
+            <div class="jr-bar"><i :style="{width: k.pct + '%'}"></i></div></div>
+        </div>
+        <div class="jr-note" style="margin-top:8px">Not on Collect: {{ view.curios }} curiosities.</div>
+      </div>
+      <div v-for="k in view.kinds" :key="k.key" :data-frame="k.frame">
+        <div class="subhead">{{ k.label }} · {{ k.have }} of {{ k.total }} {{ k.game ? 'caught' : 'owned' }}<template v-if="k.note"> · {{ k.note }}</template></div>
+        <div class="jr-chips"><button v-for="v in ['all','owned','missing']" :key="v" class="tab-btn" :class="{active: view.filter === v}" @click="setFilter(v)">{{ v[0].toUpperCase() + v.slice(1) }}</button></div>
+        <div class="jr-scroll"><table class="jr-table"><tbody>
+          <tr><th></th><th>Name</th><th>{{ k.game ? 'Expansion' : 'Patch' }}</th><th>{{ k.game ? 'Where' : 'How to get it' }}</th></tr>
+          <tr v-for="r in k.rows" :key="r.id" :class="{have: r.own}"><td>{{ r.own ? '✓' : '' }}</td><td>{{ r.name }}</td><td class="jr-v">{{ r.when }}</td><td class="jr-note">{{ r.how }}</td></tr>
+        </tbody></table></div>
+      </div>
+    </template>`
+};
 function renderCollections(cid){
-  const c = getChar(cid);
-  const box = document.getElementById(cid + '-coll');
-  if(!box) return;
-  if(!hasCollections(c)){ box.innerHTML = emptyCollectionsHTML('collections'); return; }
-  const source = (typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.lists) || {};
-  const lists = {};
-  Object.keys(source).forEach(k => lists[k] = source[k].filter(r => inRoute(patchExpansion(r[2]))));
-  COLLECTION_KINDS.filter(k => k.game).forEach(k => lists[k.key] = gameCollectionRows(k.game).filter(r => inRoute(r[5])));
-
-  const overview = COLLECTION_KINDS.map(k => {
-    const all = lists[k.key] || [], owned = ownedSet(c, k.key);
-    const have = all.filter(r => owned.has(r[0])).length;
-    return `<div class="jr-row"><span>${esc(k.label)}</span><span class="jr-v">${have} / ${all.length}</span>
-      <div class="jr-bar"><i style="width:${jrPct(have, all.length)}%"></i></div></div>`;
-  }).join('');
-  const curios = ownedSet(c, 'curios').size;
-
-  const chips = ['all','owned','missing'].map(v =>
-    `<button class="tab-btn${collOwnFilter===v?' active':''}" onclick="setCollFilter('${cid}','${v}')">${v[0].toUpperCase()+v.slice(1)}</button>`).join('');
-
-  const tables = COLLECTION_KINDS.map(k => {
-    const all = lists[k.key] || [], owned = ownedSet(c, k.key);
-    const rows = all.filter(r => collOwnFilter === 'all' || (collOwnFilter === 'owned') === owned.has(r[0]));
-    return `<div data-frame="${frameSlug(k.key)}">
-      <div class="subhead">${esc(k.label)} &middot; ${all.filter(r => owned.has(r[0])).length} of ${all.length} ${k.game ? 'caught' : 'owned'}${k.note ? ' &middot; ' + esc(k.note) : ''}</div>
-      <div class="jr-chips">${chips}</div>
-      <div class="jr-scroll"><table class="jr-table"><tr><th></th><th>Name</th><th>${k.game ? 'Expansion' : 'Patch'}</th><th>${k.game ? 'Where' : 'How to get it'}</th></tr>${
-        rows.map(r => `<tr class="${owned.has(r[0]) ? 'have' : ''}"><td>${owned.has(r[0]) ? '&#10003;' : ''}</td><td>${esc(r[1])}</td><td class="jr-v">${esc(r[2])}</td><td class="jr-note">${esc([r[3], r[4]].filter(Boolean).join(' · '))}</td></tr>`).join('')
-      }</table></div></div>`;
-  }).join('');
-
-  box.innerHTML = `<div data-frame="overview">
-      <div class="jr-note">${collectionsAsOf(c)} Totals are FFXIV Collect&rsquo;s obtainable items (list built ${esc((typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.built) || '?')}). Fish and spearfish totals come from the game&rsquo;s own tables.</div>
-      <div class="jr-grid">${overview}</div>
-      <div class="jr-note" style="margin-top:8px">Not on Collect: ${curios} curiosities.</div>
-    </div>${tables}`;
-  if(DATA.activeId === cid && activeTab(cid) === 'collections') applyFrames(cid, 'collections');
+  const state = boxState(cid + '-coll', CollectionsPanel);
+  if(!state) return;
+  Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+  Vue.nextTick(() => { if(DATA.activeId === cid && activeTab(cid) === 'collections') applyFrames(cid, 'collections'); });
 }
 
 /* ---- Journey ---- */
