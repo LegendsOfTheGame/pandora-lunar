@@ -1,14 +1,12 @@
-/* ---- Relics (Vue trial) ----
+/* ---- Relics ----
    The first panel drawn by Vue instead of an HTML string. It shows the same thing
    relicLineHTML and relicExpHTML showed, with the same classes, so style.css needs
    no change. It only reads the character: it has no inputs and writes nothing, so the
    saved data and the Time Memoria import format do not change.
 
-   renderJourney still rebuilds the Journey box with innerHTML. It leaves an empty
-   <div data-relic-ex> for each expansion, and mountRelics puts one Vue app in each.
-   The apps of the last render are unmounted first, because innerHTML is about to
-   discard their elements. vendor/vue.global.prod.js is a pinned copy (3.5.13), so the
-   page makes no request to a CDN. */
+   JourneyPanel (journey.js) draws one RelicExpansion per expansion, so this file
+   loads before journey.js. vendor/vue.global.prod.js is a pinned copy (3.5.13), so
+   the page makes no request to a CDN. */
 const RelicLine = {
   props: {code: String, c: Object, held: Object},
   setup(props){
@@ -60,18 +58,3 @@ const RelicExpansion = {
     <RelicLine v-for="k in codes" :key="k" :code="k" :c="c" :held="held" />
     <div class="jr-note" style="margin-top:10px">The highest stage held for each job: armoury chest, bags, saddlebag, retainers and glamour dresser. A job with none is not listed. What a retainer has equipped and the Armoire are not read.</div>`
 };
-
-const relicApps = {};
-function mountRelics(cid, box){
-  unmountRelics(cid);
-  const c = getChar(cid);
-  relicApps[cid] = [...box.querySelectorAll('[data-relic-ex]')].map(el => {
-    const app = Vue.createApp(RelicExpansion, {ex: +el.dataset.relicEx, c});
-    app.mount(el);
-    return app;
-  });
-}
-function unmountRelics(cid){
-  (relicApps[cid] || []).forEach(app => app.unmount());
-  delete relicApps[cid];
-}

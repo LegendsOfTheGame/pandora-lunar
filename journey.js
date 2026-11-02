@@ -104,16 +104,17 @@ function patchExpansion(patch){ return parseInt(patch, 10) - 2; }
 function ownedSet(c, key){ return new Set(((c.tmCollections || {}).lists || {})[key] || []); }
 function hasCollections(c){ return !!(c.tmCollections && c.tmCollections.lists); }
 function jrPct(n, d){ return d ? Math.round(n / d * 100) : 0; }
-/* Plain text for Vue; collectionsAsOf is the escaped form for HTML strings. */
 function collectionsAsOfText(c){
   if(!hasCollections(c)) return '';
   const when = c.tmCollections.asOf ? fmtTmTimestamp(c.tmCollections.asOf) : 'an earlier import';
   return `From Tales of Milestones, exported ${when}${c.tmCollections.game ? ' · game build ' + c.tmCollections.game : ''}.`;
 }
-function collectionsAsOf(c){ return esc(collectionsAsOfText(c)); }
-function emptyCollectionsHTML(what){
-  return `<div class="jr-note">No ${what} yet. In Tales of Milestones press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" onclick="toggleTmImportPanel()">Import from Tales of Milestones</button> and paste it.</div>`;
-}
+/* "No … yet" and how to get it, for Collections and Journey. */
+const EmptyTm = {
+  props: {what: String},
+  setup: () => ({toggleTmImportPanel}),
+  template: `<div class="jr-note">No {{ what }} yet. In Tales of Milestones press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" @click="toggleTmImportPanel()">Import from Tales of Milestones</button> and paste it.</div>`
+};
 
 /* ---- Collections ---- */
 let collOwnFilter = 'all';
@@ -123,6 +124,7 @@ function setCollFilter(cid, v){ collOwnFilter = v; renderCollections(cid); }
    bumps state.tick and the panel works its lists out again. applyFrames still
    hides the [data-frame] blocks, so it runs after Vue has drawn them. */
 const CollectionsPanel = {
+  components: {EmptyTm},
   props: ['state'],
   setup(props){
     const view = Vue.computed(() => {
@@ -144,10 +146,10 @@ const CollectionsPanel = {
       return {kinds, filter: collOwnFilter, asOf: collectionsAsOfText(c), curios: ownedSet(c, 'curios').size,
               built: (typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.built) || '?'};
     });
-    return {view, toggleTmImportPanel, setFilter: v => setCollFilter(props.state.cid, v)};
+    return {view, setFilter: v => setCollFilter(props.state.cid, v)};
   },
   template: `
-    <div v-if="!view" class="jr-note">No collections yet. In Tales of Milestones press <b>Copy everything</b> (or type <code>/tm full</code>), then click <button class="link-btn" @click="toggleTmImportPanel()">Import from Tales of Milestones</button> and paste it.</div>
+    <empty-tm v-if="!view" what="collections"></empty-tm>
     <template v-else>
       <div data-frame="overview">
         <div class="jr-note">{{ view.asOf }} Totals are FFXIV Collect’s obtainable items (list built {{ view.built }}). Fish and spearfish totals come from the game’s own tables.</div>
@@ -184,14 +186,23 @@ function genreRows(c, filter){
 }
 /* Finished questlines are hidden unless the character asks for them, so the list
    is what is left to do. The note under the list gives the count and the switch. */
-function genreListHTML(rows, c){
-  const done = rows.filter(r => r.total > 0 && r.have === r.total).length;
-  const shown = c.showDoneQuestlines ? rows : rows.filter(r => r.have !== r.total);
-  const note = done
-    ? `<div class="hidden-note"><span>${done} complete${c.showDoneQuestlines ? '' : ' &mdash; hidden'}</span><button class="link-btn" onclick="toggleDoneQuestlines('${c.id}')">${c.showDoneQuestlines ? 'hide them' : 'show them'}</button></div>`
-    : '';
-  return (shown.length ? listRowsHTML(shown) : '<div class="jr-note">Every questline here is complete.</div>') + note;
+function genreList(c, filter){
+  const rows = genreRows(c, filter);
+  return {rows: c.showDoneQuestlines ? rows : rows.filter(r => r.have !== r.total),
+          done: rows.filter(r => r.total > 0 && r.have === r.total).length, showing: !!c.showDoneQuestlines};
 }
+const GenreList = {
+  props: {list: Object},
+  emits: ['toggle'],
+  setup: () => ({jrPct, wikiUrl}),
+  template: `
+    <div v-if="list.rows.length" class="jr-grid">
+      <div v-for="r in list.rows" :key="r.g" class="jr-row" :class="{full: r.have === r.total}"><a class="jr-link" :href="wikiUrl(r.g)" target="_blank" rel="noopener noreferrer" title="Open the wiki page in a new tab">{{ r.g }}</a><span class="jr-v">{{ r.have }} / {{ r.total }}</span>
+        <div class="jr-bar"><i :style="{width: jrPct(r.have, r.total) + '%'}"></i></div></div>
+    </div>
+    <div v-else class="jr-note">Every questline here is complete.</div>
+    <div v-if="list.done" class="hidden-note"><span>{{ list.done }} complete{{ list.showing ? '' : ' — hidden' }}</span><button class="link-btn" @click="$emit('toggle')">{{ list.showing ? 'hide them' : 'show them' }}</button></div>`
+};
 function toggleDoneQuestlines(cid){
   const c = getChar(cid);
   c.showDoneQuestlines = !c.showDoneQuestlines;
@@ -216,11 +227,6 @@ function wikiUrl(name){
     ? WIKI_GO_BASE + '/wiki/' + encodeURIComponent(title)
     : 'https://ffxiv.consolegameswiki.com/mediawiki/index.php?title=' + encodeURIComponent(title);
 }
-function listRowsHTML(rows){
-  return `<div class="jr-grid">${rows.map(r =>
-    `<div class="jr-row${r.have === r.total ? ' full' : ''}"><a class="jr-link" href="${wikiUrl(r.g)}" target="_blank" rel="noopener noreferrer" title="Open the wiki page in a new tab">${esc(r.g)}</a><span class="jr-v">${r.have} / ${r.total}</span>
-      <div class="jr-bar"><i style="width:${jrPct(r.have, r.total)}%"></i></div></div>`).join('')}</div>`;
-}
 
 /* ---- Mount speed ----
    Every zone with a speed upgrade, in the order of the game's Mount Speed window
@@ -235,37 +241,24 @@ function speedZones(){
     return {id, name, region: region === '???' ? 'Other areas' : region, top, ex, order, aetherytes};
   }).sort((a, b) => a.ex - b.ex || a.order - b.order);
 }
-function mountSpeedHTML(c){
+/* Null when the export had no mount speed. Otherwise the totals and one group per
+   expansion, each a run of region headings and zone rows in window order. */
+function mountSpeedView(c){
   const speeds = c.tmCollections.mountSpeed;
-  if(!speeds) return '<div class="jr-note">No mount speed yet. Import a newer Tales of Milestones export (Copy everything).</div>';
+  if(!speeds) return null;
   const attuned = ownedSet(c, 'aetherytes');
-  const zones = speedZones();
   const reached = z => (speeds[z.id] || 0) > 0 || !z.aetherytes.length || z.aetherytes.some(a => attuned.has(a));
-  const shown = zones.filter(z => inRoute(z.ex));
-  const top = shown.filter(z => (speeds[z.id] || 0) >= z.top).length;
-  const gems = c.tmCollections.gemstones;
-
-  let html = `<div class="jr-grid">
-      <div class="jr-row"><span>Zones at top speed</span><span class="jr-v">${top} / ${shown.length}</span><div class="jr-bar"><i style="width:${jrPct(top, shown.length)}%"></i></div></div>
-      ${gems == null ? '' : `<div class="jr-row"><span>Bicolor gemstones</span><span class="jr-v">${gems.toLocaleString()} / 1,500</span><div class="jr-bar"><i style="width:${jrPct(gems, 1500)}%"></i></div></div>`}
-    </div>
-    <div class="jr-note">From Shadowbringers on, a zone's riding map is bought with bicolor gemstones from that zone's gemstone trader. In Endwalker and Dawntrail zones the map needs Shared FATE rank 2 in that zone.</div>`;
-  let lastEx = null, lastRegion = null;
+  const shown = speedZones().filter(z => inRoute(z.ex));
+  const groups = [];
+  let g = null, lastRegion = null;
   shown.forEach(z => {
-    if(z.ex !== lastEx){
-      if(lastEx !== null) html += '</div>';
-      html += `<div class="subhead">${esc(EXPANSION_NAMES[z.ex] || 'Other')}</div><div class="ms-list">`;
-      lastEx = z.ex; lastRegion = null;
-    }
-    if(z.region !== lastRegion){ html += `<div class="ms-region">${esc(z.region)}</div>`; lastRegion = z.region; }
+    if(!g || g.ex !== z.ex){ g = {ex: z.ex, name: EXPANSION_NAMES[z.ex] || 'Other', items: []}; groups.push(g); lastRegion = null; }
+    if(z.region !== lastRegion){ g.items.push({key: 'r' + z.id, region: z.region}); lastRegion = z.region; }
     const have = speeds[z.id] || 0;
-    const stars = reached(z)
-      ? '<span class="ms-on">★</span>'.repeat(have) + '<span class="ms-off">☆</span>'.repeat(Math.max(0, z.top - have))
-      : '<span class="jr-note">not reached</span>';
-    html += `<div class="ms-row${have >= z.top ? ' full' : ''}"><span>${esc(z.name)}</span><span class="ms-stars" title="${have} of ${z.top}">${stars}</span></div>`;
+    g.items.push({key: z.id, name: z.name, have, top: z.top, off: Math.max(0, z.top - have), reached: reached(z)});
   });
-  if(lastEx !== null) html += '</div>';
-  return html;
+  return {top: shown.filter(z => (speeds[z.id] || 0) >= z.top).length, count: shown.length,
+          gems: c.tmCollections.gemstones, groups};
 }
 
 /* ---- Relics ----
@@ -322,62 +315,104 @@ function relicStageName(code, job, stage){
   return RELIC_STAGES[code].stages[stage] ? RELIC_STAGES[code].stages[stage][0] : 'Stage ' + (stage + 1);
 }
 
-// Each expansion's relic lines are drawn by Vue: see relics-vue.js.
+/* Journey, drawn by Vue (boxState in app.js), the same way as Collections: DATA is
+   not reactive, so renderJourney bumps state.tick, and applyFrames runs after the
+   draw. Each expansion's relic lines are RelicExpansion (relics-vue.js). They work
+   their lines out once, when made, so they are keyed on the tick and made again on
+   every renderJourney. */
+const JourneyPanel = {
+  components: {EmptyTm, GenreList, RelicExpansion},
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => {
+      const tick = props.state.tick;
+      const c = getChar(props.state.cid);
+      if(!c || !hasCollections(c)) return null;
+      const L = c.tmCollections.lists;
 
+      // Duty grid: cleared of all, per expansion and type.
+      const cleared = new Set(L.dutiesDone || []);
+      const byExp = {};
+      Object.keys(TM_DUTIES).forEach(id => {
+        const [name, type, ex] = TM_DUTIES[id];
+        if(DUTY_TYPES.indexOf(type) < 0 || !inRoute(ex)) return;
+        const exp = EXPANSION_NAMES[ex] || 'Other';
+        ((byExp[exp] = byExp[exp] || {})[type] = byExp[exp][type] || []).push({name, done: cleared.has(+id)});
+      });
+      const duties = EXPANSION_NAMES.filter(e => byExp[e]).map(exp => {
+        const types = DUTY_TYPES.filter(t => byExp[exp][t]).map(t => {
+          const items = byExp[exp][t];
+          return {t, items, done: items.filter(d => d.done).length, all: items.length};
+        });
+        return {exp, types, done: types.reduce((n, t) => n + t.done, 0), all: types.reduce((n, t) => n + t.all, 0)};
+      });
+
+      const W = TM_WORLD, zonesDone = new Set(L.currentZones || []), porters = new Set(L.porters || []);
+      const explore = {
+        rows: [
+          ['Sightseeing vistas', (L.sightseeing||[]).length, W.sightseeing],
+          ['Aether currents', (L.currents||[]).length, W.currents],
+          ['Current zones complete', zonesDone.size, Object.keys(W.zones).length],
+          ['Aetherytes attuned', (L.aetherytes||[]).length, W.aetherytes],
+          ['Porter stops registered', W.porters.filter(id => porters.has(id)).length, W.porters.length]
+        ].map(([label, have, total]) => ({label, have, total})),
+        zones: Object.keys(W.zones).map(id => ({id, name: W.zones[id], done: zonesDone.has(+id)}))
+      };
+
+      return {tick, c, asOf: collectionsAsOfText(c),
+        questlines: genreList(c, (info, g) => !isRelicGenre(info, g) && info.category !== 'Seasonal Events'),
+        relics: genreList(c, isRelicGenre),
+        seasonal: genreList(c, info => info.category === 'Seasonal Events'),
+        relicEx: relicExpansions().map(ex => ({ex, frame: relicFrameKey(ex)})),
+        duties, explore, speed: mountSpeedView(c)};
+    });
+    return {view, jrPct, toggle: () => toggleDoneQuestlines(props.state.cid)};
+  },
+  template: `
+    <empty-tm v-if="!view" what="journey data"></empty-tm>
+    <template v-else>
+      <div class="jr-note">{{ view.asOf }}</div>
+      <div data-frame="questlines"><genre-list :list="view.questlines" @toggle="toggle"></genre-list></div>
+      <div data-frame="relics"><genre-list :list="view.relics" @toggle="toggle"></genre-list></div>
+      <div v-for="r in view.relicEx" :key="r.ex" :data-frame="r.frame"><div :data-relic-ex="r.ex"><relic-expansion :key="view.tick" :ex="r.ex" :c="view.c"></relic-expansion></div></div>
+      <div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div><genre-list :list="view.seasonal" @toggle="toggle"></genre-list></div>
+      <div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>
+        <template v-for="d in view.duties" :key="d.exp">
+          <div class="subhead">{{ d.exp }} · {{ d.done }} of {{ d.all }} cleared</div>
+          <template v-for="t in d.types" :key="t.t">
+            <div class="jr-note" style="margin:4px 0 2px">{{ t.t }} · {{ t.done }} / {{ t.all }}</div>
+            <div class="jr-duties"><span v-for="(x, i) in t.items" :key="i" :class="{done: x.done}" :title="x.name">{{ x.name }}</span></div>
+          </template>
+        </template>
+      </div>
+      <div data-frame="exploration">
+        <div class="jr-grid">
+          <div v-for="r in view.explore.rows" :key="r.label" class="jr-row"><span>{{ r.label }}</span><span class="jr-v">{{ r.have }} / {{ r.total }}</span><div class="jr-bar"><i :style="{width: jrPct(r.have, r.total) + '%'}"></i></div></div>
+        </div>
+        <div class="subhead" style="margin-top:10px">Flying zones</div><div class="jr-duties"><span v-for="z in view.explore.zones" :key="z.id" :class="{done: z.done}">{{ z.name }}</span></div>
+      </div>
+      <div data-frame="mountspeed">
+        <div v-if="!view.speed" class="jr-note">No mount speed yet. Import a newer Tales of Milestones export (Copy everything).</div>
+        <template v-else>
+          <div class="jr-grid">
+            <div class="jr-row"><span>Zones at top speed</span><span class="jr-v">{{ view.speed.top }} / {{ view.speed.count }}</span><div class="jr-bar"><i :style="{width: jrPct(view.speed.top, view.speed.count) + '%'}"></i></div></div>
+            <div v-if="view.speed.gems != null" class="jr-row"><span>Bicolor gemstones</span><span class="jr-v">{{ view.speed.gems.toLocaleString() }} / 1,500</span><div class="jr-bar"><i :style="{width: jrPct(view.speed.gems, 1500) + '%'}"></i></div></div>
+          </div>
+          <div class="jr-note">From Shadowbringers on, a zone's riding map is bought with bicolor gemstones from that zone's gemstone trader. In Endwalker and Dawntrail zones the map needs Shared FATE rank 2 in that zone.</div>
+          <template v-for="g in view.speed.groups" :key="g.ex">
+            <div class="subhead">{{ g.name }}</div>
+            <div class="ms-list"><template v-for="z in g.items" :key="z.key">
+              <div v-if="z.region" class="ms-region">{{ z.region }}</div>
+              <div v-else class="ms-row" :class="{full: z.have >= z.top}"><span>{{ z.name }}</span><span class="ms-stars" :title="z.have + ' of ' + z.top"><template v-if="z.reached"><span v-for="n in z.have" :key="'on' + n" class="ms-on">★</span><span v-for="n in z.off" :key="'off' + n" class="ms-off">☆</span></template><span v-else class="jr-note">not reached</span></span></div>
+            </template></div>
+          </template>
+        </template>
+      </div>
+    </template>`
+};
 function renderJourney(cid){
-  const c = getChar(cid);
-  const box = document.getElementById(cid + '-journey');
-  if(!box) return;
-  unmountRelics(cid);
-  if(!hasCollections(c)){ box.innerHTML = emptyCollectionsHTML('journey data'); return; }
-  const L = c.tmCollections.lists;
-  const asOf = `<div class="jr-note">${collectionsAsOf(c)}</div>`;
-
-  const questlines = genreRows(c, (info, g) => !isRelicGenre(info, g) && info.category !== 'Seasonal Events');
-  const relics = genreRows(c, isRelicGenre);
-  const seasonal = genreRows(c, info => info.category === 'Seasonal Events');
-
-  // Duty grid: cleared of all, per expansion and type.
-  const cleared = new Set(L.dutiesDone || []);
-  const byExp = {};
-  Object.keys(TM_DUTIES).forEach(id => {
-    const [name, type, ex] = TM_DUTIES[id];
-    if(DUTY_TYPES.indexOf(type) < 0 || !inRoute(ex)) return;
-    const exp = EXPANSION_NAMES[ex] || 'Other';
-    ((byExp[exp] = byExp[exp] || {})[type] = byExp[exp][type] || []).push({name, done: cleared.has(+id)});
-  });
-  const dutyHTML = EXPANSION_NAMES.filter(e => byExp[e]).map(exp => {
-    const types = DUTY_TYPES.filter(t => byExp[exp][t]);
-    const done = types.reduce((n, t) => n + byExp[exp][t].filter(d => d.done).length, 0);
-    const all = types.reduce((n, t) => n + byExp[exp][t].length, 0);
-    return `<div class="subhead">${esc(exp)} &middot; ${done} of ${all} cleared</div>` + types.map(t =>
-      `<div class="jr-note" style="margin:4px 0 2px">${esc(t)} &middot; ${byExp[exp][t].filter(d => d.done).length} / ${byExp[exp][t].length}</div>
-       <div class="jr-duties">${byExp[exp][t].map(d => `<span class="${d.done ? 'done' : ''}" title="${esc(d.name)}">${esc(d.name)}</span>`).join('')}</div>`).join('');
-  }).join('');
-
-  const W = TM_WORLD, zonesDone = new Set(L.currentZones || []), porters = new Set(L.porters || []);
-  const realPorters = W.porters.filter(id => porters.has(id)).length;
-  const zoneRows = Object.keys(W.zones).map(id =>
-    `<span class="${zonesDone.has(+id) ? 'done' : ''}">${esc(W.zones[id])}</span>`).join('');
-  const explore = `<div class="jr-grid">
-      <div class="jr-row"><span>Sightseeing vistas</span><span class="jr-v">${(L.sightseeing||[]).length} / ${W.sightseeing}</span><div class="jr-bar"><i style="width:${jrPct((L.sightseeing||[]).length, W.sightseeing)}%"></i></div></div>
-      <div class="jr-row"><span>Aether currents</span><span class="jr-v">${(L.currents||[]).length} / ${W.currents}</span><div class="jr-bar"><i style="width:${jrPct((L.currents||[]).length, W.currents)}%"></i></div></div>
-      <div class="jr-row"><span>Current zones complete</span><span class="jr-v">${zonesDone.size} / ${Object.keys(W.zones).length}</span><div class="jr-bar"><i style="width:${jrPct(zonesDone.size, Object.keys(W.zones).length)}%"></i></div></div>
-      <div class="jr-row"><span>Aetherytes attuned</span><span class="jr-v">${(L.aetherytes||[]).length} / ${W.aetherytes}</span><div class="jr-bar"><i style="width:${jrPct((L.aetherytes||[]).length, W.aetherytes)}%"></i></div></div>
-      <div class="jr-row"><span>Porter stops registered</span><span class="jr-v">${realPorters} / ${W.porters.length}</span><div class="jr-bar"><i style="width:${jrPct(realPorters, W.porters.length)}%"></i></div></div>
-    </div>
-    <div class="subhead" style="margin-top:10px">Flying zones</div><div class="jr-duties">${zoneRows}</div>`;
-
-  const speedHTML = mountSpeedHTML(c);
-
-  box.innerHTML = asOf
-    + `<div data-frame="questlines">${genreListHTML(questlines, c)}</div>`
-    + `<div data-frame="relics">${genreListHTML(relics, c)}</div>`
-    + relicExpansions().map(ex => `<div data-frame="${relicFrameKey(ex)}"><div data-relic-ex="${ex}"></div></div>`).join('')
-    + `<div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div>${genreListHTML(seasonal, c)}</div>`
-    + `<div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>${dutyHTML}</div>`
-    + `<div data-frame="exploration">${explore}</div>`
-    + `<div data-frame="mountspeed">${speedHTML}</div>`;
-  mountRelics(cid, box);
-  if(DATA.activeId === cid && activeTab(cid) === 'journey') applyFrames(cid, 'journey');
+  const state = boxState(cid + '-journey', JourneyPanel);
+  if(!state) return;
+  Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+  Vue.nextTick(() => { if(DATA.activeId === cid && activeTab(cid) === 'journey') applyFrames(cid, 'journey'); });
 }
