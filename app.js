@@ -3798,45 +3798,36 @@ function toggleShowZeroJobs(cid){
   scheduleSave();
 }
 
-/* ---------- allied society reputation ---------- */
-function societyRowHTML(cid, name){
-  const c = getChar(cid);
+/* ---------- allied society reputation ----------
+   Drawn by Vue (boxState). renderSocieties bumps state.tick: a new snapshot, and every
+   row made again, as the old full rebuild did. Typing points redraws nothing. The points
+   input uses v-init-value and keeps its id, so collectCharInputs reads it back; the rank
+   select follows saved data, so it is bound. toggleIntersocietal bumps state.beat, which
+   redraws only the stamp. */
+function societyRowView(c, name){
   const s = c.societies[name];
   const [, exp] = ALLIED_SOCIETIES.find(a=>a[0]===name);
   const info = rankInfo(s.rank);
-  const id = socId(name);
-  const rankOpts = validRanksFor(name)
-    .map(rank=>{ const r = rankInfo(rank); return `<option value="${r.rank}"${r.rank===s.rank?' selected':''}>${r.rank}. ${esc(r.name)}</option>`; }).join('');
   // Trust the plugin's own per-society quota over the generic rank table when we have it —
   // it knows things the table can't, like Ixal capping at Sworn(7) instead of the usual
   // rank 8, same as the four core ARR tribes cap at Trusted(4) instead of 8.
   const hasLiveQuota = c.societiesSynced && typeof s.needed === 'number';
   const quota = hasLiveQuota ? s.needed : info.quota;
-  const capped = quota === 0;
-  const cappedText = INTERSOCIETAL_QUESTS[exp]
-    ? `capped &mdash; needs ${esc(INTERSOCIETAL_QUESTS[exp])}`
-    : `capped &mdash; Bloodsworn is the max (no Intersocietal Quests exist for ${esc(exp)})`;
   // Read-only once Time Memoria has sent the real figures: the plugin reads them from the
   // game every time, so an editable control would only ever let someone make it wrong.
   // Everyone else keeps the dropdowns — most of the FC does not run the plugin, and this
   // page is for them too.
-  const rankCell = c.societiesSynced
-    ? `<span class="society-rank">${info.rank}. ${esc(info.name)}</span>`
-    : `<select id="${cid}-soc-rank-${id}" onchange="onSocietyRankChange('${cid}','${jsStr(name)}')">${rankOpts}</select>`;
-
-  const pointsCell = capped
-    ? `<span class="society-capped">${cappedText}</span>`
-    : c.societiesSynced
-      ? `<span class="society-points">${s.points}</span><span class="society-quota">/ ${quota}</span>`
-      : `<input type="text" id="${cid}-soc-points-${id}" value="${s.points}" style="text-align:right" oninput="onSocietyPointsInput('${cid}','${jsStr(name)}')">
-         <span class="society-quota">/ ${info.quota}</span>`;
-
-  return `
-    <div class="society-item">
-      <span class="society-name">${esc(name)}</span>
-      ${rankCell}
-      ${pointsCell}
-    </div>`;
+  return {
+    name, id: socId(name), synced: !!c.societiesSynced, rank: s.rank, points: s.points,
+    rankLabel: `${info.rank}. ${info.name}`,
+    opts: validRanksFor(name).map(rank => { const r = rankInfo(rank); return {rank: r.rank, label: `${r.rank}. ${r.name}`}; }),
+    capped: quota === 0,
+    cappedText: INTERSOCIETAL_QUESTS[exp]
+      ? `capped — needs ${INTERSOCIETAL_QUESTS[exp]}`
+      : `capped — Bloodsworn is the max (no Intersocietal Quests exist for ${exp})`,
+    // Manual entry shows the generic table's quota, the plugin's figures its own.
+    quota: c.societiesSynced ? quota : info.quota
+  };
 }
 // True once every society in the group is sitting at rank 8 — the point-earning cap for all
 // of them regardless of how far their individual ladder runs (Trusted for the four early-cap
@@ -3845,37 +3836,61 @@ function societyRowHTML(cid, name){
 function intersocietalReady(c, exp){
   return ALLIED_SOCIETIES.filter(a=>a[1]===exp).every(([name])=>c.societies[name].rank>=8);
 }
-function intersocietalRowHTML(cid, exp){
-  const c = getChar(cid);
-  const done = !!c.intersocietalDone[exp];
-  const id = 'inter-'+socId(exp);
-  return `
-    <div class="check-row">
-      <label><input type="checkbox" id="${cid}-${id}" ${done?'checked':''} onchange="toggleIntersocietal('${cid}','${exp}')"> ${esc(INTERSOCIETAL_QUESTS[exp])}</label>
-      ${done?'<span class="stamp">done</span>':'<span class="stamp pending">ready</span>'}
-    </div>`;
-}
+const SocietyList = {
+  props: ['state'],
+  directives: {initValue: vInitValue},
+  setup(props){
+    const groups = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      if(!c) return [];
+      const have = patchValue(c.patch);
+      return [...new Set(ALLIED_SOCIETIES.map(a=>a[1]))]
+        .filter(exp => !(have !== null && SOCIETY_EXP_GATE[exp] > have))
+        .map(exp => ({
+          exp, slug: frameSlug(exp),
+          rows: ALLIED_SOCIETIES.filter(a=>a[1]===exp).map(a => societyRowView(c, a[0])),
+          inter: INTERSOCIETAL_QUESTS[exp] && intersocietalReady(c, exp)
+            ? {id: 'inter-'+socId(exp), quest: INTERSOCIETAL_QUESTS[exp]} : null
+        }));
+    });
+    const done = exp => { props.state.beat; const c = getChar(props.state.cid); return !!(c && c.intersocietalDone[exp]); };
+    return {groups, done, onSocietyRankChange, onSocietyPointsInput, toggleIntersocietal};
+  },
+  // Each expansion is one block rather than loose siblings, so the columns on a
+  // wide screen can never split a heading from the societies under it.
+  template: `
+    <div v-if="!groups.length" class="empty-hint">Set your MSQ progress above to see allied societies as you unlock them.</div>
+    <div v-for="g in groups" :key="g.exp" class="society-exp" :data-frame="g.slug">
+      <div class="subhead">{{ g.exp }}</div>
+      <div class="society-group">
+        <div v-for="r in g.rows" :key="r.name + ':' + state.tick" class="society-item">
+          <span class="society-name">{{ r.name }}</span>
+          <span v-if="r.synced" class="society-rank">{{ r.rankLabel }}</span>
+          <select v-else :id="state.cid + '-soc-rank-' + r.id" :value="r.rank" @change="onSocietyRankChange(state.cid, r.name)">
+            <option v-for="o in r.opts" :key="o.rank" :value="o.rank">{{ o.label }}</option>
+          </select>
+          <span v-if="r.capped" class="society-capped">{{ r.cappedText }}</span>
+          <template v-else-if="r.synced"><span class="society-points">{{ r.points }}</span><span class="society-quota">/ {{ r.quota }}</span></template>
+          <template v-else><input type="text" :id="state.cid + '-soc-points-' + r.id" v-init-value="r.points" style="text-align:right" @input="onSocietyPointsInput(state.cid, r.name)"><span class="society-quota">/ {{ r.quota }}</span></template>
+        </div>
+      </div>
+      <div v-if="g.inter" class="check-row">
+        <label><input type="checkbox" :id="state.cid + '-' + g.inter.id" :checked="done(g.exp)" @change="toggleIntersocietal(state.cid, g.exp)"> {{ g.inter.quest }}</label>
+        <span :class="done(g.exp) ? 'stamp' : 'stamp pending'">{{ done(g.exp) ? 'done' : 'ready' }}</span>
+      </div>
+    </div>`
+};
 // Full render, safe to call on any rank change (a discrete <select> change, not continuous
 // typing) since it rebuilds every row — including toggling the points input vs. the capped
 // note depending on the newly selected rank's quota, and whether the Intersocietal Quests
 // prompt should appear below the group at all.
 function renderSocieties(cid){
-  const c = getChar(cid);
-  const have = patchValue(c.patch);
-  const groups = [...new Set(ALLIED_SOCIETIES.map(a=>a[1]))]
-    .filter(exp => !(have !== null && SOCIETY_EXP_GATE[exp] > have));
-  // Each expansion is one block rather than loose siblings, so the columns on a
-  // wide screen can never split a heading from the societies under it.
-  const html = groups.map(exp => `
-    <div class="society-exp" data-frame="${frameSlug(exp)}">
-      <div class="subhead">${esc(exp)}</div>
-      <div class="society-group">${ALLIED_SOCIETIES.filter(a=>a[1]===exp).map(a=>societyRowHTML(cid,a[0])).join('')}</div>
-      ${INTERSOCIETAL_QUESTS[exp] && intersocietalReady(c,exp) ? intersocietalRowHTML(cid,exp) : ''}
-    </div>
-  `).join('');
-  document.getElementById(cid+'-societies').innerHTML = html || '<div class="empty-hint">Set your MSQ progress above to see allied societies as you unlock them.</div>';
+  const state = boxState(cid+'-societies', SocietyList);
+  if(!state) return;
+  Object.assign(state, {cid, tick: (state.tick || 0) + 1});
   updateSocietyModeUi(cid);
-  applyFrames(cid, 'societies');
+  Vue.nextTick(() => applyFrames(cid, 'societies'));
   refreshNav(cid);
 }
 // Hands the section back to manual entry, or back to the plugin's figures. Not a
@@ -3916,9 +3931,8 @@ function toggleIntersocietal(cid, exp){
   const chk = document.getElementById(`${cid}-${id}`);
   if(!chk) return;
   c.intersocietalDone[exp] = chk.checked;
-  const stamp = chk.closest('.check-row').querySelector('.stamp');
-  stamp.textContent = chk.checked ? 'done' : 'ready';
-  stamp.classList.toggle('pending', !chk.checked);
+  const state = boxState(cid+'-societies', SocietyList);
+  if(state) state.beat = (state.beat || 0) + 1;
   scheduleSave();
 }
 function onSocietyRankChange(cid, name){
