@@ -3709,18 +3709,38 @@ function zeroJobCount(c){
 function emptyJobRow(rows){
   return rows || '<tr><td class="empty-hint">None levelled yet.</td></tr>';
 }
+/* The show/hide notes (jobs, locked routines, hidden routines) are drawn by Vue.
+   Each render…Note still works out its own text; drawNote hands it to one small app
+   per note element. An empty label draws nothing. When the pages are rebuilt, the
+   element is new: it gets a new app and the old one is unmounted. */
+const ToggleNote = {
+  props: ['state'],
+  template: `<template v-if="state.label"><span>{{ state.label }}</span><button class="link-btn" @click="state.toggle()">{{ state.button }}</button></template>`
+};
+const noteApps = {};
+function drawNote(id, label, button, toggle){
+  const box = document.getElementById(id);
+  if(!box) return;
+  let n = noteApps[id];
+  if(!n || n.box !== box){
+    if(n) n.app.unmount();
+    const state = Vue.reactive({label:'', button:'', toggle:null});
+    const app = Vue.createApp(ToggleNote, {state});
+    app.mount(box);
+    n = noteApps[id] = {app, box, state};
+  }
+  Object.assign(n.state, {label, button, toggle});
+}
 function renderJobsNote(cid){
-  const el = document.getElementById(cid+'-jobsnote');
-  if(!el) return;
   const c = getChar(cid);
   const zeros = zeroJobCount(c);
   // The one case with nothing to say: every job levelled, so nothing was hidden and there
   // is nothing to offer back.
-  if(!zeros){ el.innerHTML = ''; return; }
+  if(!zeros){ drawNote(cid+'-jobsnote', ''); return; }
   const label = c.showZeroJobs
     ? `showing ${zeros} ${zeros===1?'job':'jobs'} you haven't levelled`
-    : `${zeros} hidden &mdash; not levelled`;
-  el.innerHTML = `<span>${label}</span><button class="link-btn" onclick="toggleShowZeroJobs('${cid}')">${c.showZeroJobs?'hide them':'show them'}</button>`;
+    : `${zeros} hidden — not levelled`;
+  drawNote(cid+'-jobsnote', label, c.showZeroJobs?'hide them':'show them', () => toggleShowZeroJobs(cid));
 }
 // Reads the inputs back first: the tables are about to be rebuilt from the data, so a level
 // typed and not yet collected would be rewritten with the old one.
@@ -4922,11 +4942,9 @@ function renderRoutines(cid){
   refreshNav(cid);
 }
 function renderGatedNote(cid){
-  const el = document.getElementById(cid+'-gated');
-  if(!el) return;
   const c = getChar(cid);
   const locks = c.routines.map(r=>routineLock(r, c)).filter(Boolean);
-  if(!locks.length && !c.showGated){ el.innerHTML=''; return; }
+  if(!locks.length && !c.showGated){ drawNote(cid+'-gated', ''); return; }
   // Both reasons share one note and one toggle, unlike the user-hidden note below: "you
   // can't do this yet" is a single idea to the reader, whichever half of the data says so.
   // The reasons are still named, because "reach 7.0" and "level a crafter" are different
@@ -4942,27 +4960,25 @@ function renderGatedNote(cid){
     .filter(x=>x.n!==null).sort((a,b)=>a.n-b.n)[0];
   const reasons = [];
   if(byUnlock) reasons.push('unlocking in game');
-  if(byPatch) reasons.push(`a later patch${next?` (next at ${esc(next.s)})`:''}`);
+  if(byPatch) reasons.push(`a later patch${next?` (next at ${next.s})`:''}`);
   if(byLevel) reasons.push('a higher level');
   if(byJob) reasons.push(`a job you don't have`);
   const label = locks.length
-    ? `${locks.length} hidden &mdash; ${locks.length===1?'needs':'need'} ${reasons.join(' or ')}`
+    ? `${locks.length} hidden — ${locks.length===1?'needs':'need'} ${reasons.join(' or ')}`
     : 'showing locked routines';
-  el.innerHTML = `<span>${label}</span><button class="link-btn" onclick="toggleShowGated('${cid}')">${c.showGated?'hide them':'show them'}</button>`;
+  drawNote(cid+'-gated', label, c.showGated?'hide them':'show them', () => toggleShowGated(cid));
 }
 // Separate from the patch-gated note on purpose — "locked until a patch" and "hidden
 // because you chose to" are different reasons a routine isn't showing, and conflating them
 // would make it unclear which toggle would bring a given one back.
 function renderHiddenNote(cid){
-  const el = document.getElementById(cid+'-hiddennote');
-  if(!el) return;
   const c = getChar(cid);
   const hidden = c.routines.filter(r=>r.hidden);
-  if(!hidden.length && !c.showHidden){ el.innerHTML=''; return; }
+  if(!hidden.length && !c.showHidden){ drawNote(cid+'-hiddennote', ''); return; }
   const label = hidden.length
-    ? `${hidden.length} hidden by you &mdash; ${hidden.length===1?"doesn't":"don't"} apply to this character`
+    ? `${hidden.length} hidden by you — ${hidden.length===1?"doesn't":"don't"} apply to this character`
     : 'showing routines you hid';
-  el.innerHTML = `<span>${label}</span><button class="link-btn" onclick="toggleShowHidden('${cid}')">${c.showHidden?'hide them':'show them'}</button>`;
+  drawNote(cid+'-hiddennote', label, c.showHidden?'hide them':'show them', () => toggleShowHidden(cid));
 }
 function toggleShowGated(cid){
   collectAllInputs();
