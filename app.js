@@ -5208,25 +5208,42 @@ function refreshRoutines(cid){
 // Selects rebuild in full on every change — unlike text inputs, a <select> has no
 // mid-interaction typing state a rebuild could destroy, so this doesn't need the
 // focus-safe split-render treatment the rest of the app uses.
+/* Region / Data Center / World, drawn by Vue (boxState). onServerChange writes the
+   choice and clears the levels under it, then renderServerPicker bumps state.tick.
+   The selects show the saved data, so binding their value is safe here. */
+const ServerPicker = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      if(!c) return null;
+      const s = c.server;
+      return {
+        levels: [
+          ['pdc', 'Region', Object.keys(SERVER_DATA), s.pdc, false],
+          ['ldc', 'Data Center', s.pdc ? Object.keys(SERVER_DATA[s.pdc]||{}) : [], s.ldc, !s.pdc],
+          ['world', 'World', (s.pdc && s.ldc) ? ((SERVER_DATA[s.pdc]||{})[s.ldc]||[]) : [], s.world, !s.ldc]
+        ].map(([level, placeholder, list, value, disabled]) => ({level, placeholder, list, value: value || '', disabled}))
+      };
+    });
+    return {view, change: level => onServerChange(props.state.cid, level)};
+  },
+  template: `
+    <template v-if="view">
+      <span class="sp-label">Server</span>
+      <template v-for="(l, i) in view.levels" :key="l.level">
+        <span v-if="i" class="sp-sep">/</span>
+        <select :id="state.cid + '-server-' + l.level" :value="l.value" :disabled="l.disabled" @change="change(l.level)">
+          <option value="">{{ l.placeholder }}</option>
+          <option v-for="v in l.list" :key="v" :value="v">{{ v }}</option>
+        </select>
+      </template>
+    </template>`
+};
 function renderServerPicker(cid){
-  const c = getChar(cid);
-  const s = c.server;
-  const pdcList = Object.keys(SERVER_DATA);
-  const ldcList = s.pdc ? Object.keys(SERVER_DATA[s.pdc]||{}) : [];
-  const worldList = (s.pdc && s.ldc) ? ((SERVER_DATA[s.pdc]||{})[s.ldc]||[]) : [];
-
-  const options = (list, current, placeholder) =>
-    `<option value="">${placeholder}</option>` +
-    list.map(v=>`<option value="${esc(v)}"${v===current?' selected':''}>${esc(v)}</option>`).join('');
-
-  document.getElementById(cid+'-server-picker').innerHTML = `
-    <span class="sp-label">Server</span>
-    <select id="${cid}-server-pdc" onchange="onServerChange('${cid}','pdc')">${options(pdcList, s.pdc, 'Region')}</select>
-    <span class="sp-sep">/</span>
-    <select id="${cid}-server-ldc" onchange="onServerChange('${cid}','ldc')" ${s.pdc?'':'disabled'}>${options(ldcList, s.ldc, 'Data Center')}</select>
-    <span class="sp-sep">/</span>
-    <select id="${cid}-server-world" onchange="onServerChange('${cid}','world')" ${s.ldc?'':'disabled'}>${options(worldList, s.world, 'World')}</select>
-  `;
+  const state = boxState(cid+'-server-picker', ServerPicker);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
 }
 function onServerChange(cid, level){
   const c = getChar(cid);
