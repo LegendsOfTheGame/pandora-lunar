@@ -5620,7 +5620,7 @@ function resetTmImport(){
   tmImportPayload = null;
   document.getElementById('tm-import-text').value = '';
   document.getElementById('tm-import-error').textContent = '';
-  document.getElementById('tm-import-summary').innerHTML = '';
+  tmSummaryState().mode = '';
   if(tmReloadOnClose){
     tmReloadOnClose = false;
     // Save now rather than after the usual half-second wait, which the reload
@@ -5707,9 +5707,8 @@ function tmNormalizeExport(p){
 function onTmPasteInput(){
   const text = document.getElementById('tm-import-text').value.trim();
   const errEl = document.getElementById('tm-import-error');
-  const summaryEl = document.getElementById('tm-import-summary');
   tmImportPayload = null;
-  summaryEl.innerHTML = '';
+  tmSummaryState().mode = '';
   if(!text){ errEl.textContent = ''; return; }
   let obj;
   try{ obj = tmNormalizeExport(JSON.parse(text)); }
@@ -5726,30 +5725,50 @@ function onTmPasteInput(){
   tmImportPayload = obj;
   renderTmImportSummary();
 }
+/* The summary under the paste box, one Vue app on #tm-import-summary. state.mode is ''
+   (nothing pasted, or not an export), 'pick' (choose a character, see the diff, apply)
+   or 'merged' (what the merge changed, and Close). state.rows is the diff, or null
+   before a character is picked. The target select keeps its id: applyTmImport reads it. */
+const TmDiff = {
+  props: {rows: Array},
+  template: `
+    <div v-if="!rows.length" class="tm-diff-row"><span class="tm-diff-label">No changes — this character already matches the export.</span></div>
+    <div v-for="(r, i) in rows" :key="i" class="tm-diff-row"><span class="tm-diff-label">{{ r[0] }}</span><span class="tm-diff-change">{{ r[1] }}<span class="tm-diff-arrow">→</span>{{ r[2] }}</span></div>`
+};
+const TmSummary = {
+  components: {TmDiff},
+  props: ['state'],
+  setup: () => ({onTmTargetChange, applyTmImport, toggleTmImportPanel}),
+  template: `
+    <template v-if="state.mode === 'pick'">
+      <div class="tm-import-meta">{{ state.meta }}</div>
+      <select class="tm-import-select" id="tm-import-target" :value="state.target" @change="onTmTargetChange()">
+        <option value="">— Link to which tracked character? —</option>
+        <option v-for="o in state.opts" :key="o.id" :value="o.id">{{ o.name }}</option>
+      </select>
+      <div id="tm-import-diff"><tm-diff v-if="state.rows" :rows="state.rows"></tm-diff></div>
+      <button class="edit-btn tm-import-apply-btn" id="tm-import-apply-btn" :disabled="!state.target" @click="applyTmImport()">Apply merge</button>
+    </template>
+    <template v-else-if="state.mode === 'merged'">
+      <div class="tm-import-meta">{{ state.meta }}</div>
+      <div id="tm-import-diff"><tm-diff :rows="state.rows"></tm-diff></div>
+      <button class="edit-btn tm-import-apply-btn" @click="toggleTmImportPanel()">Close</button>
+    </template>`
+};
+function tmSummaryState(){ return boxState('tm-import-summary', TmSummary); }
 function renderTmImportSummary(){
-  const summaryEl = document.getElementById('tm-import-summary');
+  const state = tmSummaryState();
   const p = tmImportPayload;
-  if(!p){ summaryEl.innerHTML = ''; return; }
-  const options = DATA.chars.map((c,i)=>
-    `<option value="${c.id}">${esc(c.name || `Character ${i+1}`)}</option>`
-  ).join('');
-  summaryEl.innerHTML = `
-    <div class="tm-import-meta">${esc(p.name)} &middot; ${esc((p.server&&p.server.world)||'?')} &mdash; Tales of Milestones v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
-    <select class="tm-import-select" id="tm-import-target" onchange="onTmTargetChange()">
-      <option value="">&mdash; Link to which tracked character? &mdash;</option>
-      ${options}
-    </select>
-    <div id="tm-import-diff"></div>
-    <button class="edit-btn tm-import-apply-btn" id="tm-import-apply-btn" onclick="applyTmImport()" disabled>Apply merge</button>
-  `;
+  if(!p){ state.mode = ''; return; }
+  Object.assign(state, {
+    mode: 'pick', target: '', rows: null,
+    meta: `${p.name} · ${(p.server&&p.server.world)||'?'} — Tales of Milestones v${p.version||'?'}, exported ${fmtTmTimestamp(p.exported)}`,
+    opts: DATA.chars.map((c,i) => ({id: c.id, name: c.name || `Character ${i+1}`}))
+  });
 }
 function onTmTargetChange(){
   const cid = document.getElementById('tm-import-target').value;
-  const applyBtn = document.getElementById('tm-import-apply-btn');
-  const diffEl = document.getElementById('tm-import-diff');
-  if(!cid){ diffEl.innerHTML = ''; applyBtn.disabled = true; return; }
-  diffEl.innerHTML = computeTmDiffHTML(tmImportPayload, getChar(cid));
-  applyBtn.disabled = false;
+  Object.assign(tmSummaryState(), {target: cid, rows: cid ? computeTmDiffRows(tmImportPayload, getChar(cid)) : null});
 }
 // Values already arrive pre-combined as level + (exp/expToNext), same convention the ledger's
 // own manual entry uses — this is purely a display formatter for the diff preview.
@@ -5875,7 +5894,8 @@ function tmTickedCount(c){
   return Object.keys(c.jobQuestsDone || {})
     .reduce((sum,key)=>sum + Object.keys(c.jobQuestsDone[key]).filter(n=>c.jobQuestsDone[key][n]).length, 0);
 }
-function computeTmDiffHTML(p, c){
+// [label, from, to] for each change, as strings. Empty when nothing would change.
+function computeTmDiffRows(p, c){
   const rows = [];
   if(typeof p.comm === 'number' && p.comm !== c.comm) rows.push(['Commendations', c.comm, p.comm]);
   if(p.playtime){
@@ -5971,10 +5991,7 @@ function computeTmDiffHTML(p, c){
   }
   // Collections, quests done, duties and exploration: one row per list whose size changed.
   tmCollectionsDiffRows(p, c).forEach(row => rows.push(row));
-  if(!rows.length) return '<div class="tm-diff-row"><span class="tm-diff-label">No changes — this character already matches the export.</span></div>';
-  return rows.map(([label,from,to])=>
-    `<div class="tm-diff-row"><span class="tm-diff-label">${esc(label)}</span><span class="tm-diff-change">${esc(String(from))}<span class="tm-diff-arrow">→</span>${esc(String(to))}</span></div>`
-  ).join('');
+  return rows.map(([label,from,to]) => [String(label), String(from), String(to)]);
 }
 function applyTmImport(){
   const p = tmImportPayload;
@@ -5985,7 +6002,7 @@ function applyTmImport(){
 
   // The diff has to be cut now: after the merge the character already matches the export, so
   // the same call would answer "No changes". It is kept on screen as the record of the merge.
-  const mergedDiffHTML = computeTmDiffHTML(p, c);
+  const mergedRows = computeTmDiffRows(p, c);
 
   if(p.server && typeof p.server === 'object'){
     c.server = { pdc: p.server.pdc || '', ldc: p.server.ldc || '', world: p.server.world || '' };
@@ -6112,11 +6129,8 @@ function applyTmImport(){
   tmImportPayload = null;
   document.getElementById('tm-import-text').value = '';
   document.getElementById('tm-import-error').textContent = '';
-  document.getElementById('tm-import-summary').innerHTML = `
-    <div class="tm-import-meta">Merged into ${esc(c.name || 'this character')} &mdash; ${esc(p.name)}, Tales of Milestones v${esc(p.version||'?')}, exported ${fmtTmTimestamp(p.exported)}</div>
-    <div id="tm-import-diff">${mergedDiffHTML}</div>
-    <button class="edit-btn tm-import-apply-btn" onclick="toggleTmImportPanel()">Close</button>
-  `;
+  Object.assign(tmSummaryState(), {mode: 'merged', rows: mergedRows,
+    meta: `Merged into ${c.name || 'this character'} — ${p.name}, Tales of Milestones v${p.version||'?'}, exported ${fmtTmTimestamp(p.exported)}`});
   DATA.activeId = cid;
   rebuildPages();
   renderSwitcher();
