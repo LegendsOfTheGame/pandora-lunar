@@ -2156,21 +2156,34 @@ function collectCharInputs(cid){
 /* The character block at the top of the rail: the active character's name and
    world, and a dropdown to change character or add one. */
 function renderSwitcher(){ renderCharBlock(); }
+/* One Vue app on #switcher. The select follows DATA.activeId, so it is bound. */
+const CharBlock = {
+  props: ['state'],
+  setup: () => ({onCharSelect}),
+  template: `
+    <div class="char-name">{{ state.name }}</div>
+    <div class="char-sub">{{ state.sub }}</div>
+    <select class="char-sel" aria-label="Character" :value="state.active" @change="onCharSelect($event.target)">
+      <option v-for="o in state.opts" :key="o.id" :value="o.id">{{ o.name }}</option>
+      <option v-if="state.canAdd" value="+add">+ Add a character</option>
+    </select>`
+};
 function renderCharBlock(){
-  const box = document.getElementById('switcher');
   const capNote = document.getElementById('cap-note');
-  if(!box || !DATA) return;
+  if(!DATA) return;
+  const state = boxState('switcher', CharBlock);
+  if(!state) return;
   const c = getChar(DATA.activeId);
   const i = DATA.chars.indexOf(c);
   const s = (c && c.server) || {};
-  const sub = [s.world, s.ldc, s.pdc].filter(Boolean).join(' · ') || `Character ${i + 1}`;
-  const opts = DATA.chars.map(x =>
-    `<option value="${x.id}"${x.id === DATA.activeId ? ' selected' : ''}>${esc(x.name || 'Unnamed')}</option>`).join('')
-    + (DATA.chars.length < 3 ? '<option value="+add">+ Add a character</option>' : '');
-  box.style.setProperty('--accent', `var(--${ACCENTS[Math.max(0, i) % ACCENTS.length]})`);
-  box.innerHTML = `<div class="char-name">${esc((c && c.name) || 'Unnamed')}</div>
-    <div class="char-sub">${esc(sub)}</div>
-    <select class="char-sel" aria-label="Character" onchange="onCharSelect(this)">${opts}</select>`;
+  document.getElementById('switcher').style.setProperty('--accent', `var(--${ACCENTS[Math.max(0, i) % ACCENTS.length]})`);
+  Object.assign(state, {
+    name: (c && c.name) || 'Unnamed',
+    sub: [s.world, s.ldc, s.pdc].filter(Boolean).join(' · ') || `Character ${i + 1}`,
+    active: DATA.activeId,
+    opts: DATA.chars.map(x => ({id: x.id, name: x.name || 'Unnamed'})),
+    canAdd: DATA.chars.length < 3
+  });
   capNote.style.display = DATA.chars.length >= 3 ? '' : 'none';
 }
 function setMobileRailOpen(open){
@@ -2969,25 +2982,29 @@ function visibleJobCount(c){
   const above = o => Object.values(o||{}).filter(v => v > 0).length;
   return above(c.combat) + above(c.craft) + above(c.gather);
 }
+/* The rail's area buttons, one Vue app on #rail-nav. renderRail gives it a new list:
+   each area, then the extra rows that open one of its frames. */
+const RailNav = {
+  props: ['state'],
+  template: `
+    <button v-for="b in state.list" :key="b.key" type="button" :class="b.on ? 'area on' : 'area'" :title="b.label" :data-short="b.label.slice(0, 2)"
+      @click="b.go()"><span class="lbl">{{ b.label }}</span><span class="pct">{{ b.m === null ? '' : b.m + '%' }}</span><span v-if="b.m !== null" class="meter"><i :style="{width: b.m + '%'}"></i></span></button>`
+};
 function renderRail(){
-  const box = document.getElementById('rail-nav');
-  if(!box || !DATA) return;
+  if(!DATA) return;
+  const state = boxState('rail-nav', RailNav);
+  if(!state) return;
   const c = getChar(DATA.activeId);
   const current = globalPageOpen() ? null : activeArea(DATA.activeId).key;
   const frameNow = current ? areaFrameId(activeAreaFrame(DATA.activeId) || {}) : null;
-  const button = (label, m, on, onclick) =>
-    `<button type="button" class="area${on ? ' on' : ''}" title="${esc(label)}" data-short="${esc(label.slice(0, 2))}" onclick="${onclick}">`
-    + `<span class="lbl">${esc(label)}</span><span class="pct">${m === null ? '' : m + '%'}</span>`
-    + (m === null ? '' : `<span class="meter"><i style="width:${m}%"></i></span>`)
-    + `</button>`;
   const meter = f => { try{ return (f && c) ? f(c) : null; }catch(e){ return null; } };
-  box.innerHTML = AREAS.map(a => {
+  state.list = AREAS.flatMap(a => {
     const extras = a.extra || [];
     const extraOn = a.key === current && extras.some(x => x.frame === frameNow);
-    return button(a.label, meter(a.meter), a.key === current && !extraOn, `goArea('${a.key}')`)
-      + extras.map(x => button(x.label, meter(x.meter), a.key === current && x.frame === frameNow,
-          `goAreaToFrame('${a.key}','${x.frame}')`)).join('');
-  }).join('');
+    return [{key: a.key, label: a.label, m: meter(a.meter), on: a.key === current && !extraOn, go: () => goArea(a.key)}]
+      .concat(extras.map(x => ({key: a.key + ':' + x.frame, label: x.label, m: meter(x.meter),
+        on: a.key === current && x.frame === frameNow, go: () => goAreaToFrame(a.key, x.frame)})));
+  });
   renderCharBlock();
 }
 function goSection(key){
@@ -3133,7 +3150,7 @@ function renderFrameRow(){
 function toggleRail(){
   const rail = document.getElementById('rail');
   const collapsed = rail.classList.toggle('collapsed');
-  document.getElementById('ico-collapse').innerHTML = collapsed ? '&rsaquo;' : '&lsaquo;';
+  document.getElementById('ico-collapse').textContent = collapsed ? '›' : '‹';
   DATA.ui.railCollapsed = collapsed;
   scheduleSave();
 }
@@ -6114,7 +6131,7 @@ function applyTmImport(){
   applyTheme();
   if(DATA.ui.railCollapsed){
     document.getElementById('rail').classList.add('collapsed');
-    document.getElementById('ico-collapse').innerHTML = '&rsaquo;';
+    document.getElementById('ico-collapse').textContent = '›';
   }
   rebuildPages();
   renderSwitcher();
