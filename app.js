@@ -3396,21 +3396,52 @@ function charDashMetrics(c){
   ];
 }
 
+/* The Battle Mentor role quests and the duty count's "read …" note, drawn by Vue
+   (boxState). onMainInput calls renderRoles on every keystroke in the section, which
+   only bumps state.tick. The checkboxes keep their ids for collectCharInputs. */
+const RoleChecks = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      if(!c) return null;
+      return {
+        tankReady: COMBAT_JOBS.filter(([n,r])=>r==="Tank").some(([n])=>c.combat[n]>=100),
+        rows: [['tank', 'Tank role quest — No Sleep Till Tuliyollal', c.roleTank],
+               ['healer', 'Healer role quest — An Antidote for Anarchy', c.roleHealer],
+               ['dps', 'One DPS role quest (any of the three)', c.roleDps]].map(([k, label, on]) => ({k, label, on: !!on}))
+      };
+    });
+    return {view, changed: () => onMainInput(props.state.cid)};
+  },
+  template: `
+    <template v-if="view">
+      <div v-for="r in view.rows" :key="r.k" class="check-row"><label><input type="checkbox" :id="state.cid + '-role-' + r.k" :checked="r.on" @change="changed()"> {{ r.label }}<template v-if="r.k === 'tank'"> <span class="qname">{{ view.tankReady ? '' : '(needs a tank at 100)' }}</span></template></label><span v-if="r.on" class="stamp">done</span><span v-else class="stamp pending">pending</span></div>
+    </template>`
+};
+// Duties come from an achievement the same way the collectable counts do, so the
+// figure is only as current as the last time that window was open. Commendations
+// are read live and need no such note.
+const DutyAsOf = {
+  props: ['state'],
+  setup(props){
+    // A new string each time: a computed that returns the same character object
+    // counts as unchanged, and the note would not redraw.
+    const note = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      return c && c.dutyAsOf ? `read ${fmtTmTimestamp(c.dutyAsOf)}${c.dutyExact === false ? ' · at least' : ''}` : '';
+    });
+    return {note};
+  },
+  template: `<span v-if="note" class="asof">{{ note }}</span>`
+};
 function renderRoles(cid){
-  const c = getChar(cid);
-  // Duties come from an achievement the same way the collectable counts do, so the
-  // figure is only as current as the last time that window was open. Commendations
-  // are read live and need no such note.
-  const asof = document.getElementById(cid+'-duty-asof');
-  if(asof) asof.innerHTML = c.dutyAsOf
-    ? `<span class="asof">read ${esc(fmtTmTimestamp(c.dutyAsOf))}${c.dutyExact === false ? ' &middot; at least' : ''}</span>`
-    : '';
-  const tankReady = COMBAT_JOBS.filter(([n,r])=>r==="Tank").some(([n])=>c.combat[n]>=100);
-  document.getElementById(cid+'-roles').innerHTML = `
-    <div class="check-row"><label><input type="checkbox" id="${cid}-role-tank" ${c.roleTank?'checked':''} onchange="onMainInput('${cid}')"> Tank role quest &mdash; No Sleep Till Tuliyollal <span class="qname">${tankReady?'':'(needs a tank at 100)'}</span></label>${c.roleTank?'<span class="stamp">done</span>':'<span class="stamp pending">pending</span>'}</div>
-    <div class="check-row"><label><input type="checkbox" id="${cid}-role-healer" ${c.roleHealer?'checked':''} onchange="onMainInput('${cid}')"> Healer role quest &mdash; An Antidote for Anarchy</label>${c.roleHealer?'<span class="stamp">done</span>':'<span class="stamp pending">pending</span>'}</div>
-    <div class="check-row"><label><input type="checkbox" id="${cid}-role-dps" ${c.roleDps?'checked':''} onchange="onMainInput('${cid}')"> One DPS role quest (any of the three)</label>${c.roleDps?'<span class="stamp">done</span>':'<span class="stamp pending">pending</span>'}</div>
-  `;
+  [[cid+'-roles', RoleChecks], [cid+'-duty-asof', DutyAsOf]].forEach(([id, comp]) => {
+    const state = boxState(id, comp);
+    if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+  });
 }
 
 // Typing over an imported count makes it yours: the reading age and floor/exact flag
