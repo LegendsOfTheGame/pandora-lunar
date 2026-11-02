@@ -1879,9 +1879,10 @@ function lowestStarted(entries){
   const min = Math.min(...eligible.map(e=>e.level));
   return new Set(eligible.filter(e=>e.level===min).map(e=>e.name));
 }
-function markerHTML(lvl, cap, isLowest){
-  if(lvl >= cap) return '<span class="at-cap">at cap</span>';
-  return isLowest ? '<span class="next-up">lowest</span>' : '';
+/* A job's marker as {cls, text}, or null for none. The job tables draw it. */
+function markerOf(lvl, cap, isLowest){
+  if(lvl >= cap) return {cls: 'at-cap', text: 'at cap'};
+  return isLowest ? {cls: 'next-up', text: 'lowest'} : null;
 }
 // Ranks the bottom N distinct levels (not just the single lowest) — for beast tribe
 // crafting rotations that need to know their 2nd/3rd lowest, not just one job to level.
@@ -1897,10 +1898,10 @@ function rankLowestTiers(entries, maxTiers){
   });
   return rankOf;
 }
-function rankMarkerHTML(lvl, cap, rank){
-  if(lvl >= cap) return '<span class="at-cap">at cap</span>';
-  if(!rank) return '';
-  return `<span class="next-up">${rank===1 ? 'lowest' : '#'+rank}</span>`;
+function rankMarkerOf(lvl, cap, rank){
+  if(lvl >= cap) return {cls: 'at-cap', text: 'at cap'};
+  if(!rank) return null;
+  return {cls: 'next-up', text: rank===1 ? 'lowest' : '#'+rank};
 }
 
 /* ---------- generic helpers ---------- */
@@ -3709,43 +3710,29 @@ function onMsqExpInput(cid){
 function updateMsqCheckNote(cid){ bumpQuests(cid); }
 function updateQuestPercents(cid){ bumpQuests(cid); }
 
+// Grouped by role rather than one flat list of twenty-three, which is how the
+// game's own job panel reads and how people think about it — "what are my
+// healers on", not "what is job fourteen". Limited jobs keep their own group
+// instead of sitting under Melee and Magical Ranged where the game files them:
+// they cap early and cannot be levelled by the same means, so grouping them
+// with jobs that can would invite the wrong comparison.
+const JOB_ROLE_ORDER = ['Tank','Healer','Melee','Phys R','Mag R','Limited'];
+const JOB_ROLE_LABEL = {
+  'Tank':'Tank', 'Healer':'Healer', 'Melee':'Melee DPS',
+  'Phys R':'Physical Ranged DPS', 'Mag R':'Magical Ranged DPS',
+  'Limited':'Limited · Blue Mage 80, Beastmaster 50'
+};
+// Crafting and Gathering keep their headings either way — they're the two columns of a
+// fixed layout, and dropping one would slide the other across the page. JobBox draws
+// "None levelled yet." in their place when every row is hidden.
 function renderJobTables(cid){
-  // Grouped by role rather than one flat list of twenty-three, which is how the
-  // game's own job panel reads and how people think about it — "what are my
-  // healers on", not "what is job fourteen". Limited jobs keep their own group
-  // instead of sitting under Melee and Magical Ranged where the game files them:
-  // they cap early and cannot be levelled by the same means, so grouping them
-  // with jobs that can would invite the wrong comparison.
-  const ROLE_ORDER = ['Tank','Healer','Melee','Phys R','Mag R','Limited'];
-  const ROLE_LABEL = {
-    'Tank':'Tank', 'Healer':'Healer', 'Melee':'Melee DPS',
-    'Phys R':'Physical Ranged DPS', 'Mag R':'Magical Ranged DPS',
-    'Limited':'Limited &middot; Blue Mage 80, Beastmaster 50'
-  };
-
-  const c = getChar(cid);
-  const show = job => !hidesZeroJobs(c) || jobLevelOf(c, job) > 0;
-
-  const combat = ROLE_ORDER.map(role=>{
-    const rows = COMBAT_JOBS.filter(j=>j[1]===role && show(j[0]))
-      .map(([name,r,capOverride])=>combatRowHTML(cid,name,r,capOverride)).join('');
-    // A role whose every job is hidden takes its heading with it. "Physical Ranged DPS"
-    // over nothing at all is a heading describing an absence.
-    if(!rows) return '';
-    return `<div class="job-role"><div class="subhead">${ROLE_LABEL[role]}</div><table>${rows}</table></div>`;
-  }).join('');
-  document.getElementById(cid+'-combat').innerHTML =
-    combat || '<div class="empty-hint">None levelled yet.</div>';
-  // Crafting and Gathering keep their headings either way — they're the two columns of a
-  // fixed layout, and dropping one would slide the other across the page.
-  document.getElementById(cid+'-craft').innerHTML =
-    emptyJobRow(CRAFT_JOBS.filter(show).map(name=>craftGatherRowHTML(cid,'craft',name)).join(''));
-  document.getElementById(cid+'-gather').innerHTML =
-    emptyJobRow(GATHER_JOBS.filter(show).map(name=>craftGatherRowHTML(cid,'gather',name)).join(''));
-  updateJobCaps(cid);
+  ['combat', 'craft', 'gather'].forEach(kind => {
+    const state = boxState(cid+'-'+kind, JobBox);
+    if(state) Object.assign(state, {cid, kind, tick: (state.tick || 0) + 1});
+  });
   renderJobsNote(cid);
   renderQuestItems(cid);
-  applyFrames(cid, 'jobs');
+  Vue.nextTick(() => applyFrames(cid, 'jobs'));
   refreshNav(cid);
 }
 
@@ -3765,11 +3752,6 @@ function zeroJobCount(c){
   return COMBAT_JOBS.filter(([n])=>!(c.combat[n] > 0)).length
        + CRAFT_JOBS.filter(n=>!(c.craft[n] > 0)).length
        + GATHER_JOBS.filter(n=>!(c.gather[n] > 0)).length;
-}
-// An emptied table renders as a heading over a gap otherwise, which reads as a page that
-// failed to load rather than one with nothing to show.
-function emptyJobRow(rows){
-  return rows || '<tr><td class="empty-hint">None levelled yet.</td></tr>';
 }
 /* The show/hide notes (jobs, locked routines, hidden routines) are drawn by Vue.
    Each render…Note still works out its own text; drawNote hands it to one small app
@@ -4519,17 +4501,14 @@ function jobLevelOf(c, job){
   if(c.craft[job] !== undefined) return c.craft[job]||0;
   return c.gather[job]||0;
 }
-function jqToggleHTML(cid, job, lvl){
-  const c = getChar(cid);
+/* The job-quest button's look as {cls, label}. The job tables draw the button. */
+function jqToggleOf(c, job, lvl){
   // No sourced list yet (Viper, Pictomancer, Beastmaster) must read as "no data," never
   // as a false "caught up" — zero missed only means something when there's a real list.
-  if(!JOB_QUESTS[job] || !JOB_QUESTS[job].length){
-    return `<button class="jq-toggle neutral" id="${cid}-jqbtn-${job}" onclick="toggleJobQuests('${cid}','${job}')">&mdash;</button>`;
-  }
+  if(!JOB_QUESTS[job] || !JOB_QUESTS[job].length) return {cls: 'neutral', label: '—'};
   const missed = missedJobQuests(job, lvl, c.jobQuestsDone);
-  const cls = lvl<=0 ? 'neutral' : (missed.length ? 'warn' : 'ok');
-  const label = lvl<=0 ? 'quests' : (missed.length ? `⚠ ${missed.length}` : '✓');
-  return `<button class="jq-toggle ${cls}" id="${cid}-jqbtn-${job}" onclick="toggleJobQuests('${cid}','${job}')">${label}</button>`;
+  return {cls: lvl<=0 ? 'neutral' : (missed.length ? 'warn' : 'ok'),
+          label: lvl<=0 ? 'quests' : (missed.length ? `⚠ ${missed.length}` : '✓')};
 }
 // Own (per-job) quests and shared role quests, merged and level-sorted. Same deterministic
 // order every call (stable sort, own always concatenated before role) so an index computed
@@ -4539,26 +4518,37 @@ function mergedJobQuestList(job){
   const roleList = roleQuestsFor(job).map(q => ({level:q.level, name:q.name, src:'role', trackKey:q.trackKey}));
   return ownList.concat(roleList).sort((a,b)=>a.level-b.level);
 }
-function jqPanelHTML(cid, job){
-  const c = getChar(cid);
-  const lvl = jobLevelOf(c, job);
-  const done = c.jobQuestsDone[job] || {};
-  const list = mergedJobQuestList(job);
-  const items = list.map((q,i)=>{
-    const isDone = q.src==='own' ? !!done[q.name] : !!((c.jobQuestsDone['role:'+q.trackKey] || {})[q.name]);
-    const isMissed = q.level <= lvl && !isDone;
-    return `<div class="jq-item${isMissed?' missed':''}${q.level>lvl?' future':''}">
-      <input type="checkbox" id="${cid}-jq-${job}-${i}" ${isDone?'checked':''} onchange="toggleJobQuestDone('${cid}','${job}',${i})">
-      <span class="jq-level">Lv.${q.level}</span>
-      <span class="jq-name">${esc(q.name)}${q.src==='role'?' <span class="jq-shared-tag">shared</span>':''}</span>
-      ${isMissed?'<span class="jq-flag">not done</span>':''}
-    </div>`;
-  }).join('');
-  return `<div class="jq-panel">${items || '<div class="empty-hint">No quest data loaded for this job yet.</div>'}</div>`;
-}
+/* One job's quest checklist, drawn when its panel is open. `typed` is the job tables'
+   redraw counter, so a level typed or a quest ticked elsewhere (a shared role quest)
+   shows here at once. The checkboxes follow the data: Vue only sets `checked` when
+   the bound value changes, so a click is never undone. */
+const JqPanel = {
+  props: {cid: String, job: String, typed: Number},
+  setup(props){
+    const items = Vue.computed(() => {
+      props.typed;
+      const c = getChar(props.cid);
+      const lvl = jobLevelOf(c, props.job);
+      const done = c.jobQuestsDone[props.job] || {};
+      return mergedJobQuestList(props.job).map((q, i) => {
+        const isDone = q.src==='own' ? !!done[q.name] : !!((c.jobQuestsDone['role:'+q.trackKey] || {})[q.name]);
+        return {i, level: q.level, name: q.name, role: q.src==='role', done: isDone,
+                missed: q.level <= lvl && !isDone, future: q.level > lvl};
+      });
+    });
+    return {items, toggleJobQuestDone};
+  },
+  template: `
+    <div class="jq-panel"><template v-if="items.length"><div v-for="q in items" :key="q.i" class="jq-item" :class="{missed: q.missed, future: q.future}">
+      <input type="checkbox" :id="cid + '-jq-' + job + '-' + q.i" :checked="q.done" @change="toggleJobQuestDone(cid, job, q.i)">
+      <span class="jq-level">Lv.{{ q.level }}</span>
+      <span class="jq-name">{{ q.name }}<template v-if="q.role"> <span class="jq-shared-tag">shared</span></template></span>
+      <span v-if="q.missed" class="jq-flag">not done</span>
+    </div></template><div v-else class="empty-hint">No quest data loaded for this job yet.</div></div>`
+};
 /* ---------- quest items: one shopping list for many job quests ---------- */
 // JOBQUEST_ITEMS (jobquest-items.js) maps a quest title to its hand-in items. The quests are
-// the same ones jqPanelHTML lists, so a ticked quest drops out of the list here too.
+// the same ones JqPanel lists, so a ticked quest drops out of the list here too.
 //
 // A shared role quest is counted once however many jobs of that role are selected, because
 // finishing it on one job finishes it for all of them (the same rule missedJobQuests uses).
@@ -4680,51 +4670,99 @@ function copyQuestItems(cid){
     navigator.clipboard.writeText(ta.value).then(()=>say(true), fallback);
   }else fallback();
 }
-function combatRowHTML(cid, name, role, capOverride){
-  const c = getChar(cid);
-  const cap = capOverride || 100, lvl = c.combat[name]||0, id = name.replace(/\s/g,'');
-  const open = !!c.jobQuestsOpen[name];
-  return `<tr>
-      <td><div class="job-cell"><span class="role-tag">${role}</span><span class="job-name">${name}</span></div></td>
-      <td style="width:104px"><input type="text" id="${cid}-combat-${id}" value="${lvl}" oninput="onMainInput('${cid}')"></td>
-      <td style="width:60px" class="cap">/ ${cap}</td>
-      <td style="width:60px" id="${cid}-ccap-${id}">${lvl>=cap?'<span class="at-cap">at cap</span>':''}</td>
-      <td style="width:56px" id="${cid}-jqcell-${name}">${jqToggleHTML(cid,name,lvl)}</td>
+/* One job: its row and, under it, its quest-checklist row. The level input is v-once
+   and keeps its id for collectCharInputs; `job` is the snapshot from the last full
+   render and `live` the marker, button and open state from the latest data. */
+const JobRow = {
+  components: {JqPanel},
+  props: {cid: String, kind: String, job: Object, live: Object, typed: Number},
+  setup: () => ({onMainInput, toggleJobQuests}),
+  template: `
+    <tr>
+      <td v-if="kind === 'combat'"><div class="job-cell"><span class="role-tag">{{ job.role }}</span><span class="job-name">{{ job.name }}</span></div></td>
+      <td v-else>{{ job.name }}</td>
+      <td :style="{width: kind === 'combat' ? '104px' : '96px'}"><input v-once type="text" :id="job.inputId" :value="job.lvl" @input="onMainInput(cid)"></td>
+      <td class="cap" :style="{width: kind === 'combat' ? '60px' : '52px'}">/ {{ job.cap }}</td>
+      <td :style="{width: kind === 'combat' ? '60px' : '66px'}" :id="job.markId"><span v-if="live.marker" :class="live.marker.cls">{{ live.marker.text }}</span></td>
+      <td style="width:56px" :id="cid + '-jqcell-' + job.name"><button class="jq-toggle" :class="live.jq.cls" :id="cid + '-jqbtn-' + job.name" @click="toggleJobQuests(cid, job.name)">{{ live.jq.label }}</button></td>
     </tr>
-    <tr class="jq-panel-row" id="${cid}-jqrow-${name}" style="${open?'':'display:none'}">
-      <td colspan="5" id="${cid}-jqpanel-${name}">${open ? jqPanelHTML(cid,name) : ''}</td>
-    </tr>`;
+    <tr class="jq-panel-row" :id="cid + '-jqrow-' + job.name" :style="live.open ? {} : {display: 'none'}">
+      <td colspan="5" :id="cid + '-jqpanel-' + job.name"><jq-panel v-if="live.open" :cid="cid" :job="job.name" :typed="typed"></jq-panel></td>
+    </tr>`
+};
+/* The rows each box shows, as of a full render. */
+function jobSnapshot(c, cid, kind){
+  const show = job => !hidesZeroJobs(c) || jobLevelOf(c, job) > 0;
+  if(kind === 'combat'){
+    // A role whose every job is hidden takes its heading with it. "Physical Ranged DPS"
+    // over nothing at all is a heading describing an absence.
+    return {groups: JOB_ROLE_ORDER.map(role => ({role, label: JOB_ROLE_LABEL[role],
+      rows: COMBAT_JOBS.filter(j=>j[1]===role && show(j[0])).map(([name, r, capOverride]) => {
+        const id = name.replace(/\s/g,'');
+        return {name, role: r, cap: capOverride||100, lvl: c.combat[name]||0,
+                inputId: `${cid}-combat-${id}`, markId: `${cid}-ccap-${id}`};
+      })})).filter(g => g.rows.length)};
+  }
+  return {rows: (kind === 'craft' ? CRAFT_JOBS : GATHER_JOBS).filter(show).map(name => ({
+    name, cap: 100, lvl: c[kind][name]||0,
+    inputId: `${cid}-${kind}-${name}`, markId: `${cid}-${kind==='craft'?'craftmark':'gathermark'}-${name}`}))};
 }
-function craftGatherRowHTML(cid, kind, name){
-  const c = getChar(cid);
-  const lvl = (kind==='craft' ? c.craft[name] : c.gather[name]) || 0;
-  const open = !!c.jobQuestsOpen[name];
-  const inputId = `${cid}-${kind}-${name}`;
-  const markId = `${cid}-${kind==='craft'?'craftmark':'gathermark'}-${name}`;
-  return `<tr>
-      <td>${name}</td>
-      <td style="width:96px"><input type="text" id="${inputId}" value="${lvl}" oninput="onMainInput('${cid}')"></td>
-      <td class="cap" style="width:52px">/ 100</td>
-      <td style="width:66px" id="${markId}"></td>
-      <td style="width:56px" id="${cid}-jqcell-${name}">${jqToggleHTML(cid,name,lvl)}</td>
-    </tr>
-    <tr class="jq-panel-row" id="${cid}-jqrow-${name}" style="${open?'':'display:none'}">
-      <td colspan="5" id="${cid}-jqpanel-${name}">${open ? jqPanelHTML(cid,name) : ''}</td>
-    </tr>`;
+/* Every job's marker, quest button and open state, from the latest data. */
+function jobLive(c){
+  const out = {};
+  const combat = COMBAT_JOBS.map(([name,role,capOverride])=>({ name, level: c.combat[name]||0, cap: capOverride||100 }));
+  const combatLow = lowestStarted(combat);
+  combat.forEach(e => out[e.name] = {marker: markerOf(e.level, e.cap, combatLow.has(e.name))});
+  const craft = CRAFT_JOBS.map(name=>({ name, level: c.craft[name]||0, cap:100 }));
+  const craftRanks = rankLowestTiers(craft, 3);
+  craft.forEach(e => out[e.name] = {marker: rankMarkerOf(e.level, e.cap, craftRanks.get(e.name))});
+  const gather = GATHER_JOBS.map(name=>({ name, level: c.gather[name]||0, cap:100 }));
+  const gatherLow = lowestStarted(gather);
+  gather.forEach(e => out[e.name] = {marker: markerOf(e.level, e.cap, gatherLow.has(e.name))});
+  [...combat, ...craft, ...gather].forEach(e =>
+    Object.assign(out[e.name], {jq: jqToggleOf(c, e.name, e.level), open: !!c.jobQuestsOpen[e.name]}));
+  return out;
 }
+/* One of the three boxes (combat, craft, gather), drawn by Vue (boxState), the same
+   way as the custom trackers: renderJobTables bumps state.tick (a new snapshot and
+   every row made again); updateJobCaps bumps state.typed (markers, buttons and open
+   panels only). Crafting and gathering are <table> elements, so they get a <tbody>
+   as the HTML parser gave them before. */
+const JobBox = {
+  components: {JobRow},
+  props: ['state'],
+  setup(props){
+    const snap = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      return c && props.state.kind ? jobSnapshot(c, props.state.cid, props.state.kind) : null;
+    });
+    const live = Vue.computed(() => {
+      props.state.tick; props.state.typed;
+      const c = getChar(props.state.cid);
+      return c ? jobLive(c) : {};
+    });
+    return {snap, live};
+  },
+  template: `
+    <template v-if="snap && state.kind === 'combat'">
+      <template v-if="snap.groups.length">
+        <div v-for="g in snap.groups" :key="g.role" class="job-role"><div class="subhead">{{ g.label }}</div><table><tbody>
+          <job-row v-for="j in g.rows" :key="j.name + ':' + state.tick" :cid="state.cid" kind="combat" :job="j" :live="live[j.name]" :typed="state.typed || 0"></job-row>
+        </tbody></table></div>
+      </template>
+      <div v-else class="empty-hint">None levelled yet.</div>
+    </template>
+    <tbody v-else-if="snap">
+      <template v-if="snap.rows.length"><job-row v-for="j in snap.rows" :key="j.name + ':' + state.tick" :cid="state.cid" :kind="state.kind" :job="j" :live="live[j.name]" :typed="state.typed || 0"></job-row></template>
+      <tr v-else><td class="empty-hint">None levelled yet.</td></tr>
+    </tbody>`
+};
 function toggleJobQuests(cid, job){
   collectAllInputs();
   const c = getChar(cid);
   c.jobQuestsOpen[job] = !c.jobQuestsOpen[job];
-  const row = document.getElementById(`${cid}-jqrow-${job}`);
-  const cell = document.getElementById(`${cid}-jqpanel-${job}`);
-  if(c.jobQuestsOpen[job]){
-    row.style.display = '';
-    cell.innerHTML = jqPanelHTML(cid, job);
-  }else{
-    row.style.display = 'none';
-    cell.innerHTML = '';
-  }
+  updateJobCaps(cid);
   scheduleSave();
 }
 function toggleJobQuestDone(cid, job, index){
@@ -4740,47 +4778,16 @@ function toggleJobQuestDone(cid, job, index){
     if(!c.jobQuestsDone[job]) c.jobQuestsDone[job] = {};
     c.jobQuestsDone[job][q.name] = chk.checked;
   }
-  const lvl = jobLevelOf(c, job);
-  const item = chk.closest('.jq-item');
-  const isMissed = q.level <= lvl && !chk.checked;
-  item.classList.toggle('missed', isMissed);
-  const flag = item.querySelector('.jq-flag');
-  if(isMissed && !flag) item.insertAdjacentHTML('beforeend', '<span class="jq-flag">not done</span>');
-  if(!isMissed && flag) flag.remove();
-  const btnCell = document.getElementById(`${cid}-jqcell-${job}`);
-  if(btnCell) btnCell.innerHTML = jqToggleHTML(cid, job, lvl);
+  // A shared role quest shows in several jobs' panels; the redraw updates them all.
+  updateJobCaps(cid);
   scheduleSave();
 }
+// Markers, job-quest badges and any open checklist panel need to reflect a level typed
+// just now, not only refresh on the next full page render.
 function updateJobCaps(cid){
-  const c = getChar(cid);
-  const combatEntries = COMBAT_JOBS.map(([name,role,capOverride])=>({ name, level: c.combat[name]||0, cap: capOverride||100 }));
-  const combatLow = lowestStarted(combatEntries);
-  combatEntries.forEach(e=>{
-    const el = document.getElementById(cid+'-ccap-'+e.name.replace(/\s/g,''));
-    if(el) el.innerHTML = markerHTML(e.level, e.cap, combatLow.has(e.name));
-  });
-  const craftEntries = CRAFT_JOBS.map(name=>({ name, level: c.craft[name]||0, cap:100 }));
-  const craftRanks = rankLowestTiers(craftEntries, 3);
-  craftEntries.forEach(e=>{
-    const el = document.getElementById(cid+'-craftmark-'+e.name);
-    if(el) el.innerHTML = rankMarkerHTML(e.level, e.cap, craftRanks.get(e.name));
-  });
-  const gatherEntries = GATHER_JOBS.map(name=>({ name, level: c.gather[name]||0, cap:100 }));
-  const gatherLow = lowestStarted(gatherEntries);
-  gatherEntries.forEach(e=>{
-    const el = document.getElementById(cid+'-gathermark-'+e.name);
-    if(el) el.innerHTML = markerHTML(e.level, e.cap, gatherLow.has(e.name));
-  });
-
-  // Job-quest badges and any open checklist panel need to reflect a level typed just now,
-  // not only refresh on the next full page render.
-  [...combatEntries, ...craftEntries, ...gatherEntries].forEach(e=>{
-    const btnCell = document.getElementById(`${cid}-jqcell-${e.name}`);
-    if(btnCell) btnCell.innerHTML = jqToggleHTML(cid, e.name, e.level);
-    if(c.jobQuestsOpen[e.name]){
-      const panel = document.getElementById(`${cid}-jqpanel-${e.name}`);
-      if(panel) panel.innerHTML = jqPanelHTML(cid, e.name);
-    }
+  ['combat', 'craft', 'gather'].forEach(kind => {
+    const state = boxState(cid+'-'+kind, JobBox);
+    if(state) state.typed = (state.typed || 0) + 1;
   });
 }
 
