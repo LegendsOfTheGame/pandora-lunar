@@ -3350,8 +3350,26 @@ function applyTab(cid, tab){
 }
 
 /* ---------- per-character render/update ---------- */
+/* The character dashboard, drawn by Vue (boxState). renderCharDash bumps state.tick;
+   charDashMetrics works the figures out from the character each time. */
+const CharDash = {
+  props: ['state'],
+  setup(props){
+    const metrics = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      return c ? charDashMetrics(c) : [];
+    });
+    return {metrics};
+  },
+  template: `
+    <div v-for="m in metrics" :key="m.label" class="metric" :class="{done: m.done}"><div class="label">{{ m.label }}</div><div class="value">{{ m.value }}<small v-if="m.of"> / {{ m.of }}</small></div><div class="bar-track"><div class="bar-fill" :style="{width: m.w + '%'}"></div></div></div>`
+};
 function renderCharDash(cid){
-  const c = getChar(cid);
+  const state = boxState(cid+'-dash', CharDash);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+}
+function charDashMetrics(c){
   const dutyPct = pct(c.duty,1000), commPct = pct(c.comm,1500);
   const rolesGot = [c.roleTank,c.roleHealer,c.roleDps].filter(Boolean).length;
   const overallPct = ((Math.min(c.duty,1000)/1000)+(Math.min(c.comm,1500)/1500)+(c.roleTank?1:0)+(c.roleHealer?1:0)+(c.roleDps?1:0))/5*100;
@@ -3365,17 +3383,17 @@ function renderCharDash(cid){
   const gatherCap = Math.max(0, ...Object.values(c.gather)) >= 100 ? 1 : 0;
   const tradePct = ((Math.min(c.tradeCollected,300)/300) + (Math.min(c.tradeMade,100)/100)
                    + craftCap + gatherCap) / 4 * 100;
-  document.getElementById(cid+'-dash').innerHTML = `
-    <div class="metric ${c.duty>=1000?'done':''}"><div class="label">Duty completions</div><div class="value">${fmt(c.duty)}<small> / 1,000</small></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(dutyPct,100)}%"></div></div></div>
-    <div class="metric ${c.comm>=1500?'done':''}"><div class="label">Commendations</div><div class="value">${fmt(c.comm)}<small> / 1,500</small></div><div class="bar-track"><div class="bar-fill" style="width:${Math.min(commPct,100)}%"></div></div></div>
-    <div class="metric ${rolesGot>=3?'done':''}"><div class="label">Battle mentor role quests</div><div class="value">${rolesGot}<small> / 3 req'd</small></div><div class="bar-track"><div class="bar-fill" style="width:${rolesGot/3*100}%"></div></div></div>
-    <div class="metric"><div class="label">Overall to Battle Mentor</div><div class="value">${overallPct.toFixed(1)}%</div><div class="bar-track"><div class="bar-fill" style="width:${overallPct}%"></div></div></div>
-    <div class="metric"><div class="label">Overall to Trade Mentor</div><div class="value">${tradePct.toFixed(1)}%</div><div class="bar-track"><div class="bar-fill" style="width:${tradePct}%"></div></div></div>
-    <div class="metric"><div class="label">Quest completion</div><div class="value">${questPct.toFixed(2)}%</div><div class="bar-track"><div class="bar-fill" style="width:${questPct}%"></div></div></div>
-    <div class="metric"><div class="label">Combat levels</div><div class="value">${fmtLvl(combatTotal)}<small> / 2,230</small></div><div class="bar-track"><div class="bar-fill" style="width:${pct(combatTotal,2230)}%"></div></div></div>
-    <div class="metric"><div class="label">Crafting levels</div><div class="value">${fmtLvl(craftTotal)}<small> / 800</small></div><div class="bar-track"><div class="bar-fill" style="width:${pct(craftTotal,800)}%"></div></div></div>
-    <div class="metric"><div class="label">Gathering levels</div><div class="value">${fmtLvl(gatherTotal)}<small> / 300</small></div><div class="bar-track"><div class="bar-fill" style="width:${pct(gatherTotal,300)}%"></div></div></div>
-  `;
+  return [
+    {label: 'Duty completions', value: fmt(c.duty), of: '1,000', w: Math.min(dutyPct,100), done: c.duty>=1000},
+    {label: 'Commendations', value: fmt(c.comm), of: '1,500', w: Math.min(commPct,100), done: c.comm>=1500},
+    {label: 'Battle mentor role quests', value: rolesGot, of: "3 req'd", w: rolesGot/3*100, done: rolesGot>=3},
+    {label: 'Overall to Battle Mentor', value: overallPct.toFixed(1)+'%', w: overallPct},
+    {label: 'Overall to Trade Mentor', value: tradePct.toFixed(1)+'%', w: tradePct},
+    {label: 'Quest completion', value: questPct.toFixed(2)+'%', w: questPct},
+    {label: 'Combat levels', value: fmtLvl(combatTotal), of: '2,230', w: pct(combatTotal,2230)},
+    {label: 'Crafting levels', value: fmtLvl(craftTotal), of: '800', w: pct(craftTotal,800)},
+    {label: 'Gathering levels', value: fmtLvl(gatherTotal), of: '300', w: pct(gatherTotal,300)}
+  ];
 }
 
 function renderRoles(cid){
