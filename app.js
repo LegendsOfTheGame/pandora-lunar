@@ -2458,45 +2458,53 @@ function toggleZoneStyle(){
   scheduleSave();
 }
 
-function renderLastCompleted(cid){
-  const box = document.getElementById(cid + '-lastdone');
-  if(!box) return;
-  const c = getChar(cid);
+/* Drawn by Vue (boxState): renderLastCompleted bumps state.tick and lastDoneView
+   works the list out again. Read-only apart from the time-zone switch. */
+function lastDoneView(c){
   const rows = (c.routines||[]).filter(r => r.lastDone).sort((a,b) => b.lastDone - a.lastDone);
-  const never = (c.routines||[]).length - rows.length;
-
-  if(!rows.length){
-    box.innerHTML = '<div class="empty-hint">No routine has been ticked yet. Tick one in any frame and it appears here.</div>';
-    return;
-  }
+  if(!rows.length) return null;
   const now = Date.now();
   const headZone = zoneLabel(new Date());
-  const body = rows.map(r=>{
-    const d = new Date(r.lastDone);
-    // Day first on a 24 hour clock, to match every other time on the page.
-    const when = d.toLocaleString('en-GB',
-      {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false});
-    const rowZone = zoneLabel(d);
-    return `<div class="done-item" title="${esc(d.toUTCString())}">
-      <span class="dn-label">${esc(r.label)}</span>
-      <span class="dn-frame">${esc(routineSection(r))}</span>
-      <span class="dn-when">${esc(when)}${
-        rowZone && rowZone !== headZone ? `<span class="dn-zone">${esc(rowZone)}</span>` : ''}</span>
-      <span class="dn-ago">${agoText(now - r.lastDone)}</span>
-    </div>`;
-  }).join('');
   const offsetOn = DATA.ui.zoneStyle === 'offset';
-  box.innerHTML = `
-    <div class="done-head"><span>Routine</span><span>Section</span><span>Last done${
-      headZone ? ' (' + esc(headZone) + ')' : ''}</span><span class="r">Ago</span></div>
-    ${body}
-    ${never ? `<div class="gated-note">${never} routine${never===1?'':'s'} ${never===1?'has':'have'} never been ticked</div>` : ''}
-    <div class="opt-switch">
-      <span class="sw${offsetOn?' on':''}" role="switch" tabindex="0"
-            aria-checked="${offsetOn}" onclick="toggleZoneStyle()"></span>
-      <label onclick="toggleZoneStyle()">Name the time zone as an offset${
-        offsetOn ? '' : ' — ' + esc(zoneOffset(new Date())) + ' instead of ' + esc(zoneAbbr(new Date()))}</label>
-    </div>`;
+  return {
+    headZone, offsetOn, never: (c.routines||[]).length - rows.length,
+    switchNote: offsetOn ? '' : ' — ' + zoneOffset(new Date()) + ' instead of ' + zoneAbbr(new Date()),
+    rows: rows.map(r=>{
+      const d = new Date(r.lastDone);
+      const rowZone = zoneLabel(d);
+      // Day first on a 24 hour clock, to match every other time on the page.
+      return {id: r.id, label: r.label, section: routineSection(r), utc: d.toUTCString(),
+        when: d.toLocaleString('en-GB', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:false}),
+        zone: rowZone && rowZone !== headZone ? rowZone : '', ago: agoText(now - r.lastDone)};
+    })
+  };
+}
+const LastDone = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => { props.state.tick; const c = getChar(props.state.cid); return c ? lastDoneView(c) : null; });
+    return {view, toggleZoneStyle};
+  },
+  template: `
+    <div v-if="!view" class="empty-hint">No routine has been ticked yet. Tick one in any frame and it appears here.</div>
+    <template v-else>
+      <div class="done-head"><span>Routine</span><span>Section</span><span>Last done{{ view.headZone ? ' (' + view.headZone + ')' : '' }}</span><span class="r">Ago</span></div>
+      <div v-for="r in view.rows" :key="r.id" class="done-item" :title="r.utc">
+        <span class="dn-label">{{ r.label }}</span>
+        <span class="dn-frame">{{ r.section }}</span>
+        <span class="dn-when">{{ r.when }}<span v-if="r.zone" class="dn-zone">{{ r.zone }}</span></span>
+        <span class="dn-ago">{{ r.ago }}</span>
+      </div>
+      <div v-if="view.never" class="gated-note">{{ view.never }} routine{{ view.never === 1 ? '' : 's' }} {{ view.never === 1 ? 'has' : 'have' }} never been ticked</div>
+      <div class="opt-switch">
+        <span class="sw" :class="{on: view.offsetOn}" role="switch" tabindex="0" :aria-checked="String(view.offsetOn)" @click="toggleZoneStyle()"></span>
+        <label @click="toggleZoneStyle()">Name the time zone as an offset{{ view.switchNote }}</label>
+      </div>
+    </template>`
+};
+function renderLastCompleted(cid){
+  const state = boxState(cid + '-lastdone', LastDone);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
 }
 
 function refreshNav(cid){
