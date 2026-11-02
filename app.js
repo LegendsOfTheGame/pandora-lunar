@@ -2813,31 +2813,47 @@ function pickStation(i){
   renderNav();
   scheduleSave();
 }
-/* Above the panels while a station is picked: that expansion's quest count. */
+/* Above the panels while a station is picked: that expansion's quest count. Each page
+   has its own card, one boxState app each (id cid-station-card), given the picked
+   station as state.s or null. */
+const StationCard = {
+  props: ['state'],
+  template: `
+    <div v-if="state.s" class="section"><h2>{{ state.s.n }}</h2>
+      <div v-if="!state.s.released" class="jr-note">Expansion 8.0. The game sheets fill this in on release day.</div>
+      <template v-else>
+        <template v-if="state.s.q">
+          <div class="jr-row"><span>Quests done</span><span class="jr-v">{{ state.s.have }} / {{ state.s.total }} · {{ state.s.p }}%</span><div class="jr-bar"><i :style="{width: state.s.p + '%'}"></i></div></div>
+          <div class="jr-note">The figures are the same as Tales of Milestones’s Overview: main scenario, chronicles, sidequests, allied society, class and job quests, and levequests.</div>
+        </template>
+        <div v-else class="jr-note">No quest data yet. Import Copy everything from Tales of Milestones.</div>
+        <div class="jr-note">The lists below show {{ state.s.n }} only.</div>
+      </template>
+    </div>`
+};
 function renderStationCard(st){
+  document.querySelectorAll('.station-card').forEach(el => {
+    const state = el.id && boxState(el.id, StationCard);
+    if(state) state.s = null;
+  });
   // Directly under the pinned character line of the page on screen, so the
   // line's negative top margin cannot cover it.
-  document.querySelectorAll('.station-card').forEach(el => { el.innerHTML = ''; });
   const head = document.querySelector(`#page-${DATA.activeId} .char-header`);
   if(!head) return;
   let box = head.nextElementSibling;
   if(!box || !box.classList.contains('station-card')){
     box = document.createElement('div');
     box.className = 'station-card';
+    box.id = DATA.activeId + '-station-card';
     head.after(box);
   }
+  const state = boxState(box.id, StationCard);
+  if(!state) return;
   const sel = routeExp();
-  if(sel === null || globalPageOpen() || !activeArea(DATA.activeId).splits){ box.innerHTML = ''; return; }
+  if(sel === null || globalPageOpen() || !activeArea(DATA.activeId).splits) return;
   const s = st[sel];
-  if(!s.released){
-    box.innerHTML = `<div class="section"><h2>${esc(s.n)}</h2><div class="jr-note">Expansion 8.0. The game sheets fill this in on release day.</div></div>`;
-    return;
-  }
-  box.innerHTML = `<div class="section"><h2>${esc(s.n)}</h2>${s.q
-    ? `<div class="jr-row"><span>Quests done</span><span class="jr-v">${s.q.have.toLocaleString()} / ${s.q.total.toLocaleString()} &middot; ${s.p}%</span><div class="jr-bar"><i style="width:${s.p}%"></i></div></div>
-       <div class="jr-note">The figures are the same as Tales of Milestones&rsquo;s Overview: main scenario, chronicles, sidequests, allied society, class and job quests, and levequests.</div>`
-    : `<div class="jr-note">No quest data yet. Import Copy everything from Tales of Milestones.</div>`}
-    <div class="jr-note">The lists below show ${esc(s.n)} only.</div></div>`;
+  state.s = {n: s.n, released: s.released, q: !!s.q, p: s.p,
+    have: s.q ? s.q.have.toLocaleString() : '', total: s.q ? s.q.total.toLocaleString() : ''};
 }
 
 /* ---------- events ----------
