@@ -2257,7 +2257,7 @@ function characterPageHTML(cid){
 
   <div class="tab-panel" data-tab="overview">
   <div class="section" data-frame="progress">
-    <h2>Quest categories <span class="hint-group"><span class="hint" id="${cid}-pluginhint">via Tales of Milestones</span><button class="link-btn" id="${cid}-pluginmode-btn" onclick="toggleNoPlugin('${cid}')">I don't use the plugin</button><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
+    <h2>Quest categories <span class="hint-group"><span class="plugin-mode" id="${cid}-pluginmode"></span><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
     <div class="quest-grid" id="${cid}-quests"></div>
     <div class="check-note" id="${cid}-overall-check"></div>
   </div>
@@ -3557,12 +3557,15 @@ function renderQuestsTable(cid){
     if(c.msqBreakdownOpen) msqRow.innerHTML = msqBreakdownPanelHTML(cid);
   }
 }
+/* The quest-categories hint and its switch, drawn by Vue (see boxState). */
+const PluginMode = {
+  props: ['state'],
+  setup: () => ({toggleNoPlugin}),
+  template: `<span class="hint">{{ state.noPlugin ? 'manual entry — no plugin' : 'via Tales of Milestones' }}</span><button class="link-btn" @click="toggleNoPlugin(state.cid)">{{ state.noPlugin ? 'I use Tales of Milestones' : "I don't use the plugin" }}</button>`
+};
 function renderPluginMode(cid){
-  const c = getChar(cid);
-  const hint = document.getElementById(`${cid}-pluginhint`);
-  const btn = document.getElementById(`${cid}-pluginmode-btn`);
-  if(hint) hint.textContent = c.noPlugin ? 'manual entry — no plugin' : 'via Tales of Milestones';
-  if(btn) btn.textContent = c.noPlugin ? 'I use Tales of Milestones' : "I don't use the plugin";
+  const state = boxState(`${cid}-pluginmode`, PluginMode);
+  if(state) Object.assign(state, {cid, noPlugin: !!getChar(cid).noPlugin});
 }
 function toggleNoPlugin(cid){
   collectAllInputs();
@@ -3717,19 +3720,25 @@ const ToggleNote = {
   props: ['state'],
   template: `<template v-if="state.label"><span>{{ state.label }}</span><button class="link-btn" @click="state.toggle()">{{ state.button }}</button></template>`
 };
-const noteApps = {};
-function drawNote(id, label, button, toggle){
+/* One Vue app per element id, given a reactive `state` prop. Returns that state for
+   the caller to fill in, or null when the element is not on the page. */
+const vueBoxes = {};
+function boxState(id, component){
   const box = document.getElementById(id);
-  if(!box) return;
-  let n = noteApps[id];
+  if(!box) return null;
+  let n = vueBoxes[id];
   if(!n || n.box !== box){
     if(n) n.app.unmount();
-    const state = Vue.reactive({label:'', button:'', toggle:null});
-    const app = Vue.createApp(ToggleNote, {state});
+    const state = Vue.reactive({});
+    const app = Vue.createApp(component, {state});
     app.mount(box);
-    n = noteApps[id] = {app, box, state};
+    n = vueBoxes[id] = {app, box, state};
   }
-  Object.assign(n.state, {label, button, toggle});
+  return n.state;
+}
+function drawNote(id, label, button, toggle){
+  const state = boxState(id, ToggleNote);
+  if(state) Object.assign(state, {label, button, toggle});
 }
 function renderJobsNote(cid){
   const c = getChar(cid);

@@ -167,6 +167,8 @@ body{
 .hint a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px}
 .hint a:hover{color:var(--text-dim)}
 .hint-group{display:flex;align-items:center;gap:10px}
+/* Vue's mount point for the hint and its switch: keeps both as flex items of .hint-group. */
+.plugin-mode{display:contents}
 .edit-btn{
   background:transparent;border:1px solid var(--line-soft);color:var(--text-dim);
   font-size:10.5px;padding:3px 10px;border-radius:4px;cursor:pointer;
