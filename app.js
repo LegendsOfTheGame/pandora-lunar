@@ -3573,38 +3573,91 @@ function onTotalInput(cid){
   renderCharDash(cid);
   scheduleSave();
 }
+/* The quest categories table, drawn by Vue (boxState), the same way as the custom
+   trackers. renderQuestsTable bumps state.tick: a new snapshot, and every row made
+   again. Typing bumps state.typed (bumpQuests): only the percentages, the MSQ
+   switch and the check note redraw. Inputs are v-once and keep their ids for
+   collectCharInputs; each row is its own component so v-once is per row.
+
+   The total input uses v-init-value instead: Vue 3.5's compiler crashes on a
+   <template v-if> whose only child is v-once. The directive sets the value once,
+   when the input is made, and Vue never binds it, so typing is never overwritten. */
+const vInitValue = { mounted(el, binding){ el.value = binding.value; } };
+const QuestRow = {
+  props: {cid: String, row: Object, editing: Boolean, p: Number, msqToggle: Boolean, msqOpen: Boolean},
+  emits: ['toggleMsq'],
+  directives: {initValue: vInitValue},
+  setup: () => ({onMainInput, onTotalInput}),
+  template: `
+    <div>{{ row.label }}<template v-if="msqToggle"> <button class="jq-toggle neutral" :id="cid + '-msqbtn'" @click="$emit('toggleMsq')">{{ msqOpen ? 'hide' : 'by expansion' }}</button></template></div>
+    <div><input v-once type="text" :id="cid + '-quest-' + row.key" :value="row.v" style="text-align:right" @input="onMainInput(cid)"></div>
+    <div style="text-align:right" class="cap"><template v-if="editing"><input type="text" class="total-input" :id="cid + '-total-' + row.key" v-init-value="row.total" @input="onTotalInput(cid)"></template><template v-else>{{ row.total.toLocaleString() }}</template></div>
+    <div style="text-align:right;font-family:var(--font-mono);color:var(--text-dim)" :id="cid + '-qpct-' + row.key">{{ p.toFixed(1) }}%</div>`
+};
+// Main Scenario gets a per-expansion breakdown option — the no-plugin fallback. Same
+// number-entry pattern as every other category, not a quest-by-quest checklist; the
+// user types each expansion's own done/total (from the wiki or their own count),
+// and a mini consistency check confirms it against this row's own numbers, same
+// relationship as Overall vs. the seven categories.
+const MsqRow = {
+  props: {cid: String, row: Object, p: Number},
+  setup: () => ({onMsqExpInput}),
+  template: `
+    <div class="jq-item">
+      <span class="jq-name" style="flex:1">{{ row.label }}</span>
+      <input v-once type="text" :id="cid + '-msqexp-' + row.k" :value="row.v" style="width:56px;text-align:right" @input="onMsqExpInput(cid)">
+      <span class="jq-level" style="width:12px;text-align:center;flex:0 0 auto">/</span>
+      <input v-once type="text" :id="cid + '-msqexptotal-' + row.k" :value="row.t" style="width:56px;text-align:right" @input="onMsqExpInput(cid)">
+      <span class="jq-level" style="width:50px;text-align:right;font-family:var(--font-mono)" :id="cid + '-msqexppct-' + row.k">{{ p.toFixed(1) }}%</span>
+    </div>`
+};
+// Made when the panel opens, so its inputs start from the saved numbers.
+const MsqPanel = {
+  components: {MsqRow},
+  props: {cid: String, typed: Number},
+  setup(props){
+    const c = getChar(props.cid);
+    const rows = MSQ_EXPANSIONS.map(([k, label]) => ({k, label, v: c.msqBreakdown[k]||0, t: c.msqBreakdownTotals[k]}));
+    const p = k => { props.typed; const ch = getChar(props.cid); return pct(ch.msqBreakdown[k]||0, ch.msqBreakdownTotals[k]); };
+    const check = Vue.computed(() => { props.typed; return msqCheck(props.cid); });
+    return {rows, p, check};
+  },
+  template: `
+    <div class="jq-panel"><msq-row v-for="r in rows" :key="r.k" :cid="cid" :row="r" :p="p(r.k)"></msq-row><div class="check-note" :class="check.cls" :id="cid + '-msqcheck'" style="margin-top:8px">{{ check.text }}</div></div>`
+};
+const QuestsTable = {
+  components: {QuestRow, MsqPanel},
+  props: ['state'],
+  setup(props){
+    const snap = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      if(!c) return null;
+      return {editing: !!editingTotals[props.state.cid], noPlugin: !!c.noPlugin,
+              rows: QUEST_CATS.map(([key, label]) => ({key, label, v: c.quests[key]||0, total: c.questTotals[key]}))};
+    });
+    const live = () => { props.state.typed; return getChar(props.state.cid); };
+    const p = key => { const c = live(); return pct(c.quests[key]||0, c.questTotals[key]); };
+    const msqOpen = () => !!live().msqBreakdownOpen;
+    return {snap, p, msqOpen, toggleMsq: () => toggleMsqBreakdown(props.state.cid)};
+  },
+  template: `
+    <template v-if="snap">
+      <div class="h">Category</div><div class="h" style="text-align:right">Done</div><div class="h" style="text-align:right">Total</div><div class="h" style="text-align:right">%</div>
+      <template v-for="r in snap.rows" :key="r.key + ':' + state.tick">
+        <quest-row :cid="state.cid" :row="r" :editing="snap.editing" :p="p(r.key)" :msq-toggle="r.key === 'msq' && snap.noPlugin" :msq-open="msqOpen()" @toggle-msq="toggleMsq"></quest-row>
+        <div v-if="r.key === 'msq' && snap.noPlugin" :id="state.cid + '-msqrow'" style="grid-column:1/-1" :style="msqOpen() ? {} : {display: 'none'}"><msq-panel v-if="msqOpen()" :cid="state.cid" :typed="state.typed || 0"></msq-panel></div>
+      </template>
+    </template>`
+};
 function renderQuestsTable(cid){
-  const c = getChar(cid);
-  let rows = `<div class="h">Category</div><div class="h" style="text-align:right">Done</div><div class="h" style="text-align:right">Total</div><div class="h" style="text-align:right">%</div>`;
-  QUEST_CATS.forEach(([key,label])=>{
-    const v = c.quests[key]||0, total = c.questTotals[key];
-    const totalCell = editingTotals[cid]
-      ? `<input type="text" class="total-input" id="${cid}-total-${key}" value="${total}" oninput="onTotalInput('${cid}')">`
-      : total.toLocaleString();
-    // Main Scenario gets a per-expansion breakdown option — the no-plugin fallback. Same
-    // number-entry pattern as every other category, not a quest-by-quest checklist; the
-    // user types each expansion's own done/total (from the wiki or their own count),
-    // and a mini consistency check confirms it against this row's own numbers, same
-    // relationship as Overall vs. the seven categories.
-    const labelCell = (key==='msq' && c.noPlugin)
-      ? `${label} ${msqToggleHTML(cid)}`
-      : label;
-    rows += `
-      <div>${labelCell}</div>
-      <div><input type="text" id="${cid}-quest-${key}" value="${v}" style="text-align:right" oninput="onMainInput('${cid}')"></div>
-      <div style="text-align:right" class="cap">${totalCell}</div>
-      <div style="text-align:right;font-family:var(--font-mono);color:var(--text-dim)" id="${cid}-qpct-${key}">${pct(v,total).toFixed(1)}%</div>
-    `;
-    if(key==='msq' && c.noPlugin){
-      rows += `<div id="${cid}-msqrow" style="grid-column:1/-1;${c.msqBreakdownOpen?'':'display:none'}"></div>`;
-    }
-  });
-  document.getElementById(cid+'-quests').innerHTML = rows;
-  const msqRow = document.getElementById(`${cid}-msqrow`);
-  if(msqRow && c.noPlugin){
-    msqRow.style.display = c.msqBreakdownOpen ? '' : 'none';
-    if(c.msqBreakdownOpen) msqRow.innerHTML = msqBreakdownPanelHTML(cid);
-  }
+  const state = boxState(cid+'-quests', QuestsTable);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+}
+/* Redraws the percentages, the MSQ switch and the check notes from the live data. */
+function bumpQuests(cid){
+  const state = boxState(cid+'-quests', QuestsTable);
+  if(state) state.typed = (state.typed || 0) + 1;
 }
 /* The quest-categories hint and its switch, drawn by Vue (see boxState). */
 const PluginMode = {
@@ -3627,10 +3680,6 @@ function toggleNoPlugin(cid){
 }
 
 /* ---------- MSQ per-expansion breakdown (no-plugin fallback) ---------- */
-function msqToggleHTML(cid){
-  const c = getChar(cid);
-  return `<button class="jq-toggle neutral" id="${cid}-msqbtn" onclick="toggleMsqBreakdown('${cid}')">${c.msqBreakdownOpen?'hide':'by expansion'}</button>`;
-}
 function msqCheck(cid){
   const c = getChar(cid);
   let sumDone=0, sumTotal=0;
@@ -3644,60 +3693,21 @@ function msqCheck(cid){
   if(!totalOk) parts.push(`total ${fmt(sumTotal)} vs Main scenario ${fmt(c.questTotals.msq||0)}`);
   return { cls:'warn', text:`⚠ expansions disagree — ${parts.join('; ')}` };
 }
-function msqBreakdownPanelHTML(cid){
-  const c = getChar(cid);
-  const rows = MSQ_EXPANSIONS.map(([key,label])=>{
-    const v = c.msqBreakdown[key]||0, t = c.msqBreakdownTotals[key];
-    return `<div class="jq-item">
-      <span class="jq-name" style="flex:1">${esc(label)}</span>
-      <input type="text" id="${cid}-msqexp-${key}" value="${v}" style="width:56px;text-align:right" oninput="onMsqExpInput('${cid}')">
-      <span class="jq-level" style="width:12px;text-align:center;flex:0 0 auto">/</span>
-      <input type="text" id="${cid}-msqexptotal-${key}" value="${t}" style="width:56px;text-align:right" oninput="onMsqExpInput('${cid}')">
-      <span class="jq-level" style="width:50px;text-align:right;font-family:var(--font-mono)" id="${cid}-msqexppct-${key}">${pct(v,t).toFixed(1)}%</span>
-    </div>`;
-  }).join('');
-  const check = msqCheck(cid);
-  return `<div class="jq-panel">${rows}<div class="check-note ${check.cls}" id="${cid}-msqcheck" style="margin-top:8px">${check.text}</div></div>`;
-}
 function toggleMsqBreakdown(cid){
   collectAllInputs();
   const c = getChar(cid);
   c.msqBreakdownOpen = !c.msqBreakdownOpen;
-  const row = document.getElementById(`${cid}-msqrow`);
-  const btn = document.getElementById(`${cid}-msqbtn`);
-  if(row){
-    row.style.display = c.msqBreakdownOpen ? '' : 'none';
-    row.innerHTML = c.msqBreakdownOpen ? msqBreakdownPanelHTML(cid) : '';
-  }
-  if(btn) btn.textContent = c.msqBreakdownOpen ? 'hide' : 'by expansion';
+  bumpQuests(cid);
   scheduleSave();
 }
 function onMsqExpInput(cid){
   collectAllInputs();
-  const c = getChar(cid);
-  MSQ_EXPANSIONS.forEach(([key])=>{
-    const v = c.msqBreakdown[key]||0, t = c.msqBreakdownTotals[key];
-    const el = document.getElementById(`${cid}-msqexppct-${key}`);
-    if(el) el.textContent = pct(v,t).toFixed(1)+'%';
-  });
-  updateMsqCheckNote(cid);
+  bumpQuests(cid);
   scheduleSave();
 }
-function updateMsqCheckNote(cid){
-  const el = document.getElementById(`${cid}-msqcheck`);
-  if(!el) return;
-  const check = msqCheck(cid);
-  el.className = 'check-note '+check.cls;
-  el.textContent = check.text;
-}
-function updateQuestPercents(cid){
-  const c = getChar(cid);
-  QUEST_CATS.forEach(([key])=>{
-    const v = c.quests[key]||0, total = c.questTotals[key];
-    const el = document.getElementById(cid+'-qpct-'+key);
-    if(el) el.textContent = pct(v,total).toFixed(1)+'%';
-  });
-}
+// Both called on every keystroke by onMainInput and onTotalInput; the table draws both.
+function updateMsqCheckNote(cid){ bumpQuests(cid); }
+function updateQuestPercents(cid){ bumpQuests(cid); }
 
 function renderJobTables(cid){
   // Grouped by role rather than one flat list of twenty-three, which is how the
