@@ -4415,42 +4415,14 @@ function redAlertClass(){
 }
 function onRedAlertClassChange(cid){
   DATA.ui.redAlertClass = document.getElementById(cid+'-ra-class').value;
-  DATA.chars.forEach(c => { renderRedAlerts(c.id); applyFrames(c.id, 'cosmic'); });
+  DATA.chars.forEach(c => renderRedAlerts(c.id));
   scheduleSave();
 }
 
-function redAlertVariantHTML(alert, regions, vi, pick){
-  const label = alert.variants.length > 1 ? `Variant ${RED_ALERT_VARIANT_NAMES[vi]}` : 'One variant';
-  const regionHTML = regions.map(r => `
-    <div class="ra-region">
-      <div class="ra-where">${esc(r.dir)} <span class="faint">(${esc(r.xy)})</span></div>
-      ${r.missions.map(([cls, mission]) => `
-        <div class="ra-mission${pick && cls === pick ? ' pick' : ''}${pick && cls !== pick ? ' other' : ''}">
-          <span class="ra-cls">${esc(cls)}</span><span class="ra-name">${esc(mission)}</span>
-        </div>`).join('')}
-    </div>`).join('');
-  return `
-    <div class="ra-variant">
-      <div class="ra-vlabel">${label}</div>
-      <div class="ra-regions">${regionHTML}</div>
-    </div>`;
-}
-
-function renderRedAlerts(cid){
-  const box = document.getElementById(cid+'-redalert');
-  const bar = document.getElementById(cid+'-ra-bar');
-  if(!box || !bar) return;
-  const pick = redAlertClass();
+/* The Red Alert table for one class filter, as plain data. The table is the same for
+   every character, so only the pick changes it. */
+function redAlertView(pick){
   const has = regions => regions.some(r => r.missions.some(([cls]) => cls === pick));
-
-  bar.innerHTML = `
-    <label class="ra-pick">Class
-      <select id="${cid}-ra-class" onchange="onRedAlertClassChange('${cid}')">
-        <option value="">All classes</option>
-        ${COSMIC_CLASSES.map(j => `<option value="${j}"${j === pick ? ' selected' : ''}>${j}</option>`).join('')}
-      </select>
-    </label>`;
-
   // Counted per zone, so each zone's own frame can state its own totals and the
   // all-zones frame their sum.
   const summary = (v, m) => pick
@@ -4463,31 +4435,79 @@ function renderRedAlerts(cid){
       const variants = a.variants
         .map((regions, vi) => ({regions, vi}))
         .filter(({regions}) => !pick || has(regions));
-      if(!variants.length) return '';
+      if(!variants.length) return null;
       zv += variants.length;
       variants.forEach(({regions}) => regions.forEach(r =>
         zm += r.missions.filter(([cls]) => !pick || cls === pick).length));
-      return `
-        <div class="ra-weather">
-          <div class="ra-wname">${esc(a.weather)}</div>
-          ${variants.map(({regions, vi}) => redAlertVariantHTML(a, regions, vi, pick)).join('')}
-          ${a.lock ? `<div class="ra-lock">${esc(a.lock)}</div>` : ''}
-        </div>`;
-    }).join('');
+      return {weather: a.weather, lock: a.lock || '', variants: variants.map(({regions, vi}) => ({
+        vi,
+        label: a.variants.length > 1 ? `Variant ${RED_ALERT_VARIANT_NAMES[vi]}` : 'One variant',
+        regions: regions.map(r => ({dir: r.dir, xy: r.xy, missions: r.missions.map(([cls, mission]) => ({
+          cls, mission, mark: pick ? (cls === pick ? ' pick' : ' other') : ''
+        }))}))
+      }))};
+    }).filter(Boolean);
     variantsShown += zv; missionsShown += zm;
-    // In the all-zones frame and in this zone's own frame. The zone's summary line is
-    // only for its own frame; the all-zones frame has one line for everything.
-    return `
-      <div class="ra-zone" data-frame="red-alerts ${frameSlug(zone)}">
-        <div class="subhead">${esc(zone)}</div>
-        <div class="check-note ok ra-zone-sum" data-frame="${frameSlug(zone)}">${esc(summary(zv, zm))}</div>
-        <div class="ra-weathers">${weathers || '<div class="empty-hint">No Red Alert in this zone includes this class.</div>'}</div>
-      </div>`;
-  }).join('');
-
-  box.innerHTML = `
-    <div class="check-note ok" data-frame="red-alerts">${esc(summary(variantsShown, missionsShown))}</div>
-    <div class="ra-columns">${zones}</div>`;
+    return {zone, slug: frameSlug(zone), summary: summary(zv, zm), weathers};
+  });
+  return {summary: summary(variantsShown, missionsShown), zones};
+}
+const RedAlertBar = {
+  props: ['state'],
+  setup(){ return {COSMIC_CLASSES, onRedAlertClassChange}; },
+  template: `
+    <label class="ra-pick">Class
+      <select :id="state.cid + '-ra-class'" :value="state.pick" @change="onRedAlertClassChange(state.cid)">
+        <option value="">All classes</option>
+        <option v-for="j in COSMIC_CLASSES" :key="j" :value="j">{{ j }}</option>
+      </select>
+    </label>`
+};
+/* The zone blocks carry data-frame, and applyFrames sets frame-on on them by hand, so
+   their class attributes stay static: Vue never rewrites them. */
+const RedAlerts = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => { props.state.tick; return redAlertView(props.state.pick || ''); });
+    return {view};
+  },
+  template: `
+    <div class="check-note ok" data-frame="red-alerts">{{ view.summary }}</div>
+    <div class="ra-columns">
+      <div v-for="z in view.zones" :key="z.zone" class="ra-zone" :data-frame="'red-alerts ' + z.slug">
+        <div class="subhead">{{ z.zone }}</div>
+        <div class="check-note ok ra-zone-sum" :data-frame="z.slug">{{ z.summary }}</div>
+        <div class="ra-weathers">
+          <div v-for="w in z.weathers" :key="w.weather" class="ra-weather">
+            <div class="ra-wname">{{ w.weather }}</div>
+            <div v-for="v in w.variants" :key="v.vi" class="ra-variant">
+              <div class="ra-vlabel">{{ v.label }}</div>
+              <div class="ra-regions">
+                <div v-for="r in v.regions" :key="r.dir + r.xy" class="ra-region">
+                  <div class="ra-where">{{ r.dir }} <span class="faint">({{ r.xy }})</span></div>
+                  <div v-for="m in r.missions" :key="m.cls + m.mission" :class="'ra-mission' + m.mark">
+                    <span class="ra-cls">{{ m.cls }}</span><span class="ra-name">{{ m.mission }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-if="w.lock" class="ra-lock">{{ w.lock }}</div>
+          </div>
+          <div v-if="!z.weathers.length" class="empty-hint">No Red Alert in this zone includes this class.</div>
+        </div>
+      </div>
+    </div>`
+};
+function renderRedAlerts(cid){
+  const pick = redAlertClass();
+  const bar = boxState(cid + '-ra-bar', RedAlertBar);
+  const box = boxState(cid + '-redalert', RedAlerts);
+  if(!bar || !box) return;
+  Object.assign(bar, {cid, pick});
+  Object.assign(box, {cid, pick, tick: (box.tick || 0) + 1});
+  // A filter change adds and removes zone summaries and weathers; settle the frames once
+  // Vue has drawn them.
+  Vue.nextTick(() => applyFrames(cid, 'cosmic'));
 }
 
 /* ---------- job quest checklist (levels 1-70) ---------- */
