@@ -2737,45 +2737,74 @@ function stationQuests(c, i){
   const r = Array.isArray(c.questsByExp) ? c.questsByExp[i] : null;
   return r && r[1] > 0 ? {have: r[0], total: r[1]} : null;
 }
-function renderRoute(){
-  const box = document.getElementById('route');
-  if(!box || !DATA) return;
-  if(globalPageOpen()){ box.innerHTML = ''; return; }
-  const c = getChar(DATA.activeId);
+function routeStations(c){
   const reached = patchValue(c.patch);
-  const sel = routeExp(), area = activeArea(DATA.activeId);
-  const st = ROUTE_STATIONS.map(s => {
+  return ROUTE_STATIONS.map(s => {
     const q = s.i < ROUTE_STATIONS.length - 1 ? stationQuests(c, s.i) : null;
     const released = s.i < ROUTE_STATIONS.length - 1;
     return Object.assign({}, s, {q, released, p: q ? jrPct(q.have, q.total) : 0,
       done: released && reached !== null && reached >= s.patch + 1});
   });
+}
+function routeView(){
+  const st = routeStations(getChar(DATA.activeId));
+  const sel = routeExp();
   const open = st.find(s => s.released && !s.done);
-  const track = `<div class="track" aria-hidden="true">${st.slice(0, -1).map((s, i) =>
-    `<span class="seg${open && s.i === open.i ? ' active' : ''}" style="grid-column:${2*i+2} / span 2"><i style="width:${s.p}%"></i></span>`).join('')}</div>`;
-  const stations = st.map((s, i) => {
-    const cls = !s.released ? 'locked' : s.done ? 'done' : (open && s.i === open.i ? 'active' : '');
-    const pc = !s.released ? '8.0' : s.q ? s.p + '%' : '—';
-    const title = !s.released ? 'Expansion 8.0. The game sheets fill this in on release day.'
-      : s.q ? `${s.q.have.toLocaleString()} of ${s.q.total.toLocaleString()} quests done` : 'Import Copy everything from Tales of Milestones to fill this in.';
-    return `<button type="button" style="grid-column:${i+1}" class="stn ${cls}${s.i === sel ? ' sel' : ''}" title="${esc(title)}"
-      aria-pressed="${s.i === sel}" onclick="pickStation(${s.i})"><span class="dot"></span><span class="nm">${esc(s.n)}</span><span class="pc">${pc}</span></button>`;
-  }).join('');
-  const s = sel !== null ? st[sel] : null;
-  const note = s
-    ? (area.splits ? `Showing <b>${esc(s.n)}</b> only` : `<b>${esc(s.n)}</b> selected &middot; this area spans every expansion`)
-      + ` <button type="button" onclick="pickStation(null)">Show all expansions</button>`
-    : (area.splits ? 'All expansions &middot; pick a station to narrow this area'
-                   : (open ? `Now boarding: <b>${esc(open.n)}</b>` : ''));
-  // No per-expansion figures at all: a character last imported before Time
-  // Memoria 3.8.0.15 shows a dash on every station, which reads as broken unless
-  // the line says why. The tooltip alone was not enough (22 Oct 2026).
-  const noFigures = st.every(x => !x.released || !x.q);
-  const hint = noFigures
-    ? `<span class="route-hint">Import <b>Copy everything</b> from Tales of Milestones 3.8 or later to fill in these percentages.</span>`
-    : '';
-  box.innerHTML = `<div class="route-stations" tabindex="0" aria-label="Scroll expansion timeline">${track}${stations}</div><div class="route-note">${note}${hint}</div>`;
-  renderStationCard(st);
+  const isOpen = s => !!open && s.i === open.i;
+  return {
+    segs: st.slice(0, -1).map(s => ({i: s.i, cls: isOpen(s) ? 'seg active' : 'seg', p: s.p})),
+    stations: st.map(s => {
+      const cls = !s.released ? 'locked' : s.done ? 'done' : (isOpen(s) ? 'active' : '');
+      return {i: s.i, n: s.n, sel: s.i === sel,
+        cls: `stn ${cls}${s.i === sel ? ' sel' : ''}`,
+        pc: !s.released ? '8.0' : s.q ? s.p + '%' : '—',
+        title: !s.released ? 'Expansion 8.0. The game sheets fill this in on release day.'
+          : s.q ? `${s.q.have.toLocaleString()} of ${s.q.total.toLocaleString()} quests done` : 'Import Copy everything from Tales of Milestones to fill this in.'};
+    }),
+    picked: sel !== null ? st[sel].n : '',
+    splits: !!activeArea(DATA.activeId).splits,
+    open: open ? open.n : '',
+    // No per-expansion figures at all: a character last imported before Time
+    // Memoria 3.8.0.15 shows a dash on every station, which reads as broken unless
+    // the line says why. The tooltip alone was not enough (22 Oct 2026).
+    noFigures: st.every(x => !x.released || !x.q)
+  };
+}
+/* The route line is one Vue app for the whole page (boxState on #route), drawn for the
+   active character. renderRoute bumps state.tick; state.hidden empties it while a
+   global page is open. */
+const RouteLine = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => { props.state.tick; return props.state.hidden || !DATA ? null : routeView(); });
+    return {view, pickStation};
+  },
+  template: `
+    <template v-if="view">
+      <div class="route-stations" tabindex="0" aria-label="Scroll expansion timeline">
+        <div class="track" aria-hidden="true"><span v-for="(s, i) in view.segs" :key="s.i" :class="s.cls" :style="{gridColumn: (2*i+2) + ' / span 2'}"><i :style="{width: s.p + '%'}"></i></span></div>
+        <button v-for="(s, i) in view.stations" :key="s.i" type="button" :style="{gridColumn: String(i+1)}" :class="s.cls" :title="s.title"
+          :aria-pressed="String(s.sel)" @click="pickStation(s.i)"><span class="dot"></span><span class="nm">{{ s.n }}</span><span class="pc">{{ s.pc }}</span></button>
+      </div>
+      <div class="route-note">
+        <template v-if="view.picked">
+          <template v-if="view.splits">Showing <b>{{ view.picked }}</b> only</template>
+          <template v-else><b>{{ view.picked }}</b> selected · this area spans every expansion</template>
+          <button type="button" @click="pickStation(null)">Show all expansions</button>
+        </template>
+        <template v-else-if="view.splits">All expansions · pick a station to narrow this area</template>
+        <template v-else-if="view.open">Now boarding: <b>{{ view.open }}</b></template>
+        <span v-if="view.noFigures" class="route-hint">Import <b>Copy everything</b> from Tales of Milestones 3.8 or later to fill in these percentages.</span>
+      </div>
+    </template>`
+};
+function renderRoute(){
+  if(!DATA) return;
+  const state = boxState('route', RouteLine);
+  if(!state) return;
+  const hidden = !!globalPageOpen();
+  Object.assign(state, {hidden, tick: (state.tick || 0) + 1});
+  if(!hidden) renderStationCard(routeStations(getChar(DATA.activeId)));
 }
 function pickStation(i){
   DATA.ui.routeExp = (i === null || routeExp() === i) ? null : i;
