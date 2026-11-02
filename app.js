@@ -3478,8 +3478,7 @@ function tradeMentorProgress(c){
   };
 }
 
-function updateTradeMentorChecks(cid){
-  const c = getChar(cid);
+function tradeMentorView(c){
   const p = tradeMentorProgress(c);
   // The job parts name whichever job is furthest along, since "64% of a crafting job"
   // is meaningless without knowing which one the tracker settled on.
@@ -3487,31 +3486,53 @@ function updateTradeMentorChecks(cid){
   // A count read from the plugin says when it was read. It only refreshes while the
   // Achievements window is open, so an undated figure and a fortnight-old one would
   // otherwise look identical.
-  const age = at => at ? ` <span class="asof">read ${esc(fmtTmTimestamp(at))}</span>` : '';
+  const age = at => at ? `read ${fmtTmTimestamp(at)}` : '';
   const count = (n, exact) => `${(n||0).toLocaleString()}${exact === false ? '+' : ''}`;
   const detail = {
-    collected: `<span class="qname">${count(c.tradeCollected, c.tradeCollectedExact)} / 300</span>${age(c.tradeCollectedAsOf)}`,
-    made: `<span class="qname">${count(c.tradeMade, c.tradeMadeExact)} / 100</span>${age(c.tradeMadeAsOf)}`,
-    craft: `<span class="qname">${esc(best('craft', CRAFT_JOBS))} ${fmtLvl(p.craftJob)} / 100</span>`,
-    gather: `<span class="qname">${esc(best('gather', GATHER_JOBS))} ${fmtLvl(p.gatherJob)} / 100</span>`
+    collected: {qname: `${count(c.tradeCollected, c.tradeCollectedExact)} / 300`, asof: age(c.tradeCollectedAsOf)},
+    made: {qname: `${count(c.tradeMade, c.tradeMadeExact)} / 100`, asof: age(c.tradeMadeAsOf)},
+    craft: {qname: `${best('craft', CRAFT_JOBS)} ${fmtLvl(p.craftJob)} / 100`, asof: ''},
+    gather: {qname: `${best('gather', GATHER_JOBS)} ${fmtLvl(p.gatherJob)} / 100`, asof: ''}
   };
-  const rows = p.parts.map(part=>`
-    <div class="check-row">
-      <span>${part.label} ${detail[part.key]}</span>
-      <span class="trade-pct">${(part.value*100).toFixed(2)}%</span>
-      ${part.value >= 1 ? '<span class="stamp">done</span>' : '<span class="stamp pending">pending</span>'}
-    </div>`).join('');
-  const overall = `
-    <div class="check-row trade-overall">
-      <span>Trade mentor progress${p.exact ? '' : ' <span class="qname">(at least &mdash; a count is a floor)</span>'}</span>
-      <span class="trade-pct">${(p.overall*100).toFixed(3)}%</span>
-    </div>
-    <div class="bar-track"><div class="bar-fill" style="width:${(p.overall*100).toFixed(3)}%"></div></div>`;
-  document.getElementById(cid+'-trade-jobs').innerHTML = rows + overall;
-  const collectedEl = document.getElementById(cid+'-trade-collected-done');
-  const madeEl = document.getElementById(cid+'-trade-made-done');
-  if(collectedEl) collectedEl.innerHTML = c.tradeCollected >= 300 ? '<span class="at-cap">done</span>' : '';
-  if(madeEl) madeEl.innerHTML = c.tradeMade >= 100 ? '<span class="at-cap">done</span>' : '';
+  return {
+    rows: p.parts.map(part => ({key: part.key, label: part.label, ...detail[part.key],
+      pct: (part.value*100).toFixed(2) + '%', done: part.value >= 1})),
+    exact: p.exact,
+    overall: (p.overall*100).toFixed(3) + '%'
+  };
+}
+const TradeMentor = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => { props.state.tick; const c = getChar(props.state.cid); return c ? tradeMentorView(c) : null; });
+    return {view};
+  },
+  template: `
+    <template v-if="view">
+      <div v-for="r in view.rows" :key="r.key" class="check-row">
+        <span>{{ r.label }} <span class="qname">{{ r.qname }}</span><template v-if="r.asof"> <span class="asof">{{ r.asof }}</span></template></span>
+        <span class="trade-pct">{{ r.pct }}</span>
+        <span :class="r.done ? 'stamp' : 'stamp pending'">{{ r.done ? 'done' : 'pending' }}</span>
+      </div>
+      <div class="check-row trade-overall">
+        <span>Trade mentor progress<template v-if="!view.exact"> <span class="qname">(at least — a count is a floor)</span></template></span>
+        <span class="trade-pct">{{ view.overall }}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" :style="{width: view.overall}"></div></div>
+    </template>`
+};
+const AtCap = {
+  props: ['state'],
+  template: `<span v-if="state.done" class="at-cap">done</span>`
+};
+function updateTradeMentorChecks(cid){
+  const c = getChar(cid);
+  const state = boxState(cid+'-trade-jobs', TradeMentor);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+  const collected = boxState(cid+'-trade-collected-done', AtCap);
+  if(collected) collected.done = c.tradeCollected >= 300;
+  const made = boxState(cid+'-trade-made-done', AtCap);
+  if(made) made.done = c.tradeMade >= 100;
 }
 
 function updatePlaytimeTotal(cid){
