@@ -4725,43 +4725,71 @@ function updateJobCaps(cid){
   });
 }
 
-/* ---------- custom trackers (per character) ---------- */
-function customRowHTML(cid, item){
-  const p = pct(item.current, item.total);
-  const call = `onCustomInput('${cid}','${item.id}')`;
-  return `
-    <div class="custom-item" id="${cid}-custom-item-${item.id}">
+/* ---------- custom trackers (per character) ----------
+   Drawn by Vue (boxState). The inputs keep their ids, so collectCharInputs still
+   reads them back into the character on every keystroke.
+
+   Two counters, not one. state.tick (renderCustom) takes a new snapshot of the
+   list and makes every row again: the rows are keyed on it. state.typed
+   (onCustomInput) only redraws the percentage and the bar from the live data.
+   The inputs are v-once. Vue writes a bound `value` back into its input on every
+   redraw, even an unchanged one, so a bound box would lose what is being typed.
+   Each row is its own component because v-once inside a v-for shares one copy
+   across every row. */
+const CustomRow = {
+  props: {cid: String, item: Object, p: Number},
+  emits: ['changed', 'remove'],
+  template: `
+    <div class="custom-item" :id="cid + '-custom-item-' + item.id">
       <div class="custom-row">
-        <input type="text" id="${cid}-custom-label-${item.id}" value="${esc(item.label)}" placeholder="Name (e.g. Mounts)" oninput="${call}">
-        <input type="text" id="${cid}-custom-cur-${item.id}" value="${item.current}" style="text-align:right" oninput="${call}">
+        <input v-once type="text" :id="cid + '-custom-label-' + item.id" :value="item.label" placeholder="Name (e.g. Mounts)" @input="$emit('changed')">
+        <input v-once type="text" :id="cid + '-custom-cur-' + item.id" :value="item.current" style="text-align:right" @input="$emit('changed')">
         <span class="slash">/</span>
-        <input type="text" id="${cid}-custom-total-${item.id}" value="${item.total}" style="text-align:right" oninput="${call}">
-        <span class="pct" id="${cid}-custom-pct-${item.id}">${p.toFixed(1)}%</span>
-        <button class="remove-btn" title="Remove this tracker" onclick="removeCustomRow('${cid}','${item.id}')">&times;</button>
+        <input v-once type="text" :id="cid + '-custom-total-' + item.id" :value="item.total" style="text-align:right" @input="$emit('changed')">
+        <span class="pct">{{ p.toFixed(1) }}%</span>
+        <button class="remove-btn" title="Remove this tracker" @click="$emit('remove')">×</button>
       </div>
-      <div class="bar-track"><div class="bar-fill" id="${cid}-custom-bar-${item.id}" style="width:${Math.min(p,100)}%"></div></div>
-    </div>`;
-}
+      <div class="bar-track"><div class="bar-fill" :style="{width: Math.min(p, 100) + '%'}"></div></div>
+    </div>`
+};
+const CustomList = {
+  components: {CustomRow},
+  props: ['state'],
+  setup(props){
+    // Empty until renderCustom has set state.cid: boxState mounts before it returns.
+    const list = () => (getChar(props.state.cid) || {custom: []}).custom;
+    const rows = Vue.computed(() => {
+      props.state.tick;
+      return list().map(i => ({id: i.id, label: i.label, current: i.current, total: i.total}));
+    });
+    const p = id => {
+      props.state.typed;
+      const i = list().find(x => x.id === id);
+      return i ? pct(i.current, i.total) : 0;
+    };
+    return {rows, p, changed: id => onCustomInput(props.state.cid, id), remove: id => removeCustomRow(props.state.cid, id)};
+  },
+  template: `
+    <div v-if="!rows.length" class="empty-hint">Nothing yet — add achievements, mounts, minions, hunting log, or anything else worth counting.</div>
+    <custom-row v-for="item in rows" :key="item.id + ':' + state.tick" :cid="state.cid" :item="item" :p="p(item.id)"
+                @changed="changed(item.id)" @remove="remove(item.id)"></custom-row>`
+};
 function renderCustom(cid){
-  const box = document.getElementById(cid+'-custom');
-  if(!box) return;
-  const list = getChar(cid).custom;
-  box.innerHTML = list.length
-    ? list.map(item=>customRowHTML(cid,item)).join('')
-    : '<div class="empty-hint">Nothing yet &mdash; add achievements, mounts, minions, hunting log, or anything else worth counting.</div>';
-  applyFrames(cid, 'notes');
+  const state = boxState(cid+'-custom', CustomList);
+  if(!state) return;
+  Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+  Vue.nextTick(() => applyFrames(cid, 'notes'));
   refreshNav(cid);
 }
 function addCustomRow(cid){
   collectAllInputs();
   const item = { id:newId(), label:'', current:0, total:100 };
   getChar(cid).custom.push(item);
-  const box = document.getElementById(cid+'-custom');
-  const hint = box.querySelector('.empty-hint');
-  if(hint) hint.remove();
-  box.insertAdjacentHTML('beforeend', customRowHTML(cid, item));
-  const labelEl = document.getElementById(`${cid}-custom-label-${item.id}`);
-  if(labelEl) labelEl.focus();
+  renderCustom(cid);
+  Vue.nextTick(() => {
+    const labelEl = document.getElementById(`${cid}-custom-label-${item.id}`);
+    if(labelEl) labelEl.focus();
+  });
   scheduleSave();
 }
 function removeCustomRow(cid, id){
@@ -4773,21 +4801,13 @@ function removeCustomRow(cid, id){
     if(!confirm(`Remove "${name}"?`)) return;
   }
   c.custom = c.custom.filter(i=>i.id!==id);
-  const node = document.getElementById(`${cid}-custom-item-${id}`);
-  if(node) node.remove();
-  if(c.custom.length===0) renderCustom(cid);
+  renderCustom(cid);
   scheduleSave();
 }
 function onCustomInput(cid, id){
   collectAllInputs();
-  const item = getChar(cid).custom.find(i=>i.id===id);
-  if(item){
-    const p = pct(item.current, item.total);
-    const pctEl = document.getElementById(`${cid}-custom-pct-${id}`);
-    const barEl = document.getElementById(`${cid}-custom-bar-${id}`);
-    if(pctEl) pctEl.textContent = p.toFixed(1)+'%';
-    if(barEl) barEl.style.width = Math.min(p,100)+'%';
-  }
+  const state = boxState(cid+'-custom', CustomList);
+  if(state) state.typed = (state.typed || 0) + 1;
   scheduleSave();
 }
 
