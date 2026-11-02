@@ -4033,116 +4033,126 @@ function huntGroupCollapsed(c, key){
   return c.huntsCollapsed[key] === true;
 }
 
-function huntRowHTML(cid, c, mark){
-  const [rank, id, name, zone, trigger] = mark;
-  const done = !!c.hunts[id];
-  return `
-    <label class="hunt-item${done ? ' done' : ''}">
-      <input type="checkbox" data-mark="${id}" data-rank="${rank}" ${done ? 'checked' : ''} onchange="toggleHunt('${cid}', this)">
-      <span class="hunt-text"><span class="hunt-name">${esc(name)}</span>${trigger ? `<span class="hunt-trigger">${esc(trigger)}</span>` : ''}</span>
-      <span class="hunt-zone">${esc(zone)}</span>
-    </label>`;
-}
-
 // One block per achievement where an achievement exists, a plain rank block where none
 // does. The header carries the achievement's own name beside the region a reader would
 // recognise, because nothing in the game connects "the Holt" to the Black Shroud — the
 // only people who can make that jump are the ones who already knew.
-function huntBlockHTML(cid, c, key, rank, title, region, list){
-  const done = list.filter((m) => c.hunts[m[1]]).length;
-  const collapsed = huntGroupCollapsed(c, key);
+// The layout is the same for every character, so it is built once.
+const HUNT_LAYOUT = ELITE_MARKS.map(([exp, marks]) => ({
+  exp, slug: frameSlug(exp),
+  blocks: ELITE_RANKS.flatMap((rank) => {
+    const list = marks.filter((m) => m[0] === rank);
+    if(!list.length) return [];
+    const achievements = ELITE_MARK_GROUPS.filter((g) => g[0] === exp && g[3] === rank);
+    const block = (key, title, region, marks) => ({key, rank, pill: 'rank-pill rank-' + rank.toLowerCase(), title, region,
+      marks: marks.map(([, id, name, zone, trigger]) => ({id, name, zone, trigger: trigger || ''}))});
+    // Shadowbringers onward: no achievement covers these, so there is nothing to group
+    // by and the flat rank list is the honest presentation.
+    if(achievements.length === 0) return [block(exp + '|' + rank, ELITE_RANK_LABEL[rank], '', list)];
+    // Ordered by the achievement's own id list rather than by the table, so the block
+    // reads in the order the game names them.
+    return achievements.map(([, name, region, , ids]) =>
+      block(name, name, region, ids.map((id) => list.find((m) => m[1] === id)).filter(Boolean)));
+  })
+}));
 
-  return `
-    <div class="hunt-rankgroup${collapsed ? ' is-collapsed' : ''}">
-      <div class="hunt-rankhead">
-        <span class="rank-pill rank-${rank.toLowerCase()}">${rank}</span>
-        <span class="hunt-rankname">${esc(title)}${region ? `<span class="hunt-rankwhere">${esc(region)}</span>` : ''}</span>
-        <span class="hunt-rankcount"><b>${done}</b> / ${list.length}</span>
-        <button class="sec-toggle" data-key="${esc(key)}" onclick="toggleHuntGroup('${cid}', this)">${collapsed ? 'show' : 'hide'}</button>
+/* Drawn by Vue (boxState). The layout never changes; the ticks, counts and collapsed
+   blocks are read from the character on every redraw. renderHunts bumps state.tick for
+   new data, and a tick or a collapse bumps state.beat. Either one patches the page in
+   place, so a tick halfway down the 127 rows keeps the scroll position. */
+const HuntList = {
+  props: ['state'],
+  setup(props){
+    const char = () => { props.state.tick; props.state.beat; return getChar(props.state.cid); };
+    const done = id => { const c = char(); return !!(c && c.hunts[id]); };
+    const count = b => b.marks.filter(m => done(m.id)).length;
+    const collapsed = key => { const c = char(); return !!c && huntGroupCollapsed(c, key); };
+    return {HUNT_LAYOUT, done, count, collapsed,
+      tick: (id, on) => toggleHunt(props.state.cid, id, on),
+      fold: key => toggleHuntGroup(props.state.cid, key)};
+  },
+  template: `
+    <div v-for="e in HUNT_LAYOUT" :key="e.exp" class="hunt-exp" :data-frame="e.slug"><div class="subhead">{{ e.exp }}</div>
+      <div v-for="b in e.blocks" :key="b.key" :class="collapsed(b.key) ? 'hunt-rankgroup is-collapsed' : 'hunt-rankgroup'">
+        <div class="hunt-rankhead">
+          <span :class="b.pill">{{ b.rank }}</span>
+          <span class="hunt-rankname">{{ b.title }}<span v-if="b.region" class="hunt-rankwhere">{{ b.region }}</span></span>
+          <span class="hunt-rankcount"><b>{{ count(b) }}</b> / {{ b.marks.length }}</span>
+          <button class="sec-toggle" :data-key="b.key" @click="fold(b.key)">{{ collapsed(b.key) ? 'show' : 'hide' }}</button>
+        </div>
+        <div class="hunt-list">
+          <label v-for="m in b.marks" :key="m.id" :class="done(m.id) ? 'hunt-item done' : 'hunt-item'">
+            <input type="checkbox" :data-mark="m.id" :data-rank="b.rank" :checked="done(m.id)" @change="tick(m.id, $event.target.checked)">
+            <span class="hunt-text"><span class="hunt-name">{{ m.name }}</span><span v-if="m.trigger" class="hunt-trigger">{{ m.trigger }}</span></span>
+            <span class="hunt-zone">{{ m.zone }}</span>
+          </label>
+        </div>
       </div>
-      <div class="hunt-list">${list.map((m) => huntRowHTML(cid, c, m)).join('')}</div>
-    </div>`;
+    </div>`
+};
+function bumpHunts(cid){
+  const state = boxState(cid+'-hunts', HuntList);
+  if(state) state.beat = (state.beat || 0) + 1;
 }
-
 function renderHunts(cid){
-  const c = getChar(cid);
-
-  const html = ELITE_MARKS.map(([exp, marks]) => {
-    const blocks = ELITE_RANKS.map((rank) => {
-      const list = marks.filter((m) => m[0] === rank);
-      if(!list.length) return '';
-
-      const achievements = ELITE_MARK_GROUPS.filter((g) => g[0] === exp && g[3] === rank);
-
-      // Shadowbringers onward: no achievement covers these, so there is nothing to group
-      // by and the flat rank list is the honest presentation.
-      if(achievements.length === 0)
-        return huntBlockHTML(cid, c, exp + '|' + rank, rank, ELITE_RANK_LABEL[rank], '', list);
-
-      // Ordered by the achievement's own id list rather than by the table, so the block
-      // reads in the order the game names them.
-      return achievements.map(([, name, region, , ids]) =>
-        huntBlockHTML(cid, c, name, rank, name, region,
-          ids.map((id) => list.find((m) => m[1] === id)).filter(Boolean))
-      ).join('');
-    }).join('');
-
-    return `<div class="hunt-exp" data-frame="${frameSlug(exp)}"><div class="subhead">${esc(exp)}</div>${blocks}</div>`;
-  }).join('');
-
-  document.getElementById(cid+'-hunts').innerHTML = html;
+  const state = boxState(cid+'-hunts', HuntList);
+  if(!state) return;
+  Object.assign(state, {cid, tick: (state.tick || 0) + 1});
   renderHuntDash(cid);
-  applyFrames(cid, 'hunts');
+  Vue.nextTick(() => applyFrames(cid, 'hunts'));
   refreshNav(cid);
 }
 
 // Split by rank rather than rolled into one figure: an A rank comes back on a 4-6 hour
 // timer and an S rank on a 84-132 hour one, so the two are not the same achievement and a
 // combined total would let the easier half speak for both.
-function renderHuntDash(cid){
-  const c = getChar(cid);
+function huntDashView(c){
   const tally = {S:0, A:0};
   ELITE_MARKS.forEach(([, marks]) => marks.forEach(([rank, id]) => { if(c.hunts[id]) tally[rank]++; }));
-  document.getElementById(cid+'-hunt-dash').innerHTML = ELITE_RANKS.map(rank => {
+  return ELITE_RANKS.map(rank => {
     const total = ELITE_RANK_TOTALS[rank];
     const done = tally[rank];
-    return `
-      <div class="metric${done === total ? ' done' : ''}">
-        <div class="label">${ELITE_RANK_LABEL[rank]}s</div>
-        <div class="value">${done} <small>/ ${total}</small></div>
-        <div class="bar-track"><div class="bar-fill" style="width:${pct(done, total)}%"></div></div>
-      </div>`;
-  }).join('');
-  const slain = tally.S + tally.A;
-  const left = ELITE_RANK_TOTALS.S - tally.S;
+    return {rank, label: ELITE_RANK_LABEL[rank] + 's', done, total, full: done === total, width: pct(done, total) + '%'};
+  });
+}
+const HuntDash = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => { props.state.tick; const c = getChar(props.state.cid); return c ? huntDashView(c) : []; });
+    return {view};
+  },
+  template: `
+    <div v-for="m in view" :key="m.rank" :class="m.full ? 'metric done' : 'metric'">
+      <div class="label">{{ m.label }}</div>
+      <div class="value">{{ m.done }} <small>/ {{ m.total }}</small></div>
+      <div class="bar-track"><div class="bar-fill" :style="{width: m.width}"></div></div>
+    </div>`
+};
+function renderHuntDash(cid){
+  const c = getChar(cid);
+  const state = boxState(cid+'-hunt-dash', HuntDash);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
+  const tally = huntDashView(c);
+  const slain = tally[0].done + tally[1].done;
+  const left = ELITE_RANK_TOTALS.S - tally[0].done;
   document.getElementById(cid+'-hunt-tally').textContent =
     `${slain} of ${ELITE_MARK_TOTAL} marks ticked. ` +
     (left === 0 ? 'Every S rank accounted for.' : `${left} S rank${left === 1 ? '' : 's'} still out there.`);
 }
 
-// Rebuilding the whole tab on one tick would throw away the scroll position halfway down a
-// 127-row page, so this updates only the three things that changed.
-function toggleHunt(cid, cb){
+function toggleHunt(cid, id, on){
   const c = getChar(cid);
-  const id = cb.dataset.mark;
-  if(cb.checked) c.hunts[id] = true;
+  if(on) c.hunts[id] = true;
   else delete c.hunts[id];
-  cb.closest('.hunt-item').classList.toggle('done', cb.checked);
-  const group = cb.closest('.hunt-rankgroup');
-  const on = group.querySelectorAll('input:checked').length;
-  const all = group.querySelectorAll('input').length;
-  group.querySelector('.hunt-rankcount').innerHTML = `<b>${on}</b> / ${all}`;
+  bumpHunts(cid);
   renderHuntDash(cid);
   scheduleSave();
 }
 
-function toggleHuntGroup(cid, btn){
+function toggleHuntGroup(cid, key){
   const c = getChar(cid);
-  const key = btn.dataset.key;
-  const collapsed = !huntGroupCollapsed(c, key);
-  c.huntsCollapsed[key] = collapsed;
-  btn.closest('.hunt-rankgroup').classList.toggle('is-collapsed', collapsed);
-  btn.textContent = collapsed ? 'show' : 'hide';
+  c.huntsCollapsed[key] = !huntGroupCollapsed(c, key);
+  bumpHunts(cid);
   scheduleSave();
 }
 
