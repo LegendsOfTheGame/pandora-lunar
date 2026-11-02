@@ -4593,43 +4593,56 @@ function questItemTotals(c, jobs){
 function questItemsText(c, rows){
   return rows.filter(r => !r.key).map(r => `${r.qty}x ${r.name}${r.hq && c.itemsHq ? '(HQ)' : ''}`).join('\n');
 }
+/* Drawn by Vue (boxState). Every switch here flips a setting and calls
+   renderQuestItems, which bumps state.tick. The checkboxes follow the settings; the
+   text box is read-only, so binding its value is safe. */
+const QuestItems = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => {
+      props.state.tick;
+      const c = getChar(props.state.cid);
+      if(!c) return null;
+      const jobs = questItemJobs(c);
+      const rows = questItemTotals(c, jobs.filter(j => !c.itemJobsOff[j]));
+      return {ahead: !!c.itemsAhead, hq: !!c.itemsHq, rows,
+        chips: jobs.map(job => ({job, on: !c.itemJobsOff[job], n: questItemsForJob(c, job).length})),
+        text: questItemsText(c, rows), textRows: Math.max(1, Math.min(rows.filter(r=>!r.key).length, 10))};
+    });
+    const cid = () => props.state.cid;
+    return {view, toggleItemJob: job => toggleItemJob(cid(), job), toggleItemsAhead: () => toggleItemsAhead(cid()),
+            toggleItemsHq: () => toggleItemsHq(cid()), copyQuestItems: () => copyQuestItems(cid())};
+  },
+  template: `
+    <template v-if="view">
+      <div v-if="view.chips.length" class="qi-chips"><label v-for="ch in view.chips" :key="ch.job" class="qi-chip"><input type="checkbox" :checked="ch.on" @change="toggleItemJob(ch.job)"> {{ ch.job }} <span class="qi-count">{{ ch.n }}</span></label></div>
+      <div class="qi-options">
+        <label><input type="checkbox" :checked="view.ahead" @change="toggleItemsAhead()"> Include quests above the job's current level</label>
+        <label><input type="checkbox" :checked="view.hq" @change="toggleItemsHq()"> Mark items HQ where the quest asks for HQ</label>
+      </div>
+      <div v-if="!view.chips.length" class="empty-hint">No job quest at or below your levels still needs an item. Tick the box above to look ahead.</div>
+      <template v-else-if="view.rows.length">
+        <table class="qi-table"><tbody>
+          <tr><th style="width:56px;text-align:right">Qty</th><th>Item</th><th>For</th></tr>
+          <tr v-for="r in view.rows" :key="r.name + (r.hq ? ':hq' : '')" :class="{'qi-key-row': r.key}">
+            <td class="qi-qty">{{ r.qty }}</td>
+            <td>{{ r.name }}<template v-if="r.hq"> <span class="qi-hq">HQ</span></template><template v-if="r.key"> <span class="qi-key" title="Item ingredients provided by the quest" aria-label="Item ingredients provided by the quest">🔑</span></template></td>
+            <td class="qi-from">{{ r.from.join(', ') }}</td>
+          </tr>
+        </tbody></table>
+        <div class="qi-actions">
+          <button class="add-btn" style="width:auto;margin:0" @click="copyQuestItems()">Copy for Allagan Tools</button>
+          <span class="hint" :id="state.cid + '-qitems-copied'"></span>
+        </div>
+        <textarea class="qi-text" :id="state.cid + '-qitems-text'" readonly :rows="view.textRows" :value="view.text"></textarea>
+        <div class="check-note ok">In Allagan Tools, open the Teamcraft import for a craft list and paste. Rows with a key icon are left out of the copied text. Allagan Tools also skips items it cannot craft, such as gathered materials.</div>
+      </template>
+      <div v-else class="empty-hint">No job is selected.</div>
+    </template>`
+};
 function renderQuestItems(cid){
-  const box = document.getElementById(cid+'-qitems');
-  if(!box) return;
-  const c = getChar(cid);
-  const jobs = questItemJobs(c);
-  const on = jobs.filter(j => !c.itemJobsOff[j]);
-  const rows = questItemTotals(c, on);
-  const chips = jobs.map(job=>{
-    const n = questItemsForJob(c, job).length;
-    return `<label class="qi-chip"><input type="checkbox" ${c.itemJobsOff[job]?'':'checked'} onchange="toggleItemJob('${cid}','${jsStr(job)}')"> ${esc(job)} <span class="qi-count">${n}</span></label>`;
-  }).join('');
-  const options = `
-    <div class="qi-options">
-      <label><input type="checkbox" ${c.itemsAhead?'checked':''} onchange="toggleItemsAhead('${cid}')"> Include quests above the job's current level</label>
-      <label><input type="checkbox" ${c.itemsHq?'checked':''} onchange="toggleItemsHq('${cid}')"> Mark items HQ where the quest asks for HQ</label>
-    </div>`;
-  if(!jobs.length){
-    box.innerHTML = options + `<div class="empty-hint">No job quest at or below your levels still needs an item. Tick the box above to look ahead.</div>`;
-    return;
-  }
-  const table = rows.length ? `
-    <table class="qi-table">
-      <tr><th style="width:56px;text-align:right">Qty</th><th>Item</th><th>For</th></tr>
-      ${rows.map(r=>`<tr${r.key?' class="qi-key-row"':''}>
-        <td class="qi-qty">${r.qty}</td>
-        <td>${esc(r.name)}${r.hq?' <span class="qi-hq">HQ</span>':''}${r.key?' <span class="qi-key" title="Item ingredients provided by the quest" aria-label="Item ingredients provided by the quest">&#128273;</span>':''}</td>
-        <td class="qi-from">${esc(r.from.join(', '))}</td>
-      </tr>`).join('')}
-    </table>
-    <div class="qi-actions">
-      <button class="add-btn" style="width:auto;margin:0" onclick="copyQuestItems('${cid}')">Copy for Allagan Tools</button>
-      <span class="hint" id="${cid}-qitems-copied"></span>
-    </div>
-    <textarea class="qi-text" id="${cid}-qitems-text" readonly rows="${Math.max(1, Math.min(rows.filter(r=>!r.key).length, 10))}">${esc(questItemsText(c, rows))}</textarea>
-    <div class="check-note ok">In Allagan Tools, open the Teamcraft import for a craft list and paste. Rows with a key icon are left out of the copied text. Allagan Tools also skips items it cannot craft, such as gathered materials.</div>`
-    : `<div class="empty-hint">No job is selected.</div>`;
-  box.innerHTML = `<div class="qi-chips">${chips}</div>${options}${table}`;
+  const state = boxState(cid+'-qitems', QuestItems);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
 }
 function toggleItemJob(cid, job){
   const c = getChar(cid);
