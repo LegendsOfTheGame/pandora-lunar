@@ -1363,45 +1363,39 @@ function huntSetOf(item){
    A tick the character cannot reach is greyed rather than hidden, so the row
    still reads as six expansions. The leading box stands for no single routine,
    so it ticks every expansion that is reachable. */
-function huntCompactHTML(cid, which, items){
-  const c = getChar(cid);
+function huntLive(c, which, items){
   const keys = which === 'daily' ? HUNT_DAILY_KEYS : HUNT_WEEKLY_KEYS;
   const present = keys.map(k => items.find(r => r.seedKey === k)).filter(Boolean);
-  if(!present.length) return '';
+  if(!present.length) return null;
   const now = new Date();
   let done = 0, open = 0;
   const ticks = present.map(r=>{
     const lock = routineLock(r, c);
     const isDone = isRoutineDone(r, now);
     if(!lock){ open++; if(isDone) done++; }
-    return `<label class="hunt-tick${isDone?' done':''}${lock?' locked':''}"`
-      + ` title="${lock ? esc('needs ' + lock.need) : esc(r.label)}">`
-      + `<input type="checkbox" id="${cid}-rt-chk-${r.id}"${isDone?' checked':''}${lock?' disabled':''}`
-      + ` onchange="toggleRoutine('${cid}','${r.id}')">${HUNT_SHORT[r.seedKey]}</label>`;
-  }).join('');
-  const due = fmtDue(nextResetInstant(schedById(present[0].schedId), now, present[0].lastDone) - now.getTime());
-  const label = which === 'daily' ? 'The Hunt — daily mark bills'
-                                  : 'The Hunt — B-rank elite marks';
-  return `<div class="routine-item hunt-compact">
-    <input type="checkbox"${open && done===open ? ' checked' : ''} title="Tick every expansion you can reach"
-           onchange="toggleHuntSet('${cid}','${which}',this.checked)">
-    <div class="hunt-cell">
-      <span class="routine-label">${label}</span>
-      <span class="hunt-ticks">${ticks}</span>
-      <span class="hunt-tally">${done} / ${open}</span>
-    </div>
-    <span class="routine-due">${due}</span>
-  </div>`;
+    return {id: r.id, short: HUNT_SHORT[r.seedKey], done: isDone, lock: !!lock, title: lock ? 'needs ' + lock.need : r.label};
+  });
+  return {ticks, done, open,
+    due: fmtDue(nextResetInstant(schedById(present[0].schedId), now, present[0].lastDone) - now.getTime()),
+    label: which === 'daily' ? 'The Hunt — daily mark bills' : 'The Hunt — B-rank elite marks'};
 }
-function huntSwitchHTML(cid, n){
-  const on = DATA.ui.huntRows === 'rows';
-  return `<div class="opt-switch">
-    <span class="sw${on?' on':''}" role="switch" tabindex="0" aria-checked="${on}"
-          onclick="toggleHuntRows()"></span>
-    <label onclick="toggleHuntRows()">Give each expansion its own row${
-      on ? '' : ' — ' + n + ' rows instead of 1'}</label>
-  </div>`;
-}
+const HuntCompact = {
+  props: {cid: String, which: String, items: Array, beat: Number},
+  setup(props){
+    const h = Vue.computed(() => { props.beat; return huntLive(getChar(props.cid), props.which, props.items); });
+    return {h, toggleRoutine, toggleHuntSet};
+  },
+  template: `
+    <div v-if="h" class="routine-item hunt-compact">
+      <input type="checkbox" :checked="!!h.open && h.done === h.open" title="Tick every expansion you can reach" @change="toggleHuntSet(cid, which, $event.target.checked)">
+      <div class="hunt-cell">
+        <span class="routine-label">{{ h.label }}</span>
+        <span class="hunt-ticks"><label v-for="t in h.ticks" :key="t.id" class="hunt-tick" :class="{done: t.done, locked: t.lock}" :title="t.title"><input type="checkbox" :id="cid + '-rt-chk-' + t.id" :checked="t.done && !t.lock" :disabled="t.lock" @change="toggleRoutine(cid, t.id)">{{ t.short }}</label></span>
+        <span class="hunt-tally">{{ h.done }} / {{ h.open }}</span>
+      </div>
+      <span class="routine-due">{{ h.due }}</span>
+    </div>`
+};
 /* One setting for the whole ledger, not per character and not per frame. It
    describes how the reader likes to read the list, so it changes Daily and
    Weekly together. */
@@ -1428,23 +1422,17 @@ function toggleHuntSet(cid, which, on){
   updateResetBar();
   scheduleSave();
 }
-function subgroupHTML(cid, items){
-  const names = ACTIVITY_GROUPS.map(([name])=>name).concat(['Other']);
-  return names.map(name=>{
+/* Daily and Weekly are split by activity. A Hunt group is one compact row unless the
+   reader asked for a row per expansion; it carries the switch either way. */
+function routineGroups(items){
+  const rowsOn = DATA.ui.huntRows === 'rows';
+  return ACTIVITY_GROUPS.map(([name])=>name).concat(['Other']).map(name=>{
     const groupItems = items.filter(item => activityGroup(item) === name);
-    if(!groupItems.length) return '';
+    if(!groupItems.length) return null;
     const set = name === 'The Hunt' ? huntSetOf(groupItems[0]) : null;
-    const compress = set && DATA.ui.huntRows !== 'rows';
-    const body = compress
-      ? huntCompactHTML(cid, set, groupItems)
-      : groupItems.map(item=>routineHTML(cid,item)).join('');
-    const count = compress ? 1 : groupItems.length;
-    return `<div class="routine-subgroup">`
-      + `<div class="routine-subhead">${esc(name)} <span style="opacity:.6">${count}</span></div>`
-      + body
-      + (set ? huntSwitchHTML(cid, groupItems.length) : '')
-      + `</div>`;
-  }).join('');
+    const compact = set && !rowsOn ? set : null;
+    return {name, items: groupItems, set, compact, rowsOn, count: compact ? 1 : groupItems.length};
+  }).filter(Boolean);
 }
 
 function lastResetInstant(sched, now){
@@ -4877,27 +4865,55 @@ function onCustomInput(cid, id){
   scheduleSave();
 }
 
-/* ---------- routines (per character) ---------- */
-function routineHTML(cid, item){
-  const now = new Date();
-  const sched = schedById(item.schedId);
-  const done = isRoutineDone(item, now);
-  const lock = routineLock(item, getChar(cid));
-  const gated = lock !== null;
-  const dueMs = nextResetInstant(sched, now, item.lastDone) - now.getTime();
-  const opts = RESET_SCHEDULES.map(s=>`<option value="${s.id}"${s.id===item.schedId?' selected':''}>${esc(s.label)}</option>`).join('');
-  return `
-    <div class="routine-item${done?' done':''}${gated?' gated':''}${item.hidden?' user-hidden':''}" id="${cid}-rt-item-${item.id}">
-      <input type="checkbox" id="${cid}-rt-chk-${item.id}"${done?' checked':''}${gated?' disabled':''} onchange="toggleRoutine('${cid}','${item.id}')">
-      <input type="text" class="routine-label" id="${cid}-rt-label-${item.id}" value="${esc(item.label)}" placeholder="e.g. Ixali dailies" oninput="onRoutineInput('${cid}','${item.id}')">
-      <select id="${cid}-rt-sched-${item.id}" onchange="onRoutineSchedChange('${cid}','${item.id}')">${opts}</select>
-      <input type="text" class="routine-req" id="${cid}-rt-req-${item.id}" value="${esc(item.requires||'')}" placeholder="any" title="Patch this unlocks in — blank means always available" oninput="onRoutineInput('${cid}','${item.id}')">
-      <span class="routine-due" id="${cid}-rt-due-${item.id}"${lock?` title="needs ${esc(lock.need)}"`:''}>${gated?'locked':fmtDue(dueMs)}</span>
-      ${challengeInfoHTML(cid, item)}${customClientsBtnHTML(cid, item)}
-      <button class="hide-btn${item.hidden?' is-hidden':''}" id="${cid}-rt-hidebtn-${item.id}" title="${item.hidden?'Unhide this routine':"Hide — doesn't apply to this character"}" onclick="toggleRoutineHidden('${cid}','${item.id}')">${item.hidden?'◉':'○'}</button>
-      <button class="remove-btn" title="Remove this routine" onclick="removeRoutine('${cid}','${item.id}')">&times;</button>
-    </div>${challengeInfoPanelHTML(cid, item)}${customClientsPanelHTML(cid, item)}`;
+/* ---------- routines (per character) ----------
+   Drawn by Vue (boxState), with the same two counters as the custom trackers and the
+   job tables. renderRoutines bumps state.tick: a new snapshot of sections and rows,
+   every row made again. refreshRoutines bumps state.beat: ticks, due times, locks and
+   the client checkboxes redraw from the live data. It runs every 30 seconds and after
+   every tick or edit. The label and patch inputs are v-once and keep their ids for
+   collectCharInputs. The row's `item` is the routine itself: what the row shows of it
+   besides the live parts (hidden, infoOpen, schedule) only changes with a full render. */
+function routineLive(c){
+  const now = new Date(), out = {};
+  c.routines.forEach(item=>{
+    const lock = routineLock(item, c);
+    const gated = lock !== null;
+    const ms = nextResetInstant(schedById(item.schedId), now, item.lastDone) - now.getTime();
+    out[item.id] = {done: !gated && isRoutineDone(item, now), gated, need: lock ? lock.need : null,
+                    due: fmtDue(ms), soon: !gated && ms < 3600000};
+  });
+  return out;
 }
+const RoutineRow = {
+  props: {cid: String, item: Object, live: Object, clients: Object},
+  setup(props){
+    const chList = challengeList(props.item);
+    return {chList, chTip: chList.map(([name,desc])=>`${name} — ${desc}`).join('\n'),
+      schedules: RESET_SCHEDULES, clientList: CUSTOM_DELIVERY_CLIENTS,
+      toggleRoutine, onRoutineInput, onRoutineSchedChange, toggleRoutineHidden, removeRoutine, toggleChallengeInfo, toggleCustomClient};
+  },
+  template: `
+    <div class="routine-item" :class="{done: live.done, gated: live.gated, 'user-hidden': item.hidden}" :id="cid + '-rt-item-' + item.id">
+      <input type="checkbox" :id="cid + '-rt-chk-' + item.id" :checked="live.done" :disabled="live.gated" @change="toggleRoutine(cid, item.id)">
+      <input v-once type="text" class="routine-label" :id="cid + '-rt-label-' + item.id" :value="item.label" placeholder="e.g. Ixali dailies" @input="onRoutineInput(cid, item.id)">
+      <select :id="cid + '-rt-sched-' + item.id" :value="item.schedId" @change="onRoutineSchedChange(cid, item.id)"><option v-for="s in schedules" :key="s.id" :value="s.id">{{ s.label }}</option></select>
+      <input v-once type="text" class="routine-req" :id="cid + '-rt-req-' + item.id" :value="item.requires || ''" placeholder="any" title="Patch this unlocks in — blank means always available" @input="onRoutineInput(cid, item.id)">
+      <span class="routine-due" :class="{soon: live.soon}" :id="cid + '-rt-due-' + item.id" :title="live.need ? 'needs ' + live.need : null">{{ live.gated ? 'locked' : live.due }}</span>
+      <button v-if="chList.length" class="hide-btn" :title="chTip" @click="toggleChallengeInfo(cid, item.id)">{{ item.infoOpen ? '▾' : 'ⓘ' }}</button>
+      <button v-if="item.seedKey === 'custom-deliveries'" class="hide-btn" :title="'Custom Delivery clients: ' + clients.count + ' of ' + clientList.length + ' unlocked'" @click="toggleChallengeInfo(cid, item.id)">{{ item.infoOpen ? '▾' : 'ⓘ' }}</button>
+      <button class="hide-btn" :class="{'is-hidden': item.hidden}" :id="cid + '-rt-hidebtn-' + item.id" :title="item.hidden ? 'Unhide this routine' : 'Hide — doesn\\'t apply to this character'" @click="toggleRoutineHidden(cid, item.id)">{{ item.hidden ? '◉' : '○' }}</button>
+      <button class="remove-btn" title="Remove this routine" @click="removeRoutine(cid, item.id)">×</button>
+    </div>
+    <div v-if="chList.length && item.infoOpen" class="jq-panel"><div v-for="([name, desc], i) in chList" :key="i" class="jq-row"><span class="qname">{{ name }}</span> <span class="hint">{{ desc }}</span></div></div>
+    <div v-if="item.seedKey === 'custom-deliveries' && item.infoOpen" class="jq-panel">
+      <div v-for="k in clientList" :key="k.id" class="jq-item" :class="{future: !clients.on[k.id]}">
+        <input type="checkbox" :id="cid + '-cd-' + k.id" :checked="!!clients.on[k.id]" @change="toggleCustomClient(cid, k.id)">
+        <span class="jq-level">Lv.{{ k.lvl }}</span>
+        <span class="jq-name">{{ k.name }} <span class="jq-shared-tag">{{ k.exp }}</span>
+          <span class="hint">{{ k.steps.join(' → ') }}{{ k.note ? ' · ' + k.note : '' }}</span></span>
+      </div>
+    </div>`
+};
 // Custom Delivery clients, ticked once their unlock quests are done. Reuses the row's
 // `infoOpen` flag and toggleChallengeInfo, which only flips the flag and re-renders.
 // `lvl` is the delivery level the wiki gives; `steps` are the quests, in order.
@@ -4928,34 +4944,13 @@ const CUSTOM_DELIVERY_CLIENTS = [
   {id:'tiisolja', exp:'Dawntrail',     lvl:90, name:'Tiisol Ja (Tuliyollal)',
    steps:['Taco Time — Hhuki, Tuliyollal (13.7, 12.1)']}
 ];
-function customClientsBtnHTML(cid, item){
-  if(item.seedKey !== 'custom-deliveries') return '';
-  const c = getChar(cid);
-  const done = CUSTOM_DELIVERY_CLIENTS.filter(k=>c.customClients[k.id]).length;
-  return `<button class="hide-btn" title="Custom Delivery clients: ${done} of ${CUSTOM_DELIVERY_CLIENTS.length} unlocked" onclick="toggleChallengeInfo('${cid}','${item.id}')">${item.infoOpen?'▾':'ⓘ'}</button>`;
-}
-function customClientsPanelHTML(cid, item){
-  if(item.seedKey !== 'custom-deliveries' || !item.infoOpen) return '';
-  const c = getChar(cid);
-  const rows = CUSTOM_DELIVERY_CLIENTS.map(k=>`<div class="jq-item${c.customClients[k.id]?'':' future'}">
-      <input type="checkbox" id="${cid}-cd-${k.id}"${c.customClients[k.id]?' checked':''} onchange="toggleCustomClient('${cid}','${k.id}')">
-      <span class="jq-level">Lv.${k.lvl}</span>
-      <span class="jq-name">${esc(k.name)} <span class="jq-shared-tag">${esc(k.exp)}</span>
-        <span class="hint">${k.steps.map(esc).join(' &rarr; ')}${k.note?' &middot; '+esc(k.note):''}</span></span>
-    </div>`).join('');
-  return `<div class="jq-panel">${rows}</div>`;
-}
 function toggleCustomClient(cid, id){
   const c = getChar(cid);
   const chk = document.getElementById(`${cid}-cd-${id}`);
   if(!chk) return;
   c.customClients[id] = chk.checked;
-  const item = chk.closest('.jq-item');
-  if(item) item.classList.toggle('future', !chk.checked);
-  // The row's ⓘ tooltip carries the count, so refresh it without a full re-render.
-  const rt = c.routines.find(r=>r.seedKey==='custom-deliveries');
-  const btn = rt && document.querySelector(`#${cid}-rt-item-${rt.id} .hide-btn`);
-  if(btn) btn.title = `Custom Delivery clients: ${CUSTOM_DELIVERY_CLIENTS.filter(k=>c.customClients[k.id]).length} of ${CUSTOM_DELIVERY_CLIENTS.length} unlocked`;
+  // The row's ⓘ tooltip carries the count; the redraw updates it with the panel.
+  refreshRoutines(cid);
   scheduleSave();
 }
 // The info button, on Challenge Log rows only. A category name is not self-explanatory —
@@ -4963,20 +4958,6 @@ function toggleCustomClient(cid, id){
 // the list. Two ways in on purpose: the native tooltip is instant on a mouse, and the click
 // panel is the only one that works on a touchscreen, where `title` never fires.
 function challengeList(item){ return CHALLENGE_LOG[item.seedKey] || []; }
-function challengeInfoHTML(cid, item){
-  const list = challengeList(item);
-  if(!list.length) return '';
-  const tip = list.map(([name,desc])=>`${name} — ${desc}`).join('\n');
-  const open = !!(item.infoOpen);
-  return `<button class="hide-btn" title="${esc(tip)}" onclick="toggleChallengeInfo('${cid}','${item.id}')">${open?'▾':'ⓘ'}</button>`;
-}
-function challengeInfoPanelHTML(cid, item){
-  const list = challengeList(item);
-  if(!list.length || !item.infoOpen) return '';
-  const rows = list.map(([name,desc])=>
-    `<div class="jq-row"><span class="qname">${esc(name)}</span> <span class="hint">${esc(desc)}</span></div>`).join('');
-  return `<div class="jq-panel">${rows}</div>`;
-}
 function toggleChallengeInfo(cid, id){
   const c = getChar(cid);
   const item = c.routines.find(r=>r.id===id);
@@ -5000,40 +4981,73 @@ function toggleChallengeLog(cid){
   renderRoutines(cid);
   scheduleSave();
 }
-function renderRoutines(cid){
-  const box = document.getElementById(cid+'-routines');
-  if(!box) return;
-  const c = getChar(cid);
-  const patchEl = document.getElementById(cid+'-patch');
-  if(patchEl && patchEl.value !== (c.patch||'')) patchEl.value = c.patch || '';
+/* The sections and rows to draw, as of a full render. */
+function routineSnapshot(c){
   const all = c.routines;
   const visible = all.filter(r =>
     (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden)
   );
-  if(!visible.length){
-    box.innerHTML = `<div class="empty-hint">${all.length ? 'Everything here is hidden or needs a later patch.' : 'Nothing yet &mdash; add the things you repeat, like Ixali dailies or GC supply missions.'}</div>`;
-  }else{
-    box.innerHTML = ROUTINE_SECTIONS.map(sec=>{
-      const items = visible.filter(r => routineSection(r) === sec);
-      // The Challenge Log heading stays put when switched off, or the switch would vanish
-      // with the thing it controls and there'd be no way back. Every other section is only
-      // drawn when it has rows.
-      const challenge = sec === CHALLENGE_SECTION;
-      if(!items.length && !(challenge && challengeRowsExist(c))) return '';
-      const on = challengeLogOn();
-      const head = challenge
-        ? `<div class="subhead with-toggle">${esc(sec)}<button class="section-toggle${on?'':' is-off'}" title="${on?'Hide the Challenge Log for every character':'Show the Challenge Log again'}" onclick="toggleChallengeLog('${cid}')">${on?'● on':'○ off'}</button></div>`
-        : `<div class="subhead">${esc(sec)}</div>`;
-      if(challenge && !on) return `<div class="routine-section" data-frame="${frameSlug(sec)}">${head}</div>`;
-      const body = (sec === 'Daily' || sec === 'Weekly')
-        ? subgroupHTML(cid, items)
-        : items.map(item=>routineHTML(cid,item)).join('');
-      return `<div class="routine-section" data-frame="${frameSlug(sec)}">${head}${body}</div>`;
-    }).join('');
-  }
+  if(!visible.length) return {empty: all.length ? 'Everything here is hidden or needs a later patch.'
+    : 'Nothing yet — add the things you repeat, like Ixali dailies or GC supply missions.'};
+  const on = challengeLogOn();
+  return {sections: ROUTINE_SECTIONS.map(sec=>{
+    const items = visible.filter(r => routineSection(r) === sec);
+    // The Challenge Log heading stays put when switched off, or the switch would vanish
+    // with the thing it controls and there'd be no way back. Every other section is only
+    // drawn when it has rows.
+    const challenge = sec === CHALLENGE_SECTION;
+    if(!items.length && !(challenge && challengeRowsExist(c))) return null;
+    const s = {sec, frame: frameSlug(sec), challenge, on, collapsed: challenge && !on};
+    if(sec === 'Daily' || sec === 'Weekly') s.groups = routineGroups(items); else s.items = items;
+    return s;
+  }).filter(Boolean)};
+}
+const RoutineList = {
+  components: {RoutineRow, HuntCompact},
+  props: ['state'],
+  setup(props){
+    const char = () => getChar(props.state.cid);
+    const snap = Vue.computed(() => { props.state.tick; const c = char(); return c ? routineSnapshot(c) : null; });
+    const live = Vue.computed(() => { props.state.tick; props.state.beat; const c = char(); return c ? routineLive(c) : {}; });
+    const clients = Vue.computed(() => {
+      props.state.tick; props.state.beat;
+      const on = {...((char() || {}).customClients || {})};
+      return {on, count: CUSTOM_DELIVERY_CLIENTS.filter(k => on[k.id]).length};
+    });
+    return {snap, live, clients, toggleChallengeLog, toggleHuntRows};
+  },
+  template: `
+    <div v-if="snap && snap.empty" class="empty-hint">{{ snap.empty }}</div>
+    <template v-else-if="snap">
+      <div v-for="s in snap.sections" :key="s.sec + ':' + state.tick" class="routine-section" :data-frame="s.frame">
+        <div v-if="s.challenge" class="subhead with-toggle">{{ s.sec }}<button class="section-toggle" :class="{'is-off': !s.on}" :title="s.on ? 'Hide the Challenge Log for every character' : 'Show the Challenge Log again'" @click="toggleChallengeLog(state.cid)">{{ s.on ? '● on' : '○ off' }}</button></div>
+        <div v-else class="subhead">{{ s.sec }}</div>
+        <template v-if="s.collapsed"></template>
+        <template v-else-if="s.groups">
+          <div v-for="g in s.groups" :key="g.name" class="routine-subgroup">
+            <div class="routine-subhead">{{ g.name }} <span style="opacity:.6">{{ g.count }}</span></div>
+            <hunt-compact v-if="g.compact" :cid="state.cid" :which="g.compact" :items="g.items" :beat="state.beat || 0"></hunt-compact>
+            <template v-else><routine-row v-for="item in g.items" :key="item.id" :cid="state.cid" :item="item" :live="live[item.id]" :clients="clients"></routine-row></template>
+            <div v-if="g.set" class="opt-switch">
+              <span class="sw" :class="{on: g.rowsOn}" role="switch" tabindex="0" :aria-checked="String(g.rowsOn)" @click="toggleHuntRows()"></span>
+              <label @click="toggleHuntRows()">Give each expansion its own row{{ g.rowsOn ? '' : ' — ' + g.items.length + ' rows instead of 1' }}</label>
+            </div>
+          </div>
+        </template>
+        <template v-else><routine-row v-for="item in s.items" :key="item.id" :cid="state.cid" :item="item" :live="live[item.id]" :clients="clients"></routine-row></template>
+      </div>
+    </template>`
+};
+function renderRoutines(cid){
+  if(!document.getElementById(cid+'-routines')) return;
+  const c = getChar(cid);
+  const patchEl = document.getElementById(cid+'-patch');
+  if(patchEl && patchEl.value !== (c.patch||'')) patchEl.value = c.patch || '';
+  const state = boxState(cid+'-routines', RoutineList);
+  Object.assign(state, {cid, tick: (state.tick || 0) + 1});
   renderGatedNote(cid);
   renderHiddenNote(cid);
-  applyFrames(cid, 'routines');
+  Vue.nextTick(() => applyFrames(cid, 'routines'));
   refreshNav(cid);
 }
 function renderGatedNote(cid){
@@ -5125,8 +5139,10 @@ function addRoutine(cid){
   // Full re-render (rather than appending in place) so the new item lands under its
   // correct Daily/Weekly/Monthly/Other section instead of always at the very bottom.
   renderRoutines(cid);
-  const labelEl = document.getElementById(`${cid}-rt-label-${item.id}`);
-  if(labelEl) labelEl.focus();
+  Vue.nextTick(() => {
+    const labelEl = document.getElementById(`${cid}-rt-label-${item.id}`);
+    if(labelEl) labelEl.focus();
+  });
   scheduleSave();
 }
 function removeRoutine(cid, id){
@@ -5137,15 +5153,9 @@ function removeRoutine(cid, id){
     if(!confirm(`Remove "${item.label.trim()}"?`)) return;
   }
   c.routines = c.routines.filter(i=>i.id!==id);
-  const node = document.getElementById(`${cid}-rt-item-${id}`);
-  const subgroup = node ? node.closest('.routine-subgroup') : null;
-  const section = node ? node.closest('.routine-section') : null;
-  if(node) node.remove();
-  // Removing the last item in a (sub)section should take its heading with it, not leave
-  // an empty "Weekly" or "Relic Weapons" label sitting above nothing.
-  if(subgroup && !subgroup.querySelector('.routine-item')) subgroup.remove();
-  if(section && !section.querySelector('.routine-item')) section.remove();
-  if(c.routines.length===0) renderRoutines(cid);
+  // A full render takes an emptied (sub)section's heading with it, not leaving an empty
+  // "Weekly" or "Relic Weapons" label sitting above nothing.
+  renderRoutines(cid);
   scheduleSave();
 }
 function toggleRoutine(cid, id){
@@ -5153,8 +5163,6 @@ function toggleRoutine(cid, id){
   const chk = document.getElementById(`${cid}-rt-chk-${id}`);
   if(!item || !chk) return;
   item.lastDone = chk.checked ? Date.now() : null;
-  const wrap = document.getElementById(`${cid}-rt-item-${id}`);
-  if(wrap) wrap.classList.toggle('done', chk.checked);
   // Recompute the due countdown immediately — otherwise it's stuck showing whatever it read
   // before the click (e.g. "now") until the next 30s periodic refresh or a page reload.
   refreshRoutines(cid);
@@ -5177,48 +5185,15 @@ function onRoutineSchedChange(cid, id){
 }
 function onRoutineInput(cid, id){
   collectAllInputs();
-  const c = getChar(cid);
-  const item = c.routines.find(i=>i.id===id);
-  if(item){
-    const lock = routineLock(item, c);
-    const gated = lock !== null;
-    const wrap = document.getElementById(`${cid}-rt-item-${id}`);
-    const chk  = document.getElementById(`${cid}-rt-chk-${id}`);
-    const due  = document.getElementById(`${cid}-rt-due-${id}`);
-    if(wrap) wrap.classList.toggle('gated', gated);
-    if(chk) chk.disabled = gated;
-    if(due){
-      if(gated){ due.textContent = 'locked'; due.title = 'needs ' + lock.need; }
-      else due.removeAttribute('title');
-    }
-  }
+  // A typed patch can lock or unlock the row; the redraw shows it.
   refreshRoutines(cid);
   renderGatedNote(cid);
   scheduleSave();
 }
+// Ticks, due times and locks from the live data: every 30 seconds and after every tick.
 function refreshRoutines(cid){
-  const now = new Date();
-  const c = getChar(cid);
-  c.routines.forEach(item=>{
-    const sched = schedById(item.schedId);
-    const lock = routineLock(item, c);
-    const gated = lock !== null;
-    const done = !gated && isRoutineDone(item, now);
-    const chk  = document.getElementById(`${cid}-rt-chk-${item.id}`);
-    const wrap = document.getElementById(`${cid}-rt-item-${item.id}`);
-    const due  = document.getElementById(`${cid}-rt-due-${item.id}`);
-    if(chk){ chk.checked = done; chk.disabled = gated; }
-    if(wrap){ wrap.classList.toggle('done', done); wrap.classList.toggle('gated', gated); }
-    if(due){
-      if(gated){ due.textContent='locked'; due.title = 'needs ' + lock.need; due.classList.remove('soon'); }
-      else{
-        const ms = nextResetInstant(sched, now, item.lastDone) - now.getTime();
-        due.textContent = fmtDue(ms);
-        due.removeAttribute('title');
-        due.classList.toggle('soon', ms < 3600000);
-      }
-    }
-  });
+  const state = boxState(cid+'-routines', RoutineList);
+  if(state) state.beat = (state.beat || 0) + 1;
 }
 
 /* ---------- server picker (PDC -> LDC -> World) ---------- */
