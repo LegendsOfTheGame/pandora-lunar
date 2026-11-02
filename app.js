@@ -4258,31 +4258,21 @@ function cosmicTypeList(types){
   return 'Types ' + n.slice(0, -1).join(', ') + ' and ' + n[n.length-1];
 }
 
-function cosmicClassHTML(job, types){
+function cosmicClassView(job, types){
   const idx = cosmicStageIndex(types);
   const rows = types.map(t => {
     const short = Math.max(0, t.needed - t.current);
-    const full = t.max > 0 && t.current >= t.max;
-    return `
-      <div class="cosmic-row${full ? ' full' : ''}">
-        <span class="cosmic-type">Type ${COSMIC_TYPE_NUMERALS[t.type-1] || t.type}</span>
-        <span class="cosmic-num">${fmt(t.current)}</span>
-        <span class="cosmic-num">${fmt(t.needed)}</span>
-        <span class="cosmic-num">${short ? fmt(short) : '&mdash;'}</span>
-        <span class="cosmic-num faint">${fmt(t.max)}</span>
-      </div>`;
-  }).join('');
+    return {type: t.type, full: t.max > 0 && t.current >= t.max,
+      label: `Type ${COSMIC_TYPE_NUMERALS[t.type-1] || t.type}`,
+      current: fmt(t.current), needed: fmt(t.needed), short: short ? fmt(short) : '—', max: fmt(t.max)};
+  });
 
-  let stageLine;
-  if(idx < 0){
-    stageLine = `<div class="cosmic-stage faint">The research totals match no stage in this page's table. A later patch can add stages.</div>`;
-  }else{
-    const next = COSMIC_STAGES[idx+1];
-    stageLine = `
-      <div class="cosmic-stage">${esc(cosmicToolName(job, idx))}
-        <span class="faint">&middot; item level ${COSMIC_STAGES[idx].il} &middot; ${esc(cosmicTierOf(idx))} tier</span></div>
-      <div class="cosmic-next faint">Next: ${esc(cosmicToolName(job, idx+1))} &middot; item level ${next.il}</div>`;
-  }
+  // String(): a class this page has no tool names for reads "null", as the HTML strings did.
+  const stage = idx < 0 ? null : {
+    name: String(cosmicToolName(job, idx)),
+    detail: `· item level ${COSMIC_STAGES[idx].il} · ${cosmicTierOf(idx)} tier`,
+    next: `Next: ${String(cosmicToolName(job, idx+1))} · item level ${COSMIC_STAGES[idx+1].il}`
+  };
 
   const notes = [];
   const full = types.filter(t => t.max > 0 && t.current >= t.max);
@@ -4292,41 +4282,69 @@ function cosmicClassHTML(job, types){
   }
   if(types.every(t => t.current >= t.needed)) notes.push('Each data type meets the requirement for the next upgrade.');
 
-  return `
-    <div class="cosmic-class">
-      <div class="subhead">${esc(job)}</div>
-      ${stageLine}
-      <div class="cosmic-grid">
-        <div class="cosmic-row head"><span>Data</span><span>Current</span><span>Needed</span><span>Shortfall</span><span>Storage limit</span></div>
-        ${rows}
-      </div>
-      ${notes.map(n => `<div class="cosmic-note">${esc(n)}</div>`).join('')}
-    </div>`;
+  return {job, stage, rows, notes};
 }
-
-function renderCosmic(cid){
-  const c = getChar(cid);
-  const box = document.getElementById(cid+'-cosmic');
-  const meta = document.getElementById(cid+'-cosmic-meta');
-  if(!box || !meta) return;
+function cosmicView(c){
   const reading = c.cosmicTools;
-  const jobs = (reading && reading.jobs) || {};
+  if(!reading) return null;
+  const jobs = reading.jobs || {};
   const have = COSMIC_CLASSES.filter(j => Array.isArray(jobs[j]) && jobs[j].length);
   // A class name this page does not know (a new class, or a plugin that could not
   // name one) is still shown, after the known ones.
   const extra = Object.keys(jobs).filter(j => !COSMIC_CLASSES.includes(j) && Array.isArray(jobs[j]) && jobs[j].length);
-
-  if(!reading){
-    meta.innerHTML = '';
-    box.innerHTML = `<div class="empty-hint">No Cosmic tool data. Import a Tales of Milestones export to fill in this section. Tales of Milestones reads the research data only when your character is in a Cosmic Exploration zone.</div>`;
-    return;
-  }
-  const missing = COSMIC_CLASSES.filter(j => !have.includes(j));
-  meta.innerHTML = `
-    <div class="check-note ok">Research data as of ${esc(reading.asOf ? fmtTmTimestamp(reading.asOf) : 'an unknown time')}. Tales of Milestones reads it only in a Cosmic Exploration zone, so this time can be earlier than the export.</div>
-    ${missing.length ? `<div class="check-note ok">No research data in the export for ${esc(missing.join(', '))}.</div>` : ''}`;
-  box.innerHTML = have.concat(extra).map(j => cosmicClassHTML(j, jobs[j])).join('')
-    || '<div class="empty-hint">The export has no research data for any class.</div>';
+  return {
+    asOf: reading.asOf ? fmtTmTimestamp(reading.asOf) : 'an unknown time',
+    missing: COSMIC_CLASSES.filter(j => !have.includes(j)).join(', '),
+    classes: have.concat(extra).map(j => cosmicClassView(j, jobs[j]))
+  };
+}
+/* Read-only: the meta lines and the class blocks are two boxState apps given the same
+   view. renderCosmic bumps state.tick on both. */
+function cosmicSetup(props){
+  const view = Vue.computed(() => { props.state.tick; const c = getChar(props.state.cid); return c ? cosmicView(c) : null; });
+  return {view};
+}
+const CosmicMeta = {
+  props: ['state'],
+  setup: cosmicSetup,
+  template: `
+    <template v-if="view">
+      <div class="check-note ok">Research data as of {{ view.asOf }}. Tales of Milestones reads it only in a Cosmic Exploration zone, so this time can be earlier than the export.</div>
+      <div v-if="view.missing" class="check-note ok">No research data in the export for {{ view.missing }}.</div>
+    </template>`
+};
+const CosmicTools = {
+  props: ['state'],
+  setup: cosmicSetup,
+  template: `
+    <div v-if="!view" class="empty-hint">No Cosmic tool data. Import a Tales of Milestones export to fill in this section. Tales of Milestones reads the research data only when your character is in a Cosmic Exploration zone.</div>
+    <div v-else-if="!view.classes.length" class="empty-hint">The export has no research data for any class.</div>
+    <template v-else><div v-for="k in view.classes" :key="k.job" class="cosmic-class">
+      <div class="subhead">{{ k.job }}</div>
+      <div v-if="!k.stage" class="cosmic-stage faint">The research totals match no stage in this page's table. A later patch can add stages.</div>
+      <template v-else>
+        <div class="cosmic-stage">{{ k.stage.name }} <span class="faint">{{ k.stage.detail }}</span></div>
+        <div class="cosmic-next faint">{{ k.stage.next }}</div>
+      </template>
+      <div class="cosmic-grid">
+        <div class="cosmic-row head"><span>Data</span><span>Current</span><span>Needed</span><span>Shortfall</span><span>Storage limit</span></div>
+        <div v-for="r in k.rows" :key="r.type" :class="r.full ? 'cosmic-row full' : 'cosmic-row'">
+          <span class="cosmic-type">{{ r.label }}</span>
+          <span class="cosmic-num">{{ r.current }}</span>
+          <span class="cosmic-num">{{ r.needed }}</span>
+          <span class="cosmic-num">{{ r.short }}</span>
+          <span class="cosmic-num faint">{{ r.max }}</span>
+        </div>
+      </div>
+      <div v-for="n in k.notes" :key="n" class="cosmic-note">{{ n }}</div>
+    </div></template>`
+};
+function renderCosmic(cid){
+  const meta = boxState(cid+'-cosmic-meta', CosmicMeta);
+  const box = boxState(cid+'-cosmic', CosmicTools);
+  if(!box || !meta) return;
+  Object.assign(meta, {cid, tick: (meta.tick || 0) + 1});
+  Object.assign(box, {cid, tick: (box.tick || 0) + 1});
 }
 
 /* ---------- red alerts ----------
