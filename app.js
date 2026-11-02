@@ -3103,21 +3103,31 @@ function syncSitebarHeight(){
 }
 window.addEventListener('resize', syncPaneTopHeight);
 
+/* The frame row is one Vue app for the whole page (boxState on #frame-row), for the
+   active character's area. renderFrameRow gives it a new list each time, or an empty
+   one while a global page is open. */
+const FrameRow = {
+  props: ['state'],
+  setup: () => ({goAreaFrame}),
+  template: `
+    <button v-for="f in state.list" :key="f.id" type="button" role="tab" :aria-selected="String(f.on)" :class="f.on ? 'frame-btn on' : 'frame-btn'"
+      @click="goAreaFrame(f.id)">{{ f.l }}<template v-if="f.n"> <span class="frame-n">{{ f.n }}</span></template><template v-if="f.p"> <span class="frame-n">· {{ f.p }}%</span></template></button>`
+};
 function renderFrameRow(){
-  const row = document.getElementById('frame-row');
-  if(!row || !DATA) return;
-  if(globalPageOpen()){ row.innerHTML = ''; syncPaneTopHeight(); return; }
+  if(!DATA) return;
+  const state = boxState('frame-row', FrameRow);
+  if(!state) return;
+  // The row's height sets where the panels start, so measure it once Vue has drawn it.
+  Vue.nextTick(syncPaneTopHeight);
+  if(globalPageOpen()){ state.list = []; return; }
   const cid = DATA.activeId;
-  const list = areaFrames(cid);
   const current = activeAreaFrame(cid);
-  row.innerHTML = list.map(f => {
-    const id = areaFrameId(f), on = current && id === areaFrameId(current);
-    return `<button type="button" role="tab" aria-selected="${on}" class="frame-btn${on ? ' on' : ''}" onclick="goAreaFrame('${id}')">${esc(f.l)}${
-      f.n != null && f.n !== '' ? ` <span class="frame-n">${f.n}</span>` : ''}${
-      f.p != null ? ` <span class="frame-n">&middot; ${f.p}%</span>` : ''}</button>`;
-  }).join('');
+  state.list = areaFrames(cid).map(f => {
+    const id = areaFrameId(f);
+    return {id, l: f.l, on: !!current && id === areaFrameId(current),
+      n: f.n != null && f.n !== '' ? String(f.n) : '', p: f.p != null ? String(f.p) : ''};
+  });
   if(current) applyFrames(cid, current.tab);
-  syncPaneTopHeight();
 }
 
 function toggleRail(){
