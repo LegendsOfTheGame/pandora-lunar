@@ -217,6 +217,7 @@ body{
 }
 .routine-item:last-child{border-bottom:none}
 .routine-item.done .routine-label{color:var(--text-faint);text-decoration:line-through}
+.routine-optional{font-size:13px;color:var(--text-dim);font-style:italic}
 .routine-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent,var(--gold));cursor:pointer}
 .routine-item select{
   width:100%;background:var(--ink);border:1px solid var(--line-soft);color:var(--text-dim);

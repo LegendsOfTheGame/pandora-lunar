@@ -1736,6 +1736,19 @@ function unlockState(item, c){
   if(!known.length) return null;
   return known.some(k => c.unlocks[k] === true);
 }
+// The other end of a row's life: a quest after which the routine is no longer required.
+// Doman Enclave Reconstruction ends with Lighting the Way, which also awards Bio-Doma V, so
+// one quest answers both. The donation basket stays open afterwards and some players keep
+// using it for gil, so the row is not hidden: it shows as complete and optional, and the
+// weekly meter leaves it out. The saved label is untouched. Absent means not finished.
+const SEED_FINISHED = {
+  'doman-enclave': { key:'domanEnclaveDone', label:'Doman Enclave is Complete - OPTIONAL' }
+};
+const FINISH_KEYS = new Set(Object.values(SEED_FINISHED).map(f => f.key));
+function routineFinished(item, c){
+  const f = SEED_FINISHED[item.seedKey];
+  return f && c.unlocks && c.unlocks[f.key] === true ? f : null;
+}
 // The plugin omits msqPatch only when no patch's opening quest is complete. Alongside an
 // `unlocks` block, which proves it ran, that absence is a fact rather than a gap: this
 // character has not finished 2.0's opening quest, so they are in their first hour of A
@@ -2582,7 +2595,7 @@ function sectionMeter(c, sections){
   const since = activeWindowStart(now);
   const rows = (c.routines||[]).filter(r =>
     (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden)
-    && sections.includes(routineSection(r))
+    && sections.includes(routineSection(r)) && !routineFinished(r, c)
     && r.lastDone && r.lastDone >= since);
   return rows.length ? Math.round(rows.filter(r => isRoutineDone(r, now)).length / rows.length * 100) : null;
 }
@@ -4965,8 +4978,9 @@ function routineLive(c){
     const lock = routineLock(item, c);
     const gated = lock !== null;
     const ms = nextResetInstant(schedById(item.schedId), now, item.lastDone) - now.getTime();
+    const finished = routineFinished(item, c);
     out[item.id] = {done: !gated && isRoutineDone(item, now), gated, need: lock ? lock.need : null,
-                    due: fmtDue(ms), soon: !gated && ms < 3600000};
+                    due: fmtDue(ms), soon: !gated && ms < 3600000, optional: finished ? finished.label : null};
   });
   return out;
 }
@@ -4981,7 +4995,8 @@ const RoutineRow = {
   template: `
     <div class="routine-item" :class="{done: live.done, gated: live.gated, 'user-hidden': item.hidden}" :id="cid + '-rt-item-' + item.id">
       <input type="checkbox" :id="cid + '-rt-chk-' + item.id" :checked="live.done" :disabled="live.gated" @change="toggleRoutine(cid, item.id)">
-      <input v-once type="text" class="routine-label" :id="cid + '-rt-label-' + item.id" :value="item.label" placeholder="e.g. Ixali dailies" @input="onRoutineInput(cid, item.id)">
+      <span v-if="live.optional" class="routine-label routine-optional" :title="item.label">{{ live.optional }}</span>
+      <input v-else v-once type="text" class="routine-label" :id="cid + '-rt-label-' + item.id" :value="item.label" placeholder="e.g. Ixali dailies" @input="onRoutineInput(cid, item.id)">
       <select :id="cid + '-rt-sched-' + item.id" :value="item.schedId" @change="onRoutineSchedChange(cid, item.id)"><option v-for="s in schedules" :key="s.id" :value="s.id">{{ s.label }}</option></select>
       <input v-once type="text" class="routine-req" :id="cid + '-rt-req-' + item.id" :value="item.requires || ''" placeholder="any" title="Patch this unlocks in — blank means always available" @input="onRoutineInput(cid, item.id)">
       <span class="routine-due" :class="{soon: live.soon}" :id="cid + '-rt-due-' + item.id" :title="live.need ? 'needs ' + live.need : null">{{ live.gated ? 'locked' : live.due }}</span>
@@ -5802,10 +5817,12 @@ function computeTmDiffHTML(p, c){
     const changed = Object.keys(p.unlocks)
       .filter(k => typeof p.unlocks[k] === 'boolean' && p.unlocks[k] !== held[k]);
     if(changed.length){
-      const have = Object.values(p.unlocks).filter(Boolean).length;
+      // A finish key ("Lighting the Way is done") is not a feature, so it is not counted as one.
+      const features = o => Object.keys(o).filter(k => !FINISH_KEYS.has(k));
+      const have = features(p.unlocks).filter(k => p.unlocks[k]).length;
       rows.push(['Unlocked features',
-        Object.keys(held).length ? `${Object.values(held).filter(Boolean).length} known` : '(none)',
-        `${have} of ${Object.keys(p.unlocks).length}`]);
+        features(held).length ? `${features(held).filter(k => held[k]).length} known` : '(none)',
+        `${have} of ${features(p.unlocks).length}`]);
     }
   }
   ['combat','craft','gather'].forEach(group=>{
