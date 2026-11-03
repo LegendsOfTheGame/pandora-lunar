@@ -2250,54 +2250,69 @@ function removeCharacter(cid){
 }
 
 /* ---------- per-character page markup ---------- */
-function characterPageHTML(cid){
-  return `
-  <!-- Pinned under the frame row, and a direct child of .page rather than a
-       section, so it stays put for the whole scroll instead of only while the
-       first section is on screen. It holds the name, the MSQ box and Remove
-       character: scrolling used to carry all three under the sticky frame row,
-       where clicks landed on the row and the buttons could not be used. -->
+/* The page skeleton for one character. It never redraws: it has no reactive data,
+   and the renderers fill its boxes by id (many of them with their own Vue apps).
+   initCollapsible and applyFrames change these elements by hand afterwards, so
+   classes stay static. The char header is pinned under the frame row, and a direct
+   child of .page rather than a section, so it stays put for the whole scroll instead
+   of only while the first section is on screen. It holds the name, the MSQ box and
+   Remove character: scrolling used to carry all three under the sticky frame row,
+   where clicks landed on the row and the buttons could not be used. */
+const CharPage = {
+  props: ['cid'],
+  setup(){
+    const elsewhere = ELSEWHERE_LINKS.map(([n, url, what]) =>
+      ({n, url, what, short: url.replace(/^https:\/\/(www\.)?/, '').replace(/\/$/, '')}));
+    return {
+      TICKABLE_FRAMES, ELITE_MARK_TOTAL, elsewhere,
+      raFrames: 'red-alerts ' + RED_ALERT_ZONES.map(frameSlug).join(' '),
+      huntFrames: ELITE_MARKS.map(([x]) => frameSlug(x)).join(' '),
+      onNameInput, onPatchInput, removeCharacter, toggleEditTotals, onPlaytimeInput,
+      resetRoutines, addRoutine, toggleSocietiesManual, onMainInput, addCustomRow, scheduleSave
+    };
+  },
+  template: `
   <div class="char-header">
     <div class="char-name-group">
-      <input type="text" class="char-name-input" id="${cid}-name" placeholder="Character name" oninput="onNameInput('${cid}')">
-      <span class="patch-box">MSQ progress <input type="text" id="${cid}-patch" class="patch-input" placeholder="4.0" oninput="onPatchInput('${cid}')"></span>
+      <input type="text" class="char-name-input" :id="cid+'-name'" placeholder="Character name" @input="onNameInput(cid)">
+      <span class="patch-box">MSQ progress <input type="text" :id="cid+'-patch'" class="patch-input" placeholder="4.0" @input="onPatchInput(cid)"></span>
     </div>
-    <button class="remove-char-btn" onclick="removeCharacter('${cid}')">Remove character</button>
+    <button class="remove-char-btn" @click="removeCharacter(cid)">Remove character</button>
   </div>
   <div class="section char-dash-section">
-    <span class="cap" id="${cid}-tm-sync-note"></span>
-    <div class="server-picker" id="${cid}-server-picker"></div>
-    <div class="dash-grid" id="${cid}-dash"></div>
+    <span class="cap" :id="cid+'-tm-sync-note'"></span>
+    <div class="server-picker" :id="cid+'-server-picker'"></div>
+    <div class="dash-grid" :id="cid+'-dash'"></div>
   </div>
 
   <div class="tab-panel" data-tab="overview">
   <div class="section" data-frame="progress">
-    <h2>Quest categories <span class="hint-group"><span class="plugin-mode" id="${cid}-pluginmode"></span><button class="edit-btn" id="${cid}-totals-edit-btn" onclick="toggleEditTotals('${cid}')">Edit totals</button></span></h2>
-    <div class="quest-grid" id="${cid}-quests"></div>
-    <div class="check-note" id="${cid}-overall-check"></div>
+    <h2>Quest categories <span class="hint-group"><span class="plugin-mode" :id="cid+'-pluginmode'"></span><button class="edit-btn" :id="cid+'-totals-edit-btn'" @click="toggleEditTotals(cid)">Edit totals</button></span></h2>
+    <div class="quest-grid" :id="cid+'-quests'"></div>
+    <div class="check-note" :id="cid+'-overall-check'"></div>
   </div>
   <div class="section" data-frame="session">
     <h2>Session</h2>
-    <table>
+    <table><tbody>
       <tr><td style="width:160px;color:var(--text-faint)">Cumulative playtime</td><td>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <input type="text" id="${cid}-playtime-days" class="playtime-input" oninput="onPlaytimeInput('${cid}')"><span class="cap">d</span>
-          <input type="text" id="${cid}-playtime-hours" class="playtime-input" oninput="onPlaytimeInput('${cid}')"><span class="cap">h</span>
-          <span class="cap" id="${cid}-playtime-total" style="margin-left:8px"></span>
-          <span class="cap" id="${cid}-playtime-asof" style="margin-left:8px"></span>
+          <input type="text" :id="cid+'-playtime-days'" class="playtime-input" @input="onPlaytimeInput(cid)"><span class="cap">d</span>
+          <input type="text" :id="cid+'-playtime-hours'" class="playtime-input" @input="onPlaytimeInput(cid)"><span class="cap">h</span>
+          <span class="cap" :id="cid+'-playtime-total'" style="margin-left:8px"></span>
+          <span class="cap" :id="cid+'-playtime-asof'" style="margin-left:8px"></span>
         </div>
       </td></tr>
-    </table>
+    </tbody></table>
   </div>
   </div>
   <div class="tab-panel" data-tab="routines">
   <div class="section">
-    <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn" onclick="resetRoutines('${cid}')">Reset to defaults</button></span></h2>
-    <div class="routine-list" id="${cid}-routines"></div>
-    <div id="${cid}-lastdone" data-frame="last-completed"></div>
-    <div class="gated-note" id="${cid}-gated" data-frame="${TICKABLE_FRAMES}"></div>
-    <div class="hidden-note" id="${cid}-hiddennote" data-frame="${TICKABLE_FRAMES}"></div>
-    <button class="add-btn" data-frame="${TICKABLE_FRAMES}" onclick="addRoutine('${cid}')">+ Add routine</button>
+    <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn" @click="resetRoutines(cid)">Reset to defaults</button></span></h2>
+    <div class="routine-list" :id="cid+'-routines'"></div>
+    <div :id="cid+'-lastdone'" data-frame="last-completed"></div>
+    <div class="gated-note" :id="cid+'-gated'" :data-frame="TICKABLE_FRAMES"></div>
+    <div class="hidden-note" :id="cid+'-hiddennote'" :data-frame="TICKABLE_FRAMES"></div>
+    <button class="add-btn" :data-frame="TICKABLE_FRAMES" @click="addRoutine(cid)">+ Add routine</button>
   </div>
   </div>
   <div class="tab-panel" data-tab="jobs">
@@ -2305,65 +2320,65 @@ function characterPageHTML(cid){
     <h2>Job levels</h2>
     <div data-frame="combat">
       <div class="subhead">Combat &middot; cap 100 (Blue Mage 80, Beastmaster 50)</div>
-      <div id="${cid}-combat" class="job-columns"></div>
+      <div :id="cid+'-combat'" class="job-columns"></div>
     </div>
     <div data-frame="craft">
       <div class="subhead">Crafting &middot; cap 100</div>
-      <table id="${cid}-craft"></table>
+      <table :id="cid+'-craft'"></table>
     </div>
     <div data-frame="gather">
       <div class="subhead">Gathering &middot; cap 100</div>
-      <table id="${cid}-gather"></table>
+      <table :id="cid+'-gather'"></table>
     </div>
     <div data-frame="items">
       <div class="subhead">Quest items &middot; what the job quests ask you to hand in</div>
-      <div id="${cid}-qitems"></div>
+      <div :id="cid+'-qitems'"></div>
     </div>
-    <div class="gated-note" id="${cid}-jobsnote"></div>
+    <div class="gated-note" :id="cid+'-jobsnote'"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="cosmic">
   <div class="section" data-frame="tools">
     <h2>Cosmic tools <span class="hint">via Tales of Milestones &mdash; research data per class</span></h2>
-    <div id="${cid}-cosmic-meta"></div>
-    <div id="${cid}-cosmic" class="cosmic-columns"></div>
+    <div :id="cid+'-cosmic-meta'"></div>
+    <div :id="cid+'-cosmic'" class="cosmic-columns"></div>
   </div>
-  <div class="section" data-frame="red-alerts ${RED_ALERT_ZONES.map(frameSlug).join(' ')}">
+  <div class="section" :data-frame="raFrames">
     <h2>Red Alerts <span class="hint">reference &mdash; <a href="https://linkly.link/2ugww" target="_blank" rel="noopener">wiki "Red Alert", revision 12 June 2026</a></span></h2>
     <p class="ra-intro">Each zone and weather has one or two variants. Each variant opens two regions, and each region has critical missions for two or three classes. Red Alerts have no fixed schedule, and each world and zone has its own. This table does not show which Red Alert occurs next.</p>
-    <div id="${cid}-ra-bar"></div>
-    <div id="${cid}-redalert"></div>
+    <div :id="cid+'-ra-bar'"></div>
+    <div :id="cid+'-redalert'"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="journey">
   <div class="section">
     <h2>Journey <span class="hint">via Tales of Milestones &mdash; questlines, duties and exploration, from Copy everything</span></h2>
-    <div id="${cid}-journey"></div>
+    <div :id="cid+'-journey'"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="collections">
   <div class="section">
     <h2>Collections <span class="hint">via Tales of Milestones &mdash; totals from FFXIV Collect, refreshed daily</span></h2>
-    <div id="${cid}-coll"></div>
+    <div :id="cid+'-coll'"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="societies">
   <div class="section">
-    <h2>Allied society relations <span class="hint-group"><span class="hint" id="${cid}-sochint">rank + points reset to 0 on every rank-up</span><button class="link-btn" id="${cid}-socmode-btn" onclick="toggleSocietiesManual('${cid}')">Edit manually</button></span></h2>
-    <div id="${cid}-societies" class="society-columns"></div>
+    <h2>Allied society relations <span class="hint-group"><span class="hint" :id="cid+'-sochint'">rank + points reset to 0 on every rank-up</span><button class="link-btn" :id="cid+'-socmode-btn'" @click="toggleSocietiesManual(cid)">Edit manually</button></span></h2>
+    <div :id="cid+'-societies'" class="society-columns"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="hunts">
   <div class="section" data-frame="summary">
-    <h2>Marks slain <span class="hint">${ELITE_MARK_TOTAL} A and S ranks across six expansions</span></h2>
-    <div class="dash-grid" id="${cid}-hunt-dash"></div>
-    <div class="check-note ok" id="${cid}-hunt-tally"></div>
+    <h2>Marks slain <span class="hint">{{ ELITE_MARK_TOTAL }} A and S ranks across six expansions</span></h2>
+    <div class="dash-grid" :id="cid+'-hunt-dash'"></div>
+    <div class="check-note ok" :id="cid+'-hunt-tally'"></div>
   </div>
-  <div class="section" data-frame="${ELITE_MARKS.map(([x])=>frameSlug(x)).join(' ')}">
+  <div class="section" :data-frame="huntFrames">
     <h2>Elite marks
       <span class="hint">ticked by hand &mdash; no import fills this in</span>
     </h2>
-    <div id="${cid}-hunts" class="hunt-columns"></div>
+    <div :id="cid+'-hunts'" class="hunt-columns"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="mentor">
@@ -2371,51 +2386,57 @@ function characterPageHTML(cid){
     <h2>Battle Mentor requirements
       <span class="hint">1000 dungeons &middot; 1500 comms &middot; tank + healer + 1 dps role quest</span>
     </h2>
-    <table style="margin-bottom:10px">
-      <tr><td style="width:120px"><input type="text" id="${cid}-duty" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,000 duty completions</td><td style="text-align:right" id="${cid}-duty-asof"></td></tr>
-      <tr><td><input type="text" id="${cid}-comm" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 1,500 commendations</td><td></td></tr>
-    </table>
-    <div id="${cid}-roles"></div>
+    <table style="margin-bottom:10px"><tbody>
+      <tr><td style="width:120px"><input type="text" :id="cid+'-duty'" style="text-align:right" @input="onMainInput(cid)"></td><td style="color:var(--text-faint)">/ 1,000 duty completions</td><td style="text-align:right" :id="cid+'-duty-asof'"></td></tr>
+      <tr><td><input type="text" :id="cid+'-comm'" style="text-align:right" @input="onMainInput(cid)"></td><td style="color:var(--text-faint)">/ 1,500 commendations</td><td></td></tr>
+    </tbody></table>
+    <div :id="cid+'-roles'"></div>
   </div>
   <div class="section" data-frame="trade">
     <h2>Trade mentor requirements <span class="hint">300 collectables &middot; 100 synthesized &middot; a craft + gather job at 100</span></h2>
-    <table style="margin-bottom:10px">
-      <tr><td style="width:140px"><input type="text" id="${cid}-trade-collected" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 300 collectables gathered or caught</td><td style="width:60px" id="${cid}-trade-collected-done"></td></tr>
-      <tr><td><input type="text" id="${cid}-trade-made" style="text-align:right" oninput="onMainInput('${cid}')"></td><td style="color:var(--text-faint)">/ 100 collectables synthesized</td><td style="width:60px" id="${cid}-trade-made-done"></td></tr>
-    </table>
-    <div id="${cid}-trade-jobs"></div>
+    <table style="margin-bottom:10px"><tbody>
+      <tr><td style="width:140px"><input type="text" :id="cid+'-trade-collected'" style="text-align:right" @input="onMainInput(cid)"></td><td style="color:var(--text-faint)">/ 300 collectables gathered or caught</td><td style="width:60px" :id="cid+'-trade-collected-done'"></td></tr>
+      <tr><td><input type="text" :id="cid+'-trade-made'" style="text-align:right" @input="onMainInput(cid)"></td><td style="color:var(--text-faint)">/ 100 collectables synthesized</td><td style="width:60px" :id="cid+'-trade-made-done'"></td></tr>
+    </tbody></table>
+    <div :id="cid+'-trade-jobs'"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="notes">
   <div class="section" data-frame="trackers">
     <h2>Custom trackers <span class="hint">achievements, mounts, minions, logs &mdash; add your own</span></h2>
-    <div class="custom-list" id="${cid}-custom"></div>
-    <button class="add-btn" onclick="addCustomRow('${cid}')">+ Add tracker</button>
+    <div class="custom-list" :id="cid+'-custom'"></div>
+    <button class="add-btn" @click="addCustomRow(cid)">+ Add tracker</button>
   </div>
   <div class="section" data-frame="notes">
     <h2>Notes</h2>
-    <textarea class="note-area" id="${cid}-notes" placeholder="Anything worth remembering — GC, retainers, sync points, whatever." oninput="scheduleSave()"></textarea>
+    <textarea class="note-area" :id="cid+'-notes'" placeholder="Anything worth remembering — GC, retainers, sync points, whatever." @input="scheduleSave()"></textarea>
   </div>
   </div>
   <div class="tab-panel" data-tab="events">
   <div class="section">
     <h2>Events <span class="hint">from the Lodestone, the same feed as Tales of Milestones&rsquo;s Active Events &middot; checked every 6 hours</span></h2>
-    <div id="${cid}-events"></div>
+    <div :id="cid+'-events'"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="elsewhere">
   <div class="section">
     <h2>Other sites <span class="hint">for what the Ledger does not do &middot; each link opens in a new tab</span></h2>
-    ${elsewhereHTML()}
+    <div class="out"><a v-for="l in elsewhere" :key="l.url" :href="l.url" target="_blank" rel="noopener"><b>{{ l.n }}</b><span>{{ l.what }}</span><code>{{ l.short }}</code></a></div>
   </div>
-  </div>`;
-}
-
+  </div>`
+};
+/* All the pages, one app on #pages. Each rebuild mounts a new app, so the pages are
+   new elements, drawn at once, before the renderers below look them up by id. */
+const CharPages = {
+  props: ['ids', 'activeId'],
+  components: {CharPage},
+  template: `<div v-for="id in ids" :key="id" :class="id === activeId ? 'page active' : 'page'" :id="'page-'+id"><char-page :cid="id"></char-page></div>`
+};
+let pagesApp = null;
 function rebuildPages(){
-  const box = document.getElementById('pages');
-  box.innerHTML = DATA.chars.map(c=>
-    `<div class="page${c.id===DATA.activeId?' active':''}" id="page-${c.id}">${characterPageHTML(c.id)}</div>`
-  ).join('');
+  if(pagesApp) pagesApp.unmount();
+  pagesApp = Vue.createApp(CharPages, {ids: DATA.chars.map(c => c.id), activeId: DATA.activeId});
+  pagesApp.mount('#pages');
   DATA.chars.forEach(c=>renderChar(c.id));
   initCollapsible();
   DATA.chars.forEach(c=>applyArea(c.id));
@@ -2921,7 +2942,7 @@ const EventList = {
     </div>
     <div v-else class="jr-note">No event is running or announced.</div>`
 };
-/* Mounts the list once per box. When the pages are rebuilt (characterPageHTML),
+/* Mounts the list once per box. When the pages are rebuilt (rebuildPages),
    the box is a new element: it gets a new app and the old one is unmounted. */
 const eventApps = {};
 function renderEvents(cid){
@@ -2948,10 +2969,6 @@ const ELSEWHERE_LINKS = [
   ['Icy Veins', 'https://www.icy-veins.com/ffxiv/', 'Guides and patch news'],
   ['FFXIV wiki', 'https://ffxiv.consolegameswiki.com/', 'Game reference']
 ];
-function elsewhereHTML(){
-  return `<div class="out">${ELSEWHERE_LINKS.map(([n, url, what]) =>
-    `<a href="${url}" target="_blank" rel="noopener"><b>${esc(n)}</b><span>${esc(what)}</span><code>${esc(url.replace(/^https:\/\/(www\.)?/, '').replace(/\/$/, ''))}</code></a>`).join('')}</div>`;
-}
 
 /* ---------- rail ----------
    The sections are the old tabs. They are no longer listed in the rail; the
@@ -5474,8 +5491,8 @@ function renderChar(cid){
   renderCustom(cid);
   renderTmSyncNote(cid);
   renderLastCompleted(cid);
-  // Every renderer above rewrites innerHTML, which takes the frame classes
-  // with it. Settle them again for each section of this character.
+  // The renderers above draw new elements, which come without the frame
+  // classes. Settle them again for each section of this character.
   RAIL_SECTIONS.forEach(s => applyFrames(cid, s.key));
   if(DATA.activeId === cid) renderNav();
 }
