@@ -2207,8 +2207,13 @@ window.matchMedia('(max-width:820px), (orientation:portrait)').addEventListener(
   if(!event.matches) setMobileRailOpen(false);
 });
 document.addEventListener('keydown', event => {
-  if(event.key === 'Escape') setMobileRailOpen(false);
+  if(event.key === 'Escape'){ setMobileRailOpen(false); closeNavMenus(); }
 });
+/* The sitebar's Challenges menu is a <details>; it closes on a click anywhere outside it. */
+function closeNavMenus(except){
+  document.querySelectorAll('.nav-menu[open]').forEach(m => { if(m !== except) m.open = false; });
+}
+document.addEventListener('click', event => closeNavMenus(event.target.closest('.nav-menu')));
 function onCharSelect(sel){
   if(sel.value === '+add') addCharacter();
   else setActiveChar(sel.value);

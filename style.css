@@ -1081,6 +1081,15 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 .sitebar nav a.on{background:var(--line-soft);color:var(--gold)}
 .sitebar nav .soon{font-size:12.5px;padding:4px 10px;color:var(--text-faint);cursor:help}
 .sitebar nav .soon::after{content:" · soon";font-size:10.5px}
+/* Challenges: a menu of the games the challenge tracker has, then a link to ask for another. */
+.nav-menu{position:relative}
+.nav-menu summary{list-style:none;cursor:pointer;color:var(--text-dim);font-size:12.5px;padding:4px 10px;border-radius:5px}
+.nav-menu summary::-webkit-details-marker{display:none}
+.nav-menu summary::after{content:" ▾";font-size:10.5px}
+.nav-menu summary:hover,.nav-menu[open] summary{color:var(--text)}
+.nav-menu .nav-pop{position:absolute;top:calc(100% + 4px);left:0;z-index:70;min-width:190px;display:flex;flex-direction:column;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.sitebar nav .nav-pop a{padding:7px 10px}
+.sitebar nav .nav-pop a:hover{background:var(--line-soft)}
 .sitebar .who{margin-left:auto}
 .mobile-menu-toggle{
   display:none;align-items:center;justify-content:center;
@@ -1254,7 +1263,8 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   .sitebar nav{
     grid-column:2/-1;grid-row:2;display:flex;flex-wrap:wrap;gap:4px;
   }
-  .sitebar nav a,.sitebar nav .soon{min-height:40px;padding:7px 10px}
+  .sitebar nav a,.sitebar nav .soon,.nav-menu summary{min-height:40px;padding:7px 10px}
+  .nav-menu summary{display:flex;align-items:center}
   .rail{
     position:fixed;inset:var(--sitebar-h,0px) auto env(safe-area-inset-bottom) 0;
     display:flex;width:min(300px,calc(100vw - 52px));height:auto;
@@ -1335,10 +1345,11 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
     grid-column:1/-1;grid-row:2;
     display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;
   }
-  .sitebar nav a,.sitebar nav .soon{
+  .sitebar nav a,.sitebar nav .soon,.nav-menu summary{
     display:flex;align-items:center;justify-content:center;
     min-height:40px;padding:6px;text-align:center;line-height:1.25;
   }
+  .nav-menu .nav-pop{left:auto;right:0}
   .rail .switcher{padding:12px 12px 10px}
   .rail .char-sel{min-height:42px}
   .rail-foot{
