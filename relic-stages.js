@@ -2,6 +2,10 @@
 // Line code -> {expansion, name, stages: [[wiki set name, item level]]}. Stage letter A is index 0,
 // the letter Time Memoria's collections export sends in "relics".
 const RELIC_STAGES = {
+  FG:{ex:7,name:"Figmental Weapons",stages:[["Figmental Weapons",null]]},
+  EX:{ex:7,name:"Exquisite Weapons",stages:[["Exquisite Weapons",null]]},
+  DD:{ex:7,name:"Deep Dungeon Weapons",stages:[["Padjali Weapons",null],["Kinna Weapons",null],["Empyrean Weapons",null],["Orthos Weapons",null],["Enaretos Weapons",null],["Weapons of the First Light",null],["Sacramental Weapons",null]]},
+  GW:{ex:3,name:"GARO Weapons",stages:[["GARO Weapons",null]]},
   ZD:{ex:0,name:"Zodiac Weapons",stages:[["Base Zodiac Weapons",80],["Zenith Zodiac Weapons",90],["Atma Zodiac Weapons",100],["Animus Zodiac Weapons",100],["Novus Zodiac Weapons",110],["Nexus Zodiac Weapons",115],["Zodiac Braves Weapons",125],["Zodiac Zeta Weapons",135]]},
   LU:{ex:0,name:"Lucis Tools",stages:[["Mastercraft Tools",55],["Supra Relic Tools",75],["Lucis Relic Tools",90]]},
   AN:{ex:1,name:"Anima Weapons",stages:[["Animated Weapons",170],["Awoken Weapons",200],["Base Anima Weapons",210],["Hyperconductive Anima Weapons",230],["Reconditioned Anima Weapons",240],["Sharpened Anima Weapons",260],["Complete Anima Weapons",270],["Lux Anima Weapons",275]]},
@@ -14,3 +18,5 @@ const RELIC_STAGES = {
   PH:{ex:5,name:"Phantom Weapons",stages:[["Phantom Weapons Penumbrae",745],["Phantom Weapons Umbrae",760],["Phantom Weapons Obscurum",775],["Phantom Weapons Eclipticum",790],["Phantom Weapons Occultum",795]]},
   CO:{ex:5,name:"Cosmic Tools",stages:[["Prototype v0.1 Cosmic Tools",10],["Prototype v0.2 Cosmic Tools",30],["Prototype v0.3 Cosmic Tools",55],["Prototype v0.4 Cosmic Tools",150],["Prototype v0.5 Cosmic Tools",290],["Prototype v0.6 Cosmic Tools",430],["Prototype v0.7 Cosmic Tools",560],["Prototype v0.8 Cosmic Tools",690],["Cosmic Tools (IL 720)",720],["Cosmic Tools v1.1",725],["Cosmic Tools v1.2",730],["Cosmic Tools v1.3",735],["Cosmic Tools v1.4",740],["Stellar Tools",750],["Stellar Tools v1.1",755],["Stellar Tools v1.2",760],["Hypertools",765],["Hypertools v1.1",770],["Hypertools v1.2",775],["Tools of Stars",780]]}
 };
+// GARO armor: the head piece of each set. The set's place here is its letter in the export.
+const RELIC_GARO_SETS = ["The Face of the Golden Wolf","The Face of Undying Twilight","The Face of Pressing Darkness","The Face of the White Night","The Face of the Silver Wolf","Makai Mauler's Facemask","Makai Manhandler's Facemask","Makai Marksman's Eyepatch","Makai Markswoman's Ribbon","Makai Sun Guide's Circlet","Makai Moon Guide's Circlet","Makai Priest's Coronet","Makai Priestess's Headdress","Makai Vanguard's Monocle","Makai Vanbreaker's Ribbon","Makai Harbinger's Facemask","Makai Harrower's Facemask"];

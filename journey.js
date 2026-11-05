@@ -271,6 +271,7 @@ function mountSpeedView(c){
    line and job, the highest stage held anywhere the game lets Time Memoria read
    (armoury chest, bags, saddlebag, retainers, glamour dresser). "RSWAR-A" is
    Resistance Weapons, Warrior, stage A (the first). */
+const RELIC_WEAPON_LINES = ['PH', 'FG', 'EX', 'MV', 'RS', 'EU', 'AN', 'DD', 'ZD'];
 const RELIC_TOOL_LINES = ['CO', 'SP', 'RP', 'SK', 'LU'];
 /* The jobs of each line, in role order: the grid's columns. The export lists only what
    a character holds, so it cannot supply the jobs that hold nothing. A new relic line
@@ -285,6 +286,31 @@ const RELIC_JOBS = {
   PH: ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE', 'MNK', 'DRG', 'NIN', 'SAM', 'RPR', 'VPR', 'BRD', 'MCH', 'DNC', 'BLM', 'SMN', 'RDM', 'PCT'],
   CO: RELIC_TOOL_JOBS, SP: RELIC_TOOL_JOBS, RP: RELIC_TOOL_JOBS, SK: RELIC_TOOL_JOBS, LU: RELIC_TOOL_JOBS
 };
+RELIC_JOBS.DD = RELIC_JOBS.PH;
+RELIC_JOBS.FG = RELIC_JOBS.EX = RELIC_JOBS.PH.concat('BLU');
+RELIC_JOBS.GW = RELIC_JOBS.AN;
+
+/* Armor: one panel per FFXIV Collect type, newest first. A panel's rows are the five
+   slots. Its columns are the seven roles, or the jobs of a set made per job. "line" and
+   "stage" are the export's codes: "EHF-C" is line E, slot H, role F, stage C (2). */
+const RELIC_SLOTS = [['H', 'Head'], ['B', 'Body'], ['G', 'Hands'], ['L', 'Legs'], ['F', 'Feet']];
+const RELIC_ROLES = [['F', 'Fending'], ['M', 'Maiming'], ['S', 'Striking'], ['A', 'Aiming'], ['O', 'Scouting'], ['H', 'Healing'], ['C', 'Casting']];
+const RELIC_ARMOR_PANELS = [
+  ['Phantom Vision +3', 'P', 3], ['Phantom Vision +2', 'P', 2], ['Phantom Vision +1', 'P', 1], ['Phantom Vision', 'P', 0],
+  ["Arcanaut's Armor +2", 'A', 2], ["Arcanaut's Armor +1", 'A', 1], ["Arcanaut's Armor", 'A', 0],
+  ["Blade's Armor", 'D', 0], ["Augmented Law's Order", 'L', 1], ["Law's Order", 'L', 0],
+  ['Augmented Bozjan Armor', 'B', 1], ['Bozjan Armor', 'B', 0], ['Idealized Armor', 'I', 0],
+  ['Elemental Armor +2', 'E', 2], ['Elemental Armor +1', 'E', 1], ['Elemental Armor', 'E', 0],
+  ['Eureka Anemos Armor', 'J', 3], ['Eureka Job Armor +2', 'J', 2], ['Eureka Job Armor +1', 'J', 1], ['Eureka Job Armor', 'J', 0]
+];
+const RELIC_ARMOR_JOBS = {I: RELIC_JOBS.RS, J: RELIC_JOBS.EU};
+/* A later piece uses up an earlier one, so holding it also counts the earlier one. All
+   links are from the game's SpecialShop sheet, checked on 5 November 2026.
+   Deep Dungeon: only these stages are made from another. GARO armor has no links.
+   Other lines: a stage uses up the stage before it, and these use up a second line too. */
+const RELIC_EVERY_STAGE_LINES = ['DD', 'G'];
+const RELIC_DD_MADE_FROM = {1: 0, 4: 3, 6: 5};
+const RELIC_ALSO_USES = {L: {1: ['B', 1]}, P: {1: ['A', 1], 2: ['A', 2], 3: ['A', 2]}};
 /* The stages a line counts, where that is not all of them. These two lines follow
    FFXIV Collect's totals. Eureka (225) leaves out the Antiquated weapons. Cosmic (44)
    counts four tiers per job, from the first tool of each tier. Checked on 4 November
@@ -296,8 +322,7 @@ const RELIC_COUNTED_STAGES = {
 function relicLineCodes(){ return typeof RELIC_STAGES === 'undefined' ? [] : Object.keys(RELIC_STAGES); }
 /* Newest expansion first, the order of FFXIV Collect's pages. */
 function relicLinesOfKind(kind){
-  return relicLineCodes().filter(k => RELIC_TOOL_LINES.includes(k) === (kind === 'tools'))
-    .sort((a, b) => RELIC_STAGES[b].ex - RELIC_STAGES[a].ex);
+  return {weapons: RELIC_WEAPON_LINES, tools: RELIC_TOOL_LINES, garo: ['GW']}[kind] || [];
 }
 function relicCountedStages(code){
   return RELIC_COUNTED_STAGES[code] || RELIC_STAGES[code].stages.map((_, i) => i);
@@ -305,26 +330,74 @@ function relicCountedStages(code){
 /* One line for the panel: an item per job per counted stage. A held stage also counts
    every stage before it, because a relic upgrades from the one before. */
 function relicLineView(code, held){
-  const line = RELIC_STAGES[code], jobs = RELIC_JOBS[code], counted = relicCountedStages(code), mine = held[code] || {};
-  const on = (job, stage) => mine[job] !== undefined && mine[job] >= stage;
+  const line = RELIC_STAGES[code], jobs = RELIC_JOBS[code], counted = relicCountedStages(code);
   const rows = counted.map(stage => {
     const [name, il] = line.stages[stage];
-    return {name, il, cells: jobs.map(j => ({j, on: on(j, stage),
+    return {name, il, cells: jobs.map(j => ({j, on: relicIsHeld(held, code, j, stage),
       title: (TM_JOB_NAMES[j] || j) + ' · ' + relicStageName(code, j, stage) + (il ? ' · item level ' + il : '')}))};
   });
-  return {code, name: line.name, jobs, rows, total: jobs.length * counted.length,
+  return relicPanel(code, line.name, 'Stage', jobs, rows);
+}
+function relicPanel(code, name, corner, cols, rows){
+  return {code, name, corner, jobs: cols, rows, total: cols.length * rows.length,
     have: rows.reduce((n, r) => n + r.cells.filter(x => x.on).length, 0)};
 }
+/* One item is held, or used up to make an item that is held. */
+function relicIsHeld(held, line, key, stage){
+  if(line === 'DD'){
+    const all = held.DD || {};
+    if(all[key + '@' + stage]) return true;
+    return Object.keys(RELIC_DD_MADE_FROM).some(to => RELIC_DD_MADE_FROM[to] === stage && all[key + '@' + to]);
+  }
+  if(line === 'G') return !!(held.G || {})[key + '@' + stage];
+  const mine = (held[line] || {})[key];
+  if(mine !== undefined && mine >= stage) return true;
+  return Object.keys(RELIC_ALSO_USES).some(later => {
+    const top = (held[later] || {})[key];
+    if(top === undefined) return false;
+    return Object.keys(RELIC_ALSO_USES[later]).some(s => +s <= top
+      && RELIC_ALSO_USES[later][s][0] === line && RELIC_ALSO_USES[later][s][1] >= stage);
+  });
+}
+function relicArmorPanel(name, line, stage, held){
+  const jobs = RELIC_ARMOR_JOBS[line];
+  const cols = jobs || RELIC_ROLES.map(r => r[1]), keys = jobs || RELIC_ROLES.map(r => r[0]);
+  const rows = RELIC_SLOTS.map(([slot, slotName]) => ({name: slotName, cells: keys.map((k, i) => ({j: cols[i],
+    on: relicIsHeld(held, line, slot + k, stage), title: name + ' · ' + slotName + ' · ' + (TM_JOB_NAMES[cols[i]] || cols[i])}))}));
+  return relicPanel(line + stage, name, 'Slot', cols, rows);
+}
+function relicGaroArmorPanel(held){
+  const cols = RELIC_SLOTS.map(s => s[1]);
+  const rows = RELIC_GARO_SETS.map((set, stage) => ({name: set, cells: RELIC_SLOTS.map(([slot, slotName]) => ({j: slotName,
+    on: relicIsHeld(held, 'G', slot, stage), title: set + ' · ' + slotName}))}));
+  return relicPanel('G', 'GARO Armor', 'Set', cols, rows);
+}
+function relicPanels(kind, held){
+  if(kind === 'armor') return RELIC_ARMOR_PANELS.map(([name, line, stage]) => relicArmorPanel(name, line, stage, held));
+  const lines = relicLinesOfKind(kind).map(code => relicLineView(code, held));
+  return kind === 'garo' ? lines.concat(relicGaroArmorPanel(held)) : lines;
+}
 
-/* "ZDWAR-C RSWAR-A" -> {ZD:{WAR:2}, RS:{WAR:0}}. Null when the export had no
-   "relics" (an export from before Time Memoria read them); {} when it held none. */
+/* "ZDWAR-C EHF-B JHPLD-A" -> {ZD:{WAR:2}, E:{HF:1}, J:{HPLD:0}}. Null when the export
+   had no "relics" (an export from before Time Memoria read them); {} when it held none.
+   The length of the code gives its shape:
+     5 letters: J or I, slot, job (armor per job), else a two-letter line and a job.
+     3 letters: line, slot, role (armor per role).
+     2 letters: G, slot (GARO armor, where the stage letter is the set).
+   A line where every stage has its own code stores key@stage instead. */
 function heldRelics(c){
   const s = c.tmCollections && c.tmCollections.relics;
   if(typeof s !== 'string') return null;
   const out = {};
   s.split(/\s+/).forEach(code => {
-    const m = /^([A-Z]{2})([A-Z]{3})-([A-Z])$/.exec(code);
-    if(m) (out[m[1]] = out[m[1]] || {})[m[2]] = m[3].charCodeAt(0) - 65;
+    const m = /^([A-Z]{2,5})-([A-Z])$/.exec(code);
+    if(!m || m[1].length === 4) return;
+    const name = m[1], stage = m[2].charCodeAt(0) - 65;
+    const two = name.length === 5 && name[0] !== 'J' && name[0] !== 'I';
+    const line = two ? name.slice(0, 2) : name[0], key = two ? name.slice(2) : name.slice(1);
+    const into = out[line] = out[line] || {};
+    if(RELIC_EVERY_STAGE_LINES.includes(line)) into[key + '@' + stage] = true;
+    else into[key] = stage;
   });
   return out;
 }
@@ -406,7 +479,9 @@ const JourneyPanel = {
       <div class="jr-note">{{ view.asOf }}</div>
       <div data-frame="questlines"><genre-list :list="view.questlines" @toggle="toggle"></genre-list></div>
       <div data-frame="relics"><relics-panel :c="view.c" kind="weapons" :tick="view.tick"></relics-panel></div>
+      <div data-frame="relic-armor"><relics-panel :c="view.c" kind="armor" :tick="view.tick"></relics-panel></div>
       <div data-frame="relic-tools"><relics-panel :c="view.c" kind="tools" :tick="view.tick"></relics-panel></div>
+      <div data-frame="relic-garo"><relics-panel :c="view.c" kind="garo" :tick="view.tick"></relics-panel></div>
       <div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div><genre-list :list="view.seasonal" @toggle="toggle"></genre-list></div>
       <div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>
         <template v-for="d in view.duties" :key="d.exp">

@@ -1,7 +1,7 @@
 /* ---- Relics ----
-   Two frames, Weapons and Tools, with one collapsible panel per relic line. A panel
-   counts items, the same way as FFXIV Collect's relic pages: one item for each job at
-   each counted stage. The grid has one row per stage and one column per job.
+   Weapons, Armor, Tools and GARO frames, with one collapsible panel per FFXIV Collect
+   type. A panel counts items, the same way as FFXIV Collect's relic pages. Its grid has
+   one row per stage, slot or set, and one column per job, role or slot.
 
    The panels only read the character. They have no inputs and write nothing, so the
    saved data and the Time Memoria import format do not change. Which panels are open
@@ -17,7 +17,7 @@ const RelicLinePanel = {
       </button>
       <div v-if="open" class="rl-scroll">
         <table class="rl-grid">
-          <thead><tr><th scope="col">Stage</th><th v-for="j in line.jobs" :key="j" scope="col" :title="jobName(j)">{{ j }}</th></tr></thead>
+          <thead><tr><th scope="col">{{ line.corner }}</th><th v-for="j in line.jobs" :key="j" scope="col" :title="jobName(j)">{{ j }}</th></tr></thead>
           <tbody>
             <tr v-for="r in line.rows" :key="r.name">
               <th scope="row">{{ r.name }}<i v-if="r.il" class="faint"> {{ r.il }}</i></th>
@@ -37,7 +37,7 @@ const RelicsPanel = {
     const open = Vue.reactive({});
     // DATA is not reactive, so the tick makes this run again after an import.
     const held = Vue.computed(() => (props.tick, heldRelics(props.c)));
-    const lines = Vue.computed(() => relicLinesOfKind(props.kind).map(code => relicLineView(code, held.value || {})));
+    const lines = Vue.computed(() => relicPanels(props.kind, held.value || {}));
     const allOpen = Vue.computed(() => lines.value.every(l => open[l.code]));
     const toggleAll = () => {
       const to = !allOpen.value;
@@ -50,6 +50,6 @@ const RelicsPanel = {
     <template v-else>
       <div class="rl-bar"><button type="button" class="link-btn" @click="toggleAll">{{ allOpen ? 'Collapse all' : 'Expand all' }}</button></div>
       <relic-line-panel v-for="l in lines" :key="l.code" :line="l" :open="!!open[l.code]" @toggle="open[l.code] = !open[l.code]"></relic-line-panel>
-      <div class="jr-note" style="margin-top:10px">Each job counts the highest stage held and every stage before it. Tales of Milestones reads the armoury chest, bags, saddlebag, retainers and glamour dresser. It does not read the Armoire or what a retainer has equipped, so a weapon there is not counted.</div>
+      <div class="jr-note" style="margin-top:10px">An item counts when you hold it, or when you used it to make an item that you hold. Tales of Milestones reads what you have equipped, the armoury chest, bags, saddlebag, retainers and glamour dresser. It does not read the Armoire or what a retainer has equipped, so an item there is not counted.</div>
     </template>`
 };
