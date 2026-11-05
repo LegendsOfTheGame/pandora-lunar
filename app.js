@@ -2591,9 +2591,10 @@ const AREAS = [
       {tab:'journey', frame:'seasonal', l:'Seasonal'},
       {tab:'overview', frame:'session', l:'Session'}],
     meter:c => c.questTotals && c.questTotals.overall ? Math.round(pct(c.quests.overall, c.questTotals.overall)) : null},
-  // Relics left Story on 24 Oct 2026 (user's call): an overview, then one frame per expansion.
-  {key:'relics', label:'Relics', frames:() => [{tab:'journey', frame:'relics', l:'Overview'}]
-      .concat(relicExpansions().map(ex => ({tab:'journey', frame:relicFrameKey(ex), l:EXPANSION_NAMES[ex]}))),
+  // Relics left Story on 24 Oct 2026 (user's call). Weapons and Tools since 4 Nov 2026:
+  // the frame key 'relics' stays, so saved navigation state keeps working.
+  {key:'relics', label:'Relics', frames:() => [{tab:'journey', frame:'relics', l:'Weapons'},
+      {tab:'journey', frame:'relic-tools', l:'Tools'}],
     meter:c => relicsMeter(c)},
   {key:'jobs', label:'Jobs', frames:c => framesFor('jobs', c)
       .map(f => ({tab:'jobs', frame:f.k, l:f.l, n:f.n}))
@@ -3089,8 +3090,7 @@ function framesFor(section, c){
       return [{k:'overview', l:'Overview'}].concat(COLLECTION_KINDS.map(k => ({k:frameSlug(k.key), l:k.label,
         n: hasCollections(c) ? ownedSet(c, k.key).size : null})));
     case 'journey':
-      return [{k:'questlines', l:'Questlines'}, {k:'relics', l:'Relics'}]
-        .concat(relicExpansions().map(ex => ({k:relicFrameKey(ex), l:EXPANSION_NAMES[ex]})))
+      return [{k:'questlines', l:'Questlines'}, {k:'relics', l:'Weapons'}, {k:'relic-tools', l:'Tools'}]
         .concat([{k:'seasonal', l:'Seasonal'},
               {k:'duties', l:'Duties', n: hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null},
               {k:'exploration', l:'Exploration'}, {k:'mountspeed', l:'Mount speed'}]);

@@ -1,60 +1,55 @@
 /* ---- Relics ----
-   The first panel drawn by Vue instead of an HTML string. It shows the same thing
-   relicLineHTML and relicExpHTML showed, with the same classes, so style.css needs
-   no change. It only reads the character: it has no inputs and writes nothing, so the
-   saved data and the Time Memoria import format do not change.
+   Two frames, Weapons and Tools, with one collapsible panel per relic line. A panel
+   counts items, the same way as FFXIV Collect's relic pages: one item for each job at
+   each counted stage. The grid has one row per stage and one column per job.
 
-   JourneyPanel (journey.js) draws one RelicExpansion per expansion, so this file
-   loads before journey.js. vendor/vue.global.prod.js is a pinned copy (3.5.13), so
-   the page makes no request to a CDN. */
-const RelicLine = {
-  props: {code: String, c: Object, held: Object},
-  setup(props){
-    const line = RELIC_STAGES[props.code], total = line.stages.length;
-    const genre = RELIC_GENRE[props.code];
-    const ids = genre && TM_QUEST_GENRES[genre] ? TM_QUEST_GENRES[genre].ids : null;
-    const done = ownedSet(props.c, 'questsDone');
-    const quests = ids ? {g: genre, have: ids.filter(id => done.has(id)).length, total: ids.length} : null;
-    const jobs = props.held && props.held[props.code]
-      ? Object.keys(props.held[props.code]).sort((a, b) => (TM_JOB_NAMES[a] || a).localeCompare(TM_JOB_NAMES[b] || b))
-          .map(j => {
-            const s = props.held[props.code][j], il = line.stages[s] && line.stages[s][1];
-            return {j, s, il, label: (TM_JOB_NAMES[j] || j) + ' · ' + relicStageName(props.code, j, s)};
-          })
-      : [];
-    return {line, total, quests, jobs, jrPct, wikiUrl, letter: i => String.fromCharCode(65 + i)};
-  },
+   The panels only read the character. They have no inputs and write nothing, so the
+   saved data and the Time Memoria import format do not change. Which panels are open
+   is local to the page and resets on reload. */
+const RelicLinePanel = {
+  props: {line: Object, open: Boolean},
+  emits: ['toggle'],
   template: `
-    <div class="subhead">{{ line.name }}</div>
-    <div v-if="held === null" class="jr-note">Import a newer Tales of Milestones export (Copy everything) to see the stage of each job.</div>
-    <div v-else-if="jobs.length" class="jr-grid">
-      <div v-for="r in jobs" :key="r.j" class="jr-row" :class="{full: r.s === total - 1}" :title="r.il ? 'Item level ' + r.il : ''">
-        <span>{{ r.label }}</span><span class="jr-v">{{ r.s + 1 }} / {{ total }}</span>
-        <div class="jr-bar"><i :style="{width: jrPct(r.s + 1, total) + '%'}"></i></div>
+    <section class="rl-panel">
+      <button type="button" class="rl-head" :class="{full: line.total && line.have === line.total}" :aria-expanded="String(open)" @click="$emit('toggle')">
+        <span class="rl-name">{{ line.name }}</span>
+        <span class="jr-v">{{ line.have }} of {{ line.total }} Complete</span>
+      </button>
+      <div v-if="open" class="rl-scroll">
+        <table class="rl-grid">
+          <thead><tr><th scope="col">Stage</th><th v-for="j in line.jobs" :key="j" scope="col" :title="jobName(j)">{{ j }}</th></tr></thead>
+          <tbody>
+            <tr v-for="r in line.rows" :key="r.name">
+              <th scope="row">{{ r.name }}<i v-if="r.il" class="faint"> {{ r.il }}</i></th>
+              <td v-for="x in r.cells" :key="x.j" :class="{on: x.on}" :title="x.title"><span v-if="x.on" aria-label="Complete">●</span></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
-    <div v-else class="jr-note">None held.</div>
-    <div v-if="quests" class="jr-grid">
-      <div class="jr-row" :class="{full: quests.have === quests.total}">
-        <a class="jr-link" :href="wikiUrl(quests.g)" target="_blank" rel="noopener noreferrer" title="Open the wiki page in a new tab">{{ quests.g }}</a>
-        <span class="jr-v">{{ quests.have }} / {{ quests.total }}</span>
-        <div class="jr-bar"><i :style="{width: jrPct(quests.have, quests.total) + '%'}"></i></div>
-      </div>
-    </div>
-    <details class="relic-stages"><summary class="jr-note">All {{ total }} stages</summary>
-      <div class="jr-duties relic-ladder">
-        <span v-for="([s, il], i) in line.stages" :key="i" :title="'Stage ' + (i + 1) + (il ? ' · item level ' + il : '')">{{ letter(i) }}. {{ s }}<template v-if="il"> <i class="faint">{{ il }}</i></template></span>
-      </div>
-    </details>`
+    </section>`,
+  setup: () => ({jobName: j => TM_JOB_NAMES[j] || j})
 };
 
-const RelicExpansion = {
-  components: {RelicLine},
-  props: {ex: Number, c: Object},
+const RelicsPanel = {
+  components: {RelicLinePanel},
+  props: {c: Object, kind: String, tick: Number},
   setup(props){
-    return {held: heldRelics(props.c), codes: relicLineCodes().filter(k => RELIC_STAGES[k].ex === props.ex)};
+    const open = Vue.reactive({});
+    // DATA is not reactive, so the tick makes this run again after an import.
+    const held = Vue.computed(() => (props.tick, heldRelics(props.c)));
+    const lines = Vue.computed(() => relicLinesOfKind(props.kind).map(code => relicLineView(code, held.value || {})));
+    const allOpen = Vue.computed(() => lines.value.every(l => open[l.code]));
+    const toggleAll = () => {
+      const to = !allOpen.value;
+      lines.value.forEach(l => { open[l.code] = to; });
+    };
+    return {open, held, lines, allOpen, toggleAll};
   },
   template: `
-    <RelicLine v-for="k in codes" :key="k" :code="k" :c="c" :held="held" />
-    <div class="jr-note" style="margin-top:10px">The highest stage held for each job: armoury chest, bags, saddlebag, retainers and glamour dresser. A job with none is not listed. What a retainer has equipped and the Armoire are not read.</div>`
+    <div v-if="held === null" class="jr-note">Import a newer Tales of Milestones export (Copy everything) to see your relics.</div>
+    <template v-else>
+      <div class="rl-bar"><button type="button" class="link-btn" @click="toggleAll">{{ allOpen ? 'Collapse all' : 'Expand all' }}</button></div>
+      <relic-line-panel v-for="l in lines" :key="l.code" :line="l" :open="!!open[l.code]" @toggle="open[l.code] = !open[l.code]"></relic-line-panel>
+      <div class="jr-note" style="margin-top:10px">Each job counts the highest stage held and every stage before it. Tales of Milestones reads the armoury chest, bags, saddlebag, retainers and glamour dresser. It does not read the Armoire or what a retainer has equipped, so a weapon there is not counted.</div>
+    </template>`
 };
