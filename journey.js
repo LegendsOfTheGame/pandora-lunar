@@ -271,7 +271,20 @@ function mountSpeedView(c){
    line and job, the highest stage held anywhere the game lets Time Memoria read
    (armoury chest, bags, saddlebag, retainers, glamour dresser). "RSWAR-A" is
    Resistance Weapons, Warrior, stage A (the first). */
-const RELIC_TOOL_LINES = ['CO', 'SP', 'SK'];
+const RELIC_TOOL_LINES = ['CO', 'SP', 'RP', 'SK', 'LU'];
+/* The jobs of each line, in role order: the grid's columns. The export lists only what
+   a character holds, so it cannot supply the jobs that hold nothing. A new relic line
+   needs an entry here. */
+const RELIC_TOOL_JOBS = ['CRP', 'BSM', 'ARM', 'GSM', 'LTW', 'WVR', 'ALC', 'CUL', 'MIN', 'BTN', 'FSH'];
+const RELIC_JOBS = {
+  ZD: ['PLD', 'WAR', 'WHM', 'SCH', 'MNK', 'DRG', 'NIN', 'BRD', 'BLM', 'SMN'],
+  AN: ['PLD', 'WAR', 'DRK', 'WHM', 'SCH', 'AST', 'MNK', 'DRG', 'NIN', 'BRD', 'MCH', 'BLM', 'SMN'],
+  EU: ['PLD', 'WAR', 'DRK', 'WHM', 'SCH', 'AST', 'MNK', 'DRG', 'NIN', 'SAM', 'BRD', 'MCH', 'BLM', 'SMN', 'RDM'],
+  RS: ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'MNK', 'DRG', 'NIN', 'SAM', 'BRD', 'MCH', 'DNC', 'BLM', 'SMN', 'RDM'],
+  MV: ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE', 'MNK', 'DRG', 'NIN', 'SAM', 'RPR', 'BRD', 'MCH', 'DNC', 'BLM', 'SMN', 'RDM'],
+  PH: ['PLD', 'WAR', 'DRK', 'GNB', 'WHM', 'SCH', 'AST', 'SGE', 'MNK', 'DRG', 'NIN', 'SAM', 'RPR', 'VPR', 'BRD', 'MCH', 'DNC', 'BLM', 'SMN', 'RDM', 'PCT'],
+  CO: RELIC_TOOL_JOBS, SP: RELIC_TOOL_JOBS, RP: RELIC_TOOL_JOBS, SK: RELIC_TOOL_JOBS, LU: RELIC_TOOL_JOBS
+};
 /* The stages a line counts, where that is not all of them. These two lines follow
    FFXIV Collect's totals. Eureka (225) leaves out the Antiquated weapons. Cosmic (44)
    counts four tiers per job, from the first tool of each tier. Checked on 4 November
@@ -292,14 +305,14 @@ function relicCountedStages(code){
 /* One line for the panel: an item per job per counted stage. A held stage also counts
    every stage before it, because a relic upgrades from the one before. */
 function relicLineView(code, held){
-  const line = RELIC_STAGES[code], counted = relicCountedStages(code), mine = held[code] || {};
+  const line = RELIC_STAGES[code], jobs = RELIC_JOBS[code], counted = relicCountedStages(code), mine = held[code] || {};
   const on = (job, stage) => mine[job] !== undefined && mine[job] >= stage;
   const rows = counted.map(stage => {
     const [name, il] = line.stages[stage];
-    return {name, il, cells: line.jobs.map(j => ({j, on: on(j, stage),
+    return {name, il, cells: jobs.map(j => ({j, on: on(j, stage),
       title: (TM_JOB_NAMES[j] || j) + ' · ' + relicStageName(code, j, stage) + (il ? ' · item level ' + il : '')}))};
   });
-  return {code, name: line.name, jobs: line.jobs, rows, total: line.jobs.length * counted.length,
+  return {code, name: line.name, jobs, rows, total: jobs.length * counted.length,
     have: rows.reduce((n, r) => n + r.cells.filter(x => x.on).length, 0)};
 }
 
