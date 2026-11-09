@@ -88,8 +88,16 @@ function tmCollectionsDiffRows(p, c){
     if(before !== after) rows.push(['Zones at top mount speed', before == null ? '—' : before, after]);
   }
   if(typeof src.relics === 'string' && src.relics !== (c.tmCollections || {}).relics){
-    const count = s => typeof s === 'string' ? s.split(/\s+/).filter(Boolean).length : null;
-    rows.push(['Relic stages held', count((c.tmCollections || {}).relics) ?? '—', count(src.relics)]);
+    // Count items as the Relics screen does: a held stage also counts every stage
+    // before it. A count of codes stays the same when a weapon goes up a stage
+    // (ZDWAR-C to ZDWAR-E is one code before and after).
+    const count = s => {
+      if(typeof s !== 'string') return null;
+      const held = heldRelics({tmCollections: {relics: s}});
+      return ['weapons', 'tools', 'armor', 'garo']
+        .reduce((n, kind) => n + relicPanels(kind, held).reduce((m, p) => m + p.have, 0), 0);
+    };
+    rows.push(['Relic items complete', count((c.tmCollections || {}).relics) ?? '—', count(src.relics)]);
   }
   if(Number.isFinite(src.gemstones) && src.gemstones !== (c.tmCollections || {}).gemstones)
     rows.push(['Bicolor gemstones', (c.tmCollections || {}).gemstones ?? '—', src.gemstones]);
