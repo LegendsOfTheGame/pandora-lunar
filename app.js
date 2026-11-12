@@ -1,7 +1,9 @@
 /* Adventurer's Ledger — Pandora Lunar
    Self-serve, per-browser FFXIV progression tracker. Nothing here talks to a server —
-   everything lives in this browser's localStorage. Up to 3 characters per browser;
-   more than that, use a second browser (separate storage origin). */
+   everything lives in this browser's localStorage. Up to MAX_CHARS (8) characters per
+   browser, the most one account can have; more than that, use a second browser
+   (separate storage origin). */
+const MAX_CHARS = 8;
 
 const COMBAT_JOBS = [
   ["Paladin","Tank"],["Warrior","Tank"],["Dark Knight","Tank"],["Gunbreaker","Tank"],
@@ -1017,9 +1019,9 @@ const DEFAULT_ROUTINES = [
   ["Adventurer Squadron Training","daily20","squadron-training",""],
   ["Cosmic Exploration Daily Successes","daily09","cosmic-exploration","6.0"],               // A Cosmic Homecoming → Endwalker
   ["Retainer Ventures","cooldown18h","retainer-ventures",""],
-  ["Dancing Mad (Ultimate)","weeklyTue","dancing-mad","7.0"],                                // level 100, so Dawntrail
-  ["AAC Heavyweight M4","weeklyTue","aac-m4","7.0"],                                         // Dawntrail raid tier
-  ["Windurst: The Third Walk","weeklyTue","windurst","7.0"],                                 // An Otherworldly Encounter → Dawntrail
+  // Dancing Mad (Ultimate), AAC Heavyweight M4 and Windurst: The Third Walk left this list
+  // in patch 7.58, which removed their weekly limits. Seed generation 4 hides them for
+  // characters that already have them.
   ["YoRHa Epilogue Quest Chain (one-time unlock)","weeklyTue","yorha-epilogue","5.0"],       // YoRHa series → Shadowbringers
   ["Cap Allagan Tomestone of Mnemonics","weeklyTue","tomestone-cap","7.0"],                  // newest expansion's MSQ → Dawntrail
   ["AAC Heavyweight (Savage)","weeklyTue","aac-savage","7.0"],                               // Dawntrail raid tier
@@ -1081,7 +1083,7 @@ function seededRoutine(seedKey){
 // A generation counter fixes it without giving up that protection — each step names the
 // keys it introduces, so nothing outside the new set is ever touched. To add rows later:
 // bump SEED_GENERATION and add a step listing them.
-const SEED_GENERATION = 3;
+const SEED_GENERATION = 4;
 const SEED_GENERATIONS = {
   // Challenge Log split from one weekly tick into its 13 real categories.
   2: {
@@ -1102,6 +1104,14 @@ const SEED_GENERATIONS = {
     add: ['hunt-clan-daily','hunt-clan-brank','hunt-veteran-daily','hunt-veteran-brank',
           'hunt-nutsy-daily','hunt-nutsy-brank','hunt-guildship-daily','hunt-guildship-brank',
           'hunt-dawn-daily','hunt-dawn-brank']
+  },
+  // Patch 7.58 (9 Nov 2026) removed the weekly limits on Dancing Mad (Ultimate) totems,
+  // AAC Heavyweight M4 Heavy Holoblades, and Windurst: The Third Walk coffers, coins and
+  // Novaclusters. The rows are hidden, not deleted, because Evercold brings the same kind
+  // of weekly limit back on its own alliance raid and normal raid (names not announced yet).
+  // A hidden row keeps its history, and the player can show it again.
+  4: {
+    hide: ['dancing-mad','aac-m4','windurst']
   }
 };
 function applySeedGenerations(c){
@@ -1118,6 +1128,9 @@ function applySeedGenerations(c){
     (step.retire || []).forEach(({seedKey,label})=>{
       const i = c.routines.findIndex(r=>r.seedKey===seedKey);
       if(i >= 0 && c.routines[i].label === label) c.routines.splice(i,1);
+    });
+    (step.hide || []).forEach(key=>{
+      c.routines.filter(r=>r.seedKey===key).forEach(r=>{ r.hidden = true; });
     });
   }
   c.seedGeneration = SEED_GENERATION;
@@ -2064,7 +2077,7 @@ async function loadData(){
   normalizeData();
 }
 function normalizeData(){
-  DATA.chars = DATA.chars.slice(0,3).map(normalizeCharacter);
+  DATA.chars = DATA.chars.slice(0,MAX_CHARS).map(normalizeCharacter);
   if(!DATA.chars.find(c=>c.id===DATA.activeId)) DATA.activeId = DATA.chars[0].id;
   if(!DATA.ui || typeof DATA.ui !== 'object') DATA.ui = {};
   if(!DATA.ui.collapsed || typeof DATA.ui.collapsed !== 'object') DATA.ui.collapsed = {};
@@ -2163,7 +2176,7 @@ const CharBlock = {
   template: `
     <div class="char-name">{{ state.name }}</div>
     <div class="char-sub">{{ state.sub }}</div>
-    <select class="char-sel" aria-label="Character" :value="state.active" @change="onCharSelect($event.target)">
+    <select v-if="state.opts && state.opts.length > 1" class="char-sel" aria-label="Character" :value="state.active" @change="onCharSelect($event.target)">
       <option v-for="o in state.opts" :key="o.id" :value="o.id">{{ o.name }}</option>
       <option v-if="state.canAdd" value="+add">+ Add a character</option>
     </select>`
@@ -2182,9 +2195,9 @@ function renderCharBlock(){
     sub: [s.world, s.ldc, s.pdc].filter(Boolean).join(' · ') || `Character ${i + 1}`,
     active: DATA.activeId,
     opts: DATA.chars.map(x => ({id: x.id, name: x.name || 'Unnamed'})),
-    canAdd: DATA.chars.length < 3
+    canAdd: DATA.chars.length < MAX_CHARS
   });
-  capNote.style.display = DATA.chars.length >= 3 ? '' : 'none';
+  capNote.style.display = DATA.chars.length >= MAX_CHARS ? '' : 'none';
 }
 function setMobileRailOpen(open){
   const rail = document.getElementById('rail');
@@ -2229,7 +2242,7 @@ function setActiveChar(cid){
   scheduleSave();
 }
 function addCharacter(){
-  if(DATA.chars.length >= 3) return;
+  if(DATA.chars.length >= MAX_CHARS) return;
   collectAllInputs();
   const c = newCharacter('');
   DATA.chars.push(c);
@@ -2273,17 +2286,10 @@ const CharPage = {
       raFrames: 'red-alerts ' + RED_ALERT_ZONES.map(frameSlug).join(' '),
       huntFrames: ELITE_MARKS.map(([x]) => frameSlug(x)).join(' '),
       onNameInput, onPatchInput, removeCharacter, toggleEditTotals, onPlaytimeInput,
-      resetRoutines, addRoutine, toggleSocietiesManual, onMainInput, addCustomRow, scheduleSave
+      resetRoutines, addRoutine, toggleSocietiesManual, onMainInput, addCustomRow, scheduleSave, toggleRoutineEdit, addCharacter
     };
   },
   template: `
-  <div class="char-header">
-    <div class="char-name-group">
-      <input type="text" class="char-name-input" :id="cid+'-name'" placeholder="Character name" @input="onNameInput(cid)">
-      <span class="patch-box">MSQ progress <input type="text" :id="cid+'-patch'" class="patch-input" placeholder="4.0" @input="onPatchInput(cid)"></span>
-    </div>
-    <button class="remove-char-btn" @click="removeCharacter(cid)">Remove character</button>
-  </div>
   <div class="section char-dash-section">
     <span class="cap" :id="cid+'-tm-sync-note'"></span>
     <div class="server-picker" :id="cid+'-server-picker'"></div>
@@ -2312,12 +2318,14 @@ const CharPage = {
   </div>
   <div class="tab-panel" data-tab="routines">
   <div class="section">
-    <h2>Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn" @click="resetRoutines(cid)">Reset to defaults</button></span></h2>
+    <h2 data-frame="next-steps">Next Steps <span class="hint-group"><span class="hint">from your last import</span></span></h2>
+    <h2 :data-frame="TICKABLE_FRAMES + ' last-completed'">Routines <span class="hint-group"><span class="hint">clears itself on the game's reset</span><button class="edit-btn rt-edit-only" @click="resetRoutines(cid)">Reset to defaults</button><button class="edit-btn" @click="toggleRoutineEdit()"><span class="rt-view-only">Edit routines</span><span class="rt-edit-only">Done editing</span></button></span></h2>
+    <div :id="cid+'-next'" data-frame="next-steps"></div>
     <div class="routine-list" :id="cid+'-routines'"></div>
     <div :id="cid+'-lastdone'" data-frame="last-completed"></div>
     <div class="gated-note" :id="cid+'-gated'" :data-frame="TICKABLE_FRAMES"></div>
     <div class="hidden-note" :id="cid+'-hiddennote'" :data-frame="TICKABLE_FRAMES"></div>
-    <button class="add-btn" :data-frame="TICKABLE_FRAMES" @click="addRoutine(cid)">+ Add routine</button>
+    <button class="add-btn rt-edit-only" :data-frame="TICKABLE_FRAMES" @click="addRoutine(cid)">+ Add routine</button>
   </div>
   </div>
   <div class="tab-panel" data-tab="jobs">
@@ -2428,6 +2436,38 @@ const CharPage = {
     <h2>Other sites <span class="hint">for what the Ledger does not do &middot; each link opens in a new tab</span></h2>
     <div class="out"><a v-for="l in elsewhere" :key="l.url" :href="l.url" target="_blank" rel="noopener"><b>{{ l.n }}</b><span>{{ l.what }}</span><code>{{ l.short }}</code></a></div>
   </div>
+  </div>
+  <!-- Settings (Layout D): what used to sit on top of every panel and in the
+       site bar now lives here, so the other areas show only progress. -->
+  <div class="tab-panel" data-tab="settings">
+  <div class="section" data-frame="character">
+    <h2>Character</h2>
+    <div class="set-rows">
+      <label class="set-row"><span>Name</span><input type="text" class="char-name-input" :id="cid+'-name'" placeholder="Character name" @input="onNameInput(cid)"></label>
+      <label class="set-row"><span>MSQ progress</span><input type="text" :id="cid+'-patch'" class="patch-input" placeholder="4.0" @input="onPatchInput(cid)"></label>
+    </div>
+    <div class="set-actions">
+      <button class="edit-btn" @click="addCharacter()">+ Add a character</button>
+      <button class="remove-char-btn" @click="removeCharacter(cid)">Remove this character</button>
+    </div>
+    <p class="hint">Up to 8 characters per browser.</p>
+  </div>
+  <div class="section" data-frame="display">
+    <h2>Display</h2>
+    <div class="set-rows">
+      <label class="set-row"><span>Theme</span><select class="theme-sel" aria-label="Theme" onchange="setTheme(this.value)"><option value="poetic">Lunar night</option><option value="midnight">Crystarium</option><option value="daylight">Light</option></select></label>
+      <label class="set-row"><span>Time display</span><select class="time-sel" aria-label="Time display" onchange="setTimeMode(this.value)"><option value="utc">UTC — the game's reset times as published</option><option value="local">My local time</option></select></label>
+    </div>
+  </div>
+  <div class="section" data-frame="data">
+    <h2>Backup and import</h2>
+    <p class="hint">Everything is saved in this browser only. A backup file is the way to move it or keep it safe.</p>
+    <div class="set-actions">
+      <button class="edit-btn" onclick="toggleTmImportPanel()">Import from Tales of Milestones</button>
+      <button class="edit-btn" onclick="exportData()">Download backup</button>
+      <button class="edit-btn" onclick="document.getElementById('import-file').click()">Restore from file</button>
+    </div>
+  </div>
   </div>`
 };
 /* All the pages, one app on #pages. Each rebuild mounts a new app, so the pages are
@@ -2503,6 +2543,39 @@ function zoneOffset(d){
   return 'UTC' + (mins < 0 ? '-' : '+') + h + (m ? ':' + String(m).padStart(2,'0') : '');
 }
 function zoneLabel(d){ return DATA.ui.zoneStyle === 'offset' ? zoneOffset(d) : zoneAbbr(d); }
+
+/* Time display (Layout D, 9 Nov 2026): 'utc' shows the game's reset times as
+   published; 'local' shows them in the viewer's time zone. Saved per browser
+   in DATA.ui.timeMode. tz() rewrites every "HH:MM UTC" in a label (with a
+   weekday before it when there is one) to local time, so the reset schedule
+   labels and event lines need no second copy. */
+const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function localUtcMode(){ return DATA && DATA.ui && DATA.ui.timeMode === 'local'; }
+function utcAt(h, m, weekday){
+  const n = new Date(), d = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate(), h, m));
+  if(weekday !== undefined) while(d.getUTCDay() !== weekday) d.setUTCDate(d.getUTCDate() + 1);
+  return d;
+}
+function localClock(d, withDay){
+  const o = {hour:'2-digit', minute:'2-digit', hour12:false};
+  if(withDay) o.weekday = 'long';
+  return d.toLocaleString('en-GB', o).replace(',', '') + ' ' + zoneLabel(d);
+}
+function tz(text){
+  if(!localUtcMode() || typeof text !== 'string') return text;
+  return text
+    .replace(/\b(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday) (\d\d):(\d\d) UTC\b/g,
+      (s, day, h, m) => localClock(utcAt(+h, +m, WEEKDAYS.indexOf(day)), true))
+    .replace(/\b(\d\d):(\d\d)( \/ (\d\d):(\d\d))? UTC\b/g, (s, h, m, two, h2, m2) => {
+      const a = localClock(utcAt(+h, +m)).replace(/ \S+$/, ''), b = two ? localClock(utcAt(+h2, +m2)) : null;
+      return b ? `${a} / ${b}` : localClock(utcAt(+h, +m)); });
+}
+function setTimeMode(v){
+  DATA.ui.timeMode = v === 'local' ? 'local' : 'utc';
+  // Times are drawn in many panels and Vue components; a reload after the save
+  // redraws every one of them the same way, with nothing left in the old mode.
+  Promise.resolve(save()).then(() => location.reload());
+}
 function toggleZoneStyle(){
   DATA.ui.zoneStyle = DATA.ui.zoneStyle === 'offset' ? 'abbr' : 'offset';
   DATA.chars.forEach(c => renderLastCompleted(c.id));
@@ -2577,13 +2650,16 @@ const AREAS = [
   // "Daily" in the rail, with Weekly and Seasonal as extra rows into this same
   // area (stop-gap until Evercold, 22 Oct 2026). The key stays 'today' so saved
   // navigation state keeps working.
-  {key:'today', label:'Daily', frames:c => framesFor('routines', c)
+  // Layout D (12 Nov 2026): the area's rail link reads "Next Steps" and opens the
+  // next-steps frame; Daily, Weekly and Seasonal sit right under it, each with its meter.
+  {key:'today', label:'Next Steps', frames:c => framesFor('routines', c)
       .map(f => ({tab:'routines', frame:f.k, l:f.l, n:f.n, p:f.p}))
       .concat([{tab:'events', frame:'*', l:'Events', n:currentEvents().length, p:seasonalMeter(c)},
                {tab:'notes', frame:'trackers', l:'Trackers'},
                {tab:'notes', frame:'notes', l:'Notes'}]),
-    meter:c => todayMeter(c),
-    extra:[{label:'Weekly', frame:'routines:weekly', meter:c => weeklyMeter(c)},
+    meter:() => null,
+    extra:[{label:'Daily', frame:'routines:daily', meter:c => todayMeter(c)},
+           {label:'Weekly', frame:'routines:weekly', meter:c => weeklyMeter(c)},
            {label:'Seasonal', frame:'events:*', meter:c => seasonalMeter(c)}]},
   {key:'story', label:'Story', frames:() => [
       {tab:'overview', frame:'progress', l:'Quest categories'},
@@ -2593,7 +2669,7 @@ const AREAS = [
     meter:c => c.questTotals && c.questTotals.overall ? Math.round(pct(c.quests.overall, c.questTotals.overall)) : null},
   // Relics left Story on 24 Oct 2026 (user's call). FFXIV Collect's categories since 4 Nov
   // 2026: the frame key 'relics' stays, so saved navigation state keeps working.
-  {key:'relics', label:'Relics', frames:() => [{tab:'journey', frame:'relics', l:'Weapons'},
+  {key:'relics', label:'Relics', frames:() => [{tab:'journey', frame:'relic-jobs', l:'By job'}, {tab:'journey', frame:'relics', l:'Weapons'},
       {tab:'journey', frame:'relic-armor', l:'Armor'}, {tab:'journey', frame:'relic-tools', l:'Tools'},
       {tab:'journey', frame:'relic-garo', l:'GARO'}],
     meter:c => relicsMeter(c)},
@@ -2614,7 +2690,9 @@ const AREAS = [
       {tab:'hunts', frame:'@exp', l:'Hunts'},
       {tab:'journey', frame:'exploration', l:'Exploration'},
       {tab:'journey', frame:'mountspeed', l:'Mount speed'}]},
-  {key:'elsewhere', label:'Elsewhere', frames:() => [{tab:'elsewhere', frame:'*', l:'Other sites'}]}
+  {key:'elsewhere', label:'Elsewhere', frames:() => [{tab:'elsewhere', frame:'*', l:'Other sites'}]},
+  {key:'settings', label:'Settings', frames:() => [{tab:'settings', frame:'character', l:'Character'},
+      {tab:'settings', frame:'display', l:'Display'}, {tab:'settings', frame:'data', l:'Backup and import'}]}
 ];
 function areaFrameId(f){ return f.tab + ':' + f.frame; }
 
@@ -2734,6 +2812,9 @@ function applyArea(cid){
 function goArea(key){
   if(globalPageOpen()) showGlobalPage(null);
   areaState(DATA.activeId).area = key;
+  // Today is the front door (Layout D): its rail link always opens the Today frame.
+  // Other areas reopen the frame last used in them.
+  if(key === 'today') delete areaState(DATA.activeId).frames.today;
   applyArea(DATA.activeId);
   renderNav();
   setMobileRailOpen(false);
@@ -2757,7 +2838,39 @@ function renderNav(){
   renderRail();
   renderRoute();
   renderFrameRow();
+  renderSpot();
 }
+/* ---------- spotlight header (Layout D) ----------
+   The area's name in large serif, how old each part of the imported data is
+   (as a plain fact, not a warning), and four clocks: daily reset, GC and
+   squadron reset, weekly reset, Ocean Fishing boarding. */
+function spotAgo(iso){
+  if(!iso) return null;
+  const d = Math.floor((Date.now() - Date.parse(iso)) / 86400000);
+  return d < 1 ? 'today' : d === 1 ? '1 day ago' : d + ' days ago';
+}
+function fmtClock(ms){
+  const s = Math.max(0, Math.floor(ms / 1000)), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60), x = s % 60, p = v => String(v).padStart(2, '0');
+  return d ? `${d}d ${h}h ${p(m)}m` : `${p(h)}:${p(m)}:${p(x)}`;
+}
+function renderSpot(){
+  const t = document.getElementById('spot-title'); if(!t || !DATA) return;
+  const c = getChar(DATA.activeId); if(!c) return;
+  t.textContent = activeArea(DATA.activeId).label;
+  const parts = [['quests', c.tmSyncedAt], ['duties', c.dutyAsOf], ['cosmic tools', c.cosmicTools && c.cosmicTools.asOf]]
+    .filter(([, iso]) => iso).map(([n, iso]) => `${n} ${spotAgo(iso)}`);
+  document.getElementById('spot-tag').textContent = parts.length ? 'Data from the plugin export · ' + parts.join(' · ') : 'No plugin export yet · Import from Tales of Milestones to fill this in';
+  tickSpotClocks();
+}
+function tickSpotClocks(){
+  const box = document.getElementById('spot-clocks'); if(!box) return;
+  const now = new Date(), at = id => nextResetInstant(schedById(id), now, null) - now.getTime();
+  const oc = typeof oceanState === 'function' ? oceanState(now) : null;
+  const cl = [['Daily reset', at('daily15')], ['GC & squadron', at('daily20')], ['Weekly reset', at('weeklyTue')]];
+  if(oc) cl.push([oc.open ? 'Ocean Fishing · boarding' : 'Ocean Fishing', oc.msLeft]);
+  box.innerHTML = cl.map(([k, ms]) => `<div class="spot-clock"><span class="k">${k}</span><span class="v">${fmtClock(ms)}</span></div>`).join('');
+}
+setInterval(() => { if(document.getElementById('spot-clocks')) tickSpotClocks(); }, 1000);
 
 /* ---------- route line ----------
    One station per expansion. A segment fills to the quests done of the
@@ -2914,14 +3027,16 @@ function eventEnd(e){ return e.to === null ? Infinity : e.to; }
 /* Running and announced events, soonest first. */
 function currentEvents(){ const t = Date.now(); return feedEvents().filter(e => eventEnd(e) > t); }
 function runningEvents(){ const t = Date.now(); return currentEvents().filter(e => e.from <= t); }
-function fmtEventDay(ms){ return new Date(ms).toLocaleDateString('en-GB', {day:'numeric', month:'short', timeZone:'UTC'}); }
-function fmtEventTime(ms){ return new Date(ms).toISOString().slice(11, 16); }
+function fmtEventDay(ms){ return new Date(ms).toLocaleDateString('en-GB', localUtcMode() ? {day:'numeric', month:'short'} : {day:'numeric', month:'short', timeZone:'UTC'}); }
+function fmtEventTime(ms){ return localUtcMode() ? new Date(ms).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', hour12:false}) : new Date(ms).toISOString().slice(11, 16); }
+// The zone after an event time: "UTC", or the viewer's own zone in local mode.
+function eventZone(ms){ return localUtcMode() ? zoneLabel(new Date(ms)) : 'UTC'; }
 /* "7 Oct – 27 Oct", "31 Oct 02:00–04:00 UTC" for a broadcast, "From 28 Oct ·
    until Patch 8.0 (about 23 Feb)" for an event that runs until a patch. */
 /* Plain text: Vue escapes it. */
 function eventWhen(e){
   if(e.broadcast && e.to !== null)
-    return `${fmtEventDay(e.from)} ${fmtEventTime(e.from)}–${fmtEventTime(e.to)} UTC`;
+    return `${fmtEventDay(e.from)} ${fmtEventTime(e.from)}–${fmtEventTime(e.to)} ${eventZone(e.from)}`;
   if(e.note)
     return `From ${fmtEventDay(e.from)} · ${e.note.replace(/^Until/, 'until')}${e.estimated && e.to !== null ? ` (about ${fmtEventDay(e.to)})` : ''}`;
   return `${fmtEventDay(e.from)} – ${e.to !== null ? fmtEventDay(e.to) : '?'}`;
@@ -2993,7 +3108,8 @@ const RAIL_SECTIONS = [
   {key:'mentor',    label:'Mentor',    group:'Collections', ico:'✚'},
   {key:'notes',     label:'Notes',     group:'Personal',    ico:'✎'},
   {key:'events',    label:'Events',    group:'Personal',    ico:'✶'},
-  {key:'elsewhere', label:'Elsewhere', group:'Personal',    ico:'↗'}
+  {key:'elsewhere', label:'Elsewhere', group:'Personal',    ico:'↗'},
+  {key:'settings',  label:'Settings',  group:'Personal',    ico:'⚙'}
 ];
 /* Counts use the same filters the panels use, so the number beside a section
    is the number of rows that section will actually draw. */
@@ -3059,6 +3175,7 @@ function framesFor(section, c){
         .map(sec => ({k:frameSlug(sec), l:sec,
                       n:visible.filter(r => routineSection(r) === sec).length,
                       p:sectionMeter(c, sec === COOLDOWN_SECTION ? [COOLDOWN_SECTION, 'Monthly'] : [sec])}));
+      out.unshift({k:'next-steps', l:'Next Steps'});
       out.push({k:'last-completed', l:'Last completed',
                 n:(c.routines||[]).filter(r => r.lastDone).length});
       return out;
@@ -3091,13 +3208,15 @@ function framesFor(section, c){
       return [{k:'overview', l:'Overview'}].concat(COLLECTION_KINDS.map(k => ({k:frameSlug(k.key), l:k.label,
         n: hasCollections(c) ? ownedSet(c, k.key).size : null})));
     case 'journey':
-      return [{k:'questlines', l:'Questlines'}, {k:'relics', l:'Weapons'}, {k:'relic-armor', l:'Armor'},
+      return [{k:'questlines', l:'Questlines'}, {k:'relic-jobs', l:'By job'}, {k:'relics', l:'Weapons'}, {k:'relic-armor', l:'Armor'},
               {k:'relic-tools', l:'Tools'}, {k:'relic-garo', l:'GARO'}]
         .concat([{k:'seasonal', l:'Seasonal'},
               {k:'duties', l:'Duties', n: hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null},
               {k:'exploration', l:'Exploration'}, {k:'mountspeed', l:'Mount speed'}]);
     case 'notes':
       return [{k:'trackers', l:'Trackers'}, {k:'notes', l:'Notes'}];
+    case 'settings':
+      return [{k:'character', l:'Character'}, {k:'display', l:'Display'}, {k:'data', l:'Backup and import'}];
   }
   return [];
 }
@@ -3152,7 +3271,7 @@ const FrameRow = {
   setup: () => ({goAreaFrame}),
   template: `
     <button v-for="f in state.list" :key="f.id" type="button" role="tab" :aria-selected="String(f.on)" :class="f.on ? 'frame-btn on' : 'frame-btn'"
-      @click="goAreaFrame(f.id)">{{ f.l }}<template v-if="f.n"> <span class="frame-n">{{ f.n }}</span></template><template v-if="f.p"> <span class="frame-n">· {{ f.p }}%</span></template></button>`
+      @click="goAreaFrame(f.id)">{{ f.l }}<template v-if="f.n"><span class="frame-n">—{{ f.n }}</span></template><template v-if="f.p"> <span class="frame-n">· {{ f.p }}%</span></template></button>`
 };
 function renderFrameRow(){
   if(!DATA) return;
@@ -3294,7 +3413,7 @@ const ResetBar = {
       const due = visible.filter(r =>
         nextResetInstant(schedById(r.schedId), now, r.lastDone) === soonest);
       return {
-        name: String(schedById(due[0].schedId).label).split(' — ')[0],
+        name: tz(String(schedById(due[0].schedId).label).split(' — ')[0]),
         time: fmtCountdown(soonest - now.getTime()),
         what: due.length === 1 ? '· ' + due[0].label : '· ' + due.length + ' routines return',
         title: 'Returns at ' + new Date(soonest).toUTCString()
@@ -3353,7 +3472,7 @@ const FootSlot = {
     Vue.onUnmounted(() => { clearInterval(clock); clearInterval(rotor); });
 
     const label = e => e.broadcast && e.to !== null
-      ? `Live now · until ${fmtEventTime(e.to)} UTC`
+      ? `Live now · until ${fmtEventTime(e.to)} ${eventZone(e.to)}`
       : `Event · ${e.to === null ? (e.note || 'no end date') : `ends ${e.estimated ? 'about ' : ''}${fmtEventDay(e.to)}`}`;
     const left = e => e.to === null ? '—' : fmtCountdown(e.to - now.value);
     return {
@@ -3443,8 +3562,9 @@ function applyTheme(){
   document.querySelectorAll('.theme-switch button').forEach(b=>{
     b.classList.toggle('active', b.dataset.theme === theme);
   });
-  const sel = document.getElementById('theme-sel');
-  if(sel) sel.value = theme;
+  document.querySelectorAll('#theme-sel, .theme-sel').forEach(sel => { sel.value = theme; });
+  applyRoutineEdit();
+  document.querySelectorAll('#time-sel, .time-sel').forEach(ts => { ts.value = DATA.ui.timeMode === 'local' ? 'local' : 'utc'; });
 }
 
 function applyTab(cid, tab){
@@ -3956,8 +4076,29 @@ function societyRowView(c, name){
       ? `capped — needs ${INTERSOCIETAL_QUESTS[exp]}`
       : `capped — Bloodsworn is the max (no Intersocietal Quests exist for ${exp})`,
     // Manual entry shows the generic table's quota, the plugin's figures its own.
-    quota: c.societiesSynced ? quota : info.quota
+    quota: c.societiesSynced ? quota : info.quota,
+    ...societyBarAndUnlock(c, name, s, quota)
   };
+}
+/* Layout D (9 Nov 2026). A rank bar in the relic-bar shape: one cell per rank the
+   society has, each its own colour; ranks passed are solid and the current rank
+   fills by the reputation toward the next. And, when the export lists quests done
+   and the society's first story quest is not among them, the society is "not
+   unlocked": the row shows where to start (tribes.js, from the game files:
+   quest, giver, map, X/Y, level) instead of the bar. */
+const TRIBE_NORM = n => n.toLowerCase().replace(/ves$/, 'f').replace(/s$/, '');
+function societyBarAndUnlock(c, name, s, quota){
+  // validRanksFor can list rank 8 twice (a society whose own cap is 8); each rank is one cell.
+  const ranks = [...new Set(validRanksFor(name))];
+  const bar = ranks.map((r, i) => ({r, name: rankInfo(r).name, c: 'var(--tier-' + (i % 8 + 1) + ')', cur: r === s.rank,
+    fill: r < s.rank ? 100 : r === s.rank ? (quota === 0 ? 100 : quota ? Math.min(100, Math.round(s.points / quota * 100)) : 0) : 0}));
+  const done = ownedSet(c, 'questsDone');
+  const t = (window.TRIBES || []).find(x => TRIBE_NORM(x[1]) === TRIBE_NORM(name));
+  const u = t && (window.TRIBE_UNLOCK || []).find(x => x[0] === t[0]);
+  if(!done.size || !u || !u[1] || done.has(u[1])) return {bar, unlock: null};
+  const cap = w => w.charAt(0).toUpperCase() + w.slice(1);
+  return {bar, unlock: {quest: String(u[2]).replace(/^[-]\s*/, ''), giver: cap(u[3]), place: u[4],
+    x: (+u[5]).toFixed(1), y: (+u[6]).toFixed(1), lv: u[7]}};
 }
 // True once every society in the group is sitting at rank 8 — the point-earning cap for all
 // of them regardless of how far their individual ladder runs (Trusted for the four early-cap
@@ -4003,6 +4144,11 @@ const SocietyList = {
           <span v-if="r.capped" class="society-capped">{{ r.cappedText }}</span>
           <template v-else-if="r.synced"><span class="society-points">{{ r.points }}</span><span class="society-quota">/ {{ r.quota }}</span></template>
           <template v-else><input type="text" :id="state.cid + '-soc-points-' + r.id" v-init-value="r.points" style="text-align:right" @input="onSocietyPointsInput(state.cid, r.name)"><span class="society-quota">/ {{ r.quota }}</span></template>
+          <div v-if="r.unlock" class="soc-unlock"><span class="rj-st">NOT UNLOCKED</span> Unlock with <b>{{ r.unlock.quest }}</b> from {{ r.unlock.giver }} in {{ r.unlock.place }} (X: {{ r.unlock.x }} Y: {{ r.unlock.y }}) · Lv {{ r.unlock.lv }}</div>
+          <template v-else>
+            <div class="tbar soc-bar" role="img" :aria-label="r.name + ': ' + r.rankLabel"><i v-for="b in r.bar" :key="b.r" :class="{cur: b.cur}" :style="{'--c': b.c, background: 'linear-gradient(90deg,' + b.c + ' ' + b.fill + '%, color-mix(in srgb,' + b.c + ' 26%,transparent) ' + b.fill + '%)'}" :title="b.name"></i></div>
+            <div class="tlbl soc-bar" aria-hidden="true"><span v-for="b in r.bar" :key="b.r" :style="{flex: 1, '--c': b.c}">{{ b.name }}</span></div>
+          </template>
         </div>
       </div>
       <div v-if="g.inter" class="check-row">
@@ -5103,21 +5249,29 @@ const RoutineRow = {
   setup(props){
     const chList = challengeList(props.item);
     return {chList, chTip: chList.map(([name,desc])=>`${name} — ${desc}`).join('\n'),
-      schedules: RESET_SCHEDULES, clientList: CUSTOM_DELIVERY_CLIENTS,
-      toggleRoutine, onRoutineInput, onRoutineSchedChange, toggleRoutineHidden, removeRoutine, toggleChallengeInfo, toggleCustomClient};
+      schedules: RESET_SCHEDULES, clientList: CUSTOM_DELIVERY_CLIENTS, tzLabel: tz,
+      toggleRoutine, onRoutineInput, onRoutineSchedChange, toggleRoutineHidden, removeRoutine, toggleChallengeInfo, toggleCustomClient,
+      sv: subView(props.item), toggleSubPart, toggleSubAll, pickTankYou, schedLabel: id => schedById(id).label};
   },
   template: `
     <div class="routine-item" :class="{done: live.done, gated: live.gated, 'user-hidden': item.hidden}" :id="cid + '-rt-item-' + item.id">
       <input type="checkbox" :id="cid + '-rt-chk-' + item.id" :checked="live.done" :disabled="live.gated" @change="toggleRoutine(cid, item.id)">
       <span v-if="live.optional" class="routine-label routine-optional" :title="item.label">{{ live.optional }}</span>
-      <input v-else v-once type="text" class="routine-label" :id="cid + '-rt-label-' + item.id" :value="item.label" placeholder="e.g. Ixali dailies" @input="onRoutineInput(cid, item.id)">
-      <select :id="cid + '-rt-sched-' + item.id" :value="item.schedId" @change="onRoutineSchedChange(cid, item.id)"><option v-for="s in schedules" :key="s.id" :value="s.id">{{ s.label }}</option></select>
-      <input v-once type="text" class="routine-req" :id="cid + '-rt-req-' + item.id" :value="item.requires || ''" placeholder="any" title="Patch this unlocks in — blank means always available" @input="onRoutineInput(cid, item.id)">
+      <span v-if="!live.optional" class="routine-name rt-view-only">{{ item.label }}<small>{{ tzLabel(String(schedLabel(item.schedId)).split(' — ')[0]) }}</small></span>      <input v-if="!live.optional" v-once type="text" class="routine-label rt-edit-only" :id="cid + '-rt-label-' + item.id" :value="item.label" placeholder="e.g. Ixali dailies" @input="onRoutineInput(cid, item.id)">
+      <select class="rt-edit-only" :id="cid + '-rt-sched-' + item.id" :value="item.schedId" @change="onRoutineSchedChange(cid, item.id)"><option v-for="s in schedules" :key="s.id" :value="s.id">{{ tzLabel(s.label) }}</option></select>
+      <input v-once type="text" class="routine-req rt-edit-only" :id="cid + '-rt-req-' + item.id" :value="item.requires || ''" placeholder="any" title="Patch this unlocks in — blank means always available" @input="onRoutineInput(cid, item.id)">
       <span class="routine-due" :class="{soon: live.soon}" :id="cid + '-rt-due-' + item.id" :title="live.need ? 'needs ' + live.need : null">{{ live.gated ? 'locked' : live.due }}</span>
       <button v-if="chList.length" class="hide-btn" :title="chTip" @click="toggleChallengeInfo(cid, item.id)">{{ item.infoOpen ? '▾' : 'ⓘ' }}</button>
       <button v-if="item.seedKey === 'custom-deliveries'" class="hide-btn" :title="'Custom Delivery clients: ' + clients.count + ' of ' + clientList.length + ' unlocked'" @click="toggleChallengeInfo(cid, item.id)">{{ item.infoOpen ? '▾' : 'ⓘ' }}</button>
-      <button class="hide-btn" :class="{'is-hidden': item.hidden}" :id="cid + '-rt-hidebtn-' + item.id" :title="item.hidden ? 'Unhide this routine' : 'Hide — doesn\\'t apply to this character'" @click="toggleRoutineHidden(cid, item.id)">{{ item.hidden ? '◉' : '○' }}</button>
-      <button class="remove-btn" title="Remove this routine" @click="removeRoutine(cid, item.id)">×</button>
+      <button class="hide-btn rt-edit-only" :class="{'is-hidden': item.hidden}" :id="cid + '-rt-hidebtn-' + item.id" :title="item.hidden ? 'Unhide this routine' : 'Hide — doesn\\'t apply to this character'" @click="toggleRoutineHidden(cid, item.id)">{{ item.hidden ? '◉' : '○' }}</button>
+      <button class="remove-btn rt-edit-only" title="Remove this routine" @click="removeRoutine(cid, item.id)">×</button>
+    </div>
+    <div v-if="sv" class="sub-row" :class="{boxes: sv.boxes}">
+      <span v-if="sv.total" class="sub-cnt">{{ sv.n }} / {{ sv.total }}</span>
+      <template v-if="sv.pick"><button v-for="x in sv.pick" :key="x.p" type="button" class="sub" :aria-pressed="String(x.on)" @click="pickTankYou(cid, item.id, x.p)">{{ x.p }}</button></template>
+      <template v-else-if="sv.boxes"><button v-for="x in sv.parts" :key="x.p" type="button" class="sub-box" :aria-pressed="String(x.on)" :aria-label="item.label + ' ' + x.p" @click="toggleSubPart(cid, item.id, x.p)"></button></template>
+      <template v-else><button v-for="x in sv.parts" :key="x.p" type="button" class="sub" :aria-pressed="String(x.on)" @click="toggleSubPart(cid, item.id, x.p)">{{ x.p }}</button></template>
+      <span class="sub-hint">{{ sv.hint }}<span v-if="sv.linked" class="linked"> · Also counts for {{ sv.linked }}</span></span>
     </div>
     <div v-if="chList.length && item.infoOpen" class="jq-panel"><div v-for="([name, desc], i) in chList" :key="i" class="jq-row"><span class="qname">{{ name }}</span> <span class="hint">{{ desc }}</span></div></div>
     <div v-if="item.seedKey === 'custom-deliveries' && item.infoOpen" class="jq-panel">
@@ -5218,7 +5372,7 @@ function routineSnapshot(c){
   }).filter(Boolean)};
 }
 const RoutineList = {
-  components: {RoutineRow, HuntCompact},
+  components: {RoutineRow, HuntCompact, ChallengeLogPanel},
   props: ['state'],
   setup(props){
     const char = () => getChar(props.state.cid);
@@ -5238,6 +5392,7 @@ const RoutineList = {
         <div v-if="s.challenge" class="subhead with-toggle">{{ s.sec }}<button class="section-toggle" :class="{'is-off': !s.on}" :title="s.on ? 'Hide the Challenge Log for every character' : 'Show the Challenge Log again'" @click="toggleChallengeLog(state.cid)">{{ s.on ? '● on' : '○ off' }}</button></div>
         <div v-else class="subhead">{{ s.sec }}</div>
         <template v-if="s.collapsed"></template>
+        <challenge-log-panel v-else-if="s.challenge" :cid="state.cid" :tick="state.tick"></challenge-log-panel>
         <template v-else-if="s.groups">
           <div v-for="g in s.groups" :key="g.name" class="routine-subgroup">
             <div class="routine-subhead">{{ g.name }} <span style="opacity:.6">{{ g.count }}</span></div>
@@ -5255,6 +5410,7 @@ const RoutineList = {
 };
 function renderRoutines(cid){
   if(!document.getElementById(cid+'-routines')) return;
+  if(typeof renderNextSteps === 'function') renderNextSteps(cid);
   const c = getChar(cid);
   const patchEl = document.getElementById(cid+'-patch');
   if(patchEl && patchEl.value !== (c.patch||'')) patchEl.value = c.patch || '';
@@ -5373,10 +5529,95 @@ function removeRoutine(cid, id){
   renderRoutines(cid);
   scheduleSave();
 }
+/* ---- Routine sub-checks (Layout D, Haven's design, 9 Nov 2026) ----
+   Some routines are several small tasks: one tick per roulette, one per
+   crafter and gatherer for GC turn-ins, 12 boxes for allied society quests, and
+   a Leveling / High-level pick for Tank You. The ticks live on the routine
+   (item.subs = {at, on}) and clear at the routine's own reset. Ticking every
+   part ticks the routine; unticking one unticks it. Some parts also count for
+   Challenge Log entries (challenge-vue.js): a dungeon roulette for Feeling Lucky
+   (and so Dungeon Master), an allied society quest for Improving Society
+   Somewhat, a supply or provisioning turn-in for Give 'Em What They Want. */
+const SUB_ROULETTES = ['Leveling','High-level','Expert','Level Cap','Trials','Main Scenario','Guildhests','Alliance Raids','Normal Raids','Frontline'];
+const SUB_DUNGEON_ROULETTES = new Set(['Leveling','High-level','Expert','Level Cap']);
+const SUB_DEFS = {
+  'duty-roulette': {parts: SUB_ROULETTES, hint: 'One check per roulette'},
+  'gc-turnin': {parts: ['CRP','BSM','ARM','GSM','LTW','WVR','ALC','CUL','MIN','BTN','FSH'], hint: 'Supply = crafters, provisioning = gatherers'},
+  'allied-society': {parts: Array.from({length: 12}, (_, i) => String(i + 1)), boxes: true, hint: '12 daily allowances'},
+  'tank-you': {pick: ['Leveling','High-level'], hint: 'Pick the roulette you ran as a tank. It also ticks Duty Roulette.'}
+};
+const SUB_LOG = {'duty-roulette': 'Feeling Lucky', 'allied-society': 'Improving Society Somewhat I', 'gc-turnin': "Give 'Em What They Want I"};
+function subsOf(item){
+  const at = lastResetInstant(schedById(item.schedId), new Date());
+  if(!item.subs || item.subs.at !== at) item.subs = {at, on: {}};
+  return item.subs;
+}
+function subCount(item, part, on){
+  const name = SUB_LOG[item.seedKey];
+  if(!name || typeof clAdd !== 'function') return;
+  if(item.seedKey === 'duty-roulette' && !SUB_DUNGEON_ROULETTES.has(part)) return;
+  const row = (window.CHALLENGE_NOTES || []).find(r => r[1] === name);
+  if(row) return row[0];
+}
+function setSubPart(cid, item, part, on){
+  const s = subsOf(item), was = !!s.on[part];
+  if(was === on) return;
+  if(on) s.on[part] = true; else delete s.on[part];
+  // Remember which Challenge Log entries this tick raised, so unticking takes back
+  // only those (a tick on an entry already full raised nothing).
+  const logId = subCount(item, part, on);
+  s.counted = s.counted || {};
+  if(logId && on) s.counted[part] = clAddTracked(cid, logId);
+  else if(!on){ clRemoveIds(cid, s.counted[part]); delete s.counted[part]; }
+  const def = SUB_DEFS[item.seedKey];
+  if(def && def.parts) item.lastDone = def.parts.every(p => s.on[p]) ? (item.lastDone || Date.now()) : null;
+}
+function toggleSubPart(cid, id, part){
+  const c = getChar(cid), item = c && c.routines.find(r => r.id === id);
+  if(!item) return;
+  setSubPart(cid, item, part, !subsOf(item).on[part]);
+  afterSubChange(cid);
+}
+function toggleSubAll(cid, id){
+  const c = getChar(cid), item = c && c.routines.find(r => r.id === id), def = item && SUB_DEFS[item.seedKey];
+  if(!def || !def.parts) return;
+  const on = !def.parts.every(p => subsOf(item).on[p]);
+  def.parts.forEach(p => setSubPart(cid, item, p, on));
+  afterSubChange(cid);
+}
+/* Tank You: the pick ticks the same roulette on Duty Roulette; changing the pick
+   moves that tick; clearing it removes it. */
+function pickTankYou(cid, id, part){
+  const c = getChar(cid), item = c && c.routines.find(r => r.id === id);
+  if(!item) return;
+  const s = subsOf(item), prev = s.on.pick || null;
+  const dr = c.routines.find(r => r.seedKey === 'duty-roulette');
+  if(prev && dr) setSubPart(cid, dr, prev, false);
+  if(prev === part){ s.on = {}; item.lastDone = null; }
+  else { s.on = {pick: part}; item.lastDone = Date.now(); if(dr) setSubPart(cid, dr, part, true); }
+  afterSubChange(cid);
+}
+/* Routines show as clean rows (Layout D): tick box, name, reset time, countdown,
+   sub-checks. "Edit routines" shows the editing controls (name, schedule, patch,
+   hide, remove, reset to defaults, add). A class on <html> switches them, so no
+   row is rebuilt; DATA.ui.routineEdit keeps the choice. */
+function applyRoutineEdit(){ document.documentElement.classList.toggle('rt-edit', !!(DATA && DATA.ui && DATA.ui.routineEdit)); }
+function toggleRoutineEdit(){ DATA.ui.routineEdit = !DATA.ui.routineEdit; applyRoutineEdit(); scheduleSave(); }
+function afterSubChange(cid){ renderRoutines(cid); renderLastCompleted(cid); updateResetBar(); scheduleSave(); }
+function subView(item){
+  const def = SUB_DEFS[item.seedKey]; if(!def) return null;
+  const s = subsOf(item);
+  if(def.pick) return {pick: def.pick.map(p => ({p, on: s.on.pick === p})), hint: def.hint};
+  const parts = def.parts.map(p => ({p, on: !!s.on[p]}));
+  return {parts, boxes: !!def.boxes, n: parts.filter(x => x.on).length, total: parts.length, hint: def.hint,
+    linked: SUB_LOG[item.seedKey] ? (item.seedKey === 'duty-roulette' ? 'Feeling Lucky and Dungeon Master (dungeon roulettes)' : SUB_LOG[item.seedKey].replace(/ I$/, ' I and II')) : ''};
+}
 function toggleRoutine(cid, id){
   const item = getChar(cid).routines.find(i=>i.id===id);
   const chk = document.getElementById(`${cid}-rt-chk-${id}`);
   if(!item || !chk) return;
+  // A routine with sub-checks: the main box ticks or clears every part.
+  if(SUB_DEFS[item.seedKey] && SUB_DEFS[item.seedKey].parts){ toggleSubAll(cid, id); return; }
   item.lastDone = chk.checked ? Date.now() : null;
   // Recompute the due countdown immediately — otherwise it's stuck showing whatever it read
   // before the click (e.g. "now") until the next 30s periodic refresh or a page reload.

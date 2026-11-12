@@ -24,11 +24,12 @@ body{
   color:var(--text);
   font-family:var(--font-body);
   padding:0 20px 60px;
-  /* Every size on this page is hand-tuned px, not rem — scaling the root font-size
-     would do nothing. `zoom` reflows the page exactly like the browser's own zoom
-     does (unlike `transform: scale`, which doesn't), so 100% here behaves like the
-     130% users were already reaching for by hand on a 1080p monitor. */
-  zoom:1.3;
+  /* Layout D (Haven, 10 Nov 2026): drawn at 100%, as the redesign mockup is. The
+     earlier zoom:1.3 (for 1080p monitors) is gone; a player who wants it bigger
+     uses the browser's own zoom. Keep --zoom below equal to this. Base text is
+     14px with 1.5 line height, also as in the mockup. */
+  zoom:1;
+  font-size:14px;line-height:1.5;
 }
 /* Wide enough to use a desktop monitor, capped so prose in the instructions and
    notes does not run to an unreadable line length. Grouping sections into tabs
@@ -802,7 +803,7 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
 /* :root carries zoom:1.3. A vh resolves against the unzoomed viewport and is
    then scaled up, so a plain 100vh makes the rail 1.3 screens tall and pushes
    the pinned footer off the bottom. Keep --zoom equal to that zoom. */
-:root{--zoom:1.3}
+:root{--zoom:1}
 
 .shell{display:flex;align-items:flex-start;min-height:calc(100vh / var(--zoom))}
 
@@ -1412,3 +1413,189 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   .two-col{grid-template-columns:minmax(0,1fr)}
   .quest-grid{grid-template-columns:minmax(0,1.2fr) minmax(46px,.8fr) minmax(40px,.6fr) minmax(48px,.7fr);gap:5px;font-size:11.5px}
 }
+
+/* ---- Challenge Log panel (challenge-vue.js, Layout D) ---- */
+.cl-panel{display:flex;flex-direction:column;gap:8px}
+.cl-reset{font-size:12.5px;color:var(--text-dim)}
+.clbar{display:flex;flex-wrap:wrap;gap:6px;padding:2px 0 10px;border-bottom:1px solid var(--line)}
+.clbar button{all:unset;cursor:pointer;font-size:13px;color:var(--text-dim);border:1px solid var(--line);border-radius:999px;padding:4px 12px}
+.clbar button span{color:var(--text-dim);font-family:var(--font-mono);font-size:12px;margin-left:4px}
+.clbar button.on{color:var(--text);border-color:var(--gold)}
+.clbar button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.clbox{position:relative;max-height:min(70vh,640px);overflow-y:auto;overscroll-behavior:contain;padding-right:6px}
+.clsec h3{font:400 16px var(--font-display);color:var(--gold);margin:14px 0 4px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.clsec h3 small{font:12px var(--font-body);color:var(--text-dim)}
+.clgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));column-gap:20px}
+.cl-row{padding:10px 0;border-top:1px solid var(--line-soft);display:flex;flex-direction:column;gap:6px;min-width:0}
+.cl-row.done .cl-name{color:var(--text-dim)}
+.cl-head{display:flex;justify-content:space-between;gap:10px}
+.cl-name{display:flex;flex-direction:column}
+.cl-name small{font-size:12px;color:var(--text-dim)}
+.cl-cnt{font:700 12.5px var(--font-mono);color:var(--text-dim);white-space:nowrap}
+.cl-ctl{display:flex;align-items:center;gap:10px}
+.cl-ctl .step{all:unset;cursor:pointer;width:30px;height:30px;display:grid;place-items:center;border-radius:6px;background:var(--line-soft);color:var(--text);font-weight:700}
+.cl-ctl .step:focus-visible{outline:2px solid var(--gold)}
+.cl-ctl .n{font:700 20px var(--font-mono);min-width:2ch;text-align:center}
+.cl-ctl .of{color:var(--text-dim);font-family:var(--font-mono)}
+.clin{width:7ch;font:700 18px var(--font-mono);color:var(--text);background:var(--ink);border:1px solid var(--line);border-radius:6px;padding:3px 8px;text-align:right}
+.cl-desc{font-size:12.5px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px}
+.linked{font-size:12px;color:var(--teal)}
+.cl-foot{font-size:12.5px;color:var(--text-dim);padding-top:10px;border-top:1px solid var(--line)}
+
+/* ---- Relics by job (relics-vue.js, Layout D) ---- */
+:root{--tier-1:#8a93a6;--tier-2:#5cbf7a;--tier-3:#e0c050;--tier-4:#e08a4a;--tier-5:#b48ae0;--tier-6:#5ea8e0;--tier-7:#e06a6a;--tier-8:#e07ab8;
+  --low:#e06a6a;--low-bg:#4a1f24;--low-text:#ffb3b3;--part:#e0c050;--part-bg:#3d3312;--part-text:#ffe39a;--pick:#5cbf7a}
+.rj{display:flex;flex-direction:column;gap:10px}
+.rj-jobs{display:flex;flex-direction:column;gap:6px}
+.rj-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.rj-role{width:72px;font-size:12px;color:var(--text-dim)}
+.rj-job{all:unset;cursor:pointer;position:relative;font:600 12px var(--font-mono);color:var(--text-dim);border:1px solid var(--line);border-radius:5px;padding:4px 8px;min-width:30px;text-align:center}
+.rj-job.low{background:var(--low-bg);border-color:var(--low);color:var(--low-text)}
+.rj-job.part{background:var(--part-bg);border-color:var(--part);color:var(--part-text)}
+.rj-job.on{color:var(--ink);background:var(--pick);border-color:var(--pick)}
+.rj-job.has::after{content:"";position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:var(--teal);border:1px solid var(--panel)}
+.rj-job:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.rj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
+.rj-card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.rj-card h4{margin:0;font:400 16px var(--font-display);color:var(--gold)}
+.rj-card.dim h4{color:var(--text-dim)}
+.rj-card small{color:var(--text-dim);font-size:12.5px}
+.rj-st{align-self:flex-start;font:700 11px var(--font-mono);letter-spacing:.04em;padding:2px 7px;border-radius:4px;border:1px solid var(--line);color:var(--text-dim)}
+.rj-st.low{background:var(--low-bg);color:var(--low-text);border-color:var(--low)}
+.tbar{display:flex;gap:2px;margin-top:6px;height:9px}
+.tbar i{flex:1;min-width:3px;border-radius:2px;background:color-mix(in srgb,var(--c) 26%,transparent)}
+.tbar i.on{background:var(--c)}
+.tbar i.cur{outline:2px solid var(--text);outline-offset:1px}
+.tlbl{display:flex;gap:2px;margin-top:4px;font-size:11px;color:var(--text-dim)}
+.tlbl span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:2px solid var(--c);padding-left:4px}
+.society-item .soc-bar,.society-item .soc-unlock{grid-column:1/-1;flex-basis:100%}
+.soc-unlock{font-size:12.5px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:4px 6px;align-items:baseline}
+/* Collections availability (journey.js, Layout D) */
+.avail-tag{margin-left:8px;font:700 10.5px var(--font-mono);letter-spacing:.03em;padding:1px 6px;border-radius:4px;white-space:nowrap}
+.avail-tag.paused{background:var(--part-bg);color:var(--part-text);border:1px solid var(--part)}
+.avail-tag.ended{background:var(--low-bg);color:var(--low-text);border:1px solid var(--low)}
+.jr-table tr.gone td{opacity:.8}
+a.buy{color:var(--gold);text-decoration:underline;text-underline-offset:2px}
+.cz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr));gap:10px 20px}
+.cz small{color:var(--text-dim);font-size:12.5px}
+/* Next steps planner (planner-vue.js, Layout D) */
+.pl-lede{color:var(--text-dim);margin:0 0 10px}
+.pl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
+.pl-card{background:var(--panel);border:1px solid var(--gold-dim);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:5px}
+.pl-kind{font:400 16px var(--font-display);color:var(--gold)}
+.pl-title{font-weight:600;color:var(--text)}
+.pl-meta{font-size:12.5px;color:var(--text-dim)}
+.pl-exp{font:700 11px var(--font-mono);color:var(--ink);background:var(--gold);border-radius:3px;padding:0 5px;margin-right:6px}
+.pl-why{font-size:12.5px;color:var(--text-dim);display:flex;gap:8px;align-items:baseline}
+.pl-st{font:700 10.5px var(--font-mono);padding:1px 6px;border-radius:4px}
+.pl-st.ready{background:var(--teal);color:var(--ink)}
+.pl-st.wait{background:var(--part-bg);color:var(--part-text);border:1px solid var(--part)}
+.rl-job{display:flex;gap:8px;align-items:flex-start;padding:4px 0}
+.rl-job-body{flex:1;min-width:0}
+.rj-card .rl-panel{margin-top:6px}
+/* Routine sub-checks (app.js, Layout D) */
+.sub-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:0 0 8px 30px}
+.sub-row .sub{all:unset;cursor:pointer;font-size:12.5px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--text-dim)}
+.sub-row .sub[aria-pressed="true"]{border-color:var(--teal);color:var(--teal)}
+.sub-row .sub[aria-pressed="true"]::before{content:"✓ "}
+.sub-row .sub-box{all:unset;cursor:pointer;width:18px;height:18px;border:1px solid var(--text-dim);border-radius:4px}
+.sub-row .sub-box[aria-pressed="true"]{background:var(--teal);border-color:var(--teal)}
+.sub-row .sub:focus-visible,.sub-row .sub-box:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.sub-cnt{font:700 12px var(--font-mono);color:var(--text-dim);min-width:44px}
+.sub-hint{flex-basis:100%;font-size:12px;color:var(--text-dim)}
+/* Routine view vs edit mode (Layout D) */
+html:not(.rt-edit) .rt-edit-only{display:none!important}
+html.rt-edit .rt-view-only{display:none!important}
+.routine-name{flex:1;min-width:0;display:flex;flex-direction:column;font-size:14px;color:var(--text)}
+.routine-name small{font-size:12px;color:var(--text-dim)}
+html:not(.rt-edit) .routine-item{display:flex;align-items:center;gap:12px;padding:8px 0}
+html:not(.rt-edit) .routine-item input[type="checkbox"]{width:20px;height:20px;accent-color:var(--teal);flex:0 0 20px}
+html:not(.rt-edit) .routine-item.done .routine-name{color:var(--text-dim);text-decoration:line-through}
+/* A panel heading that belongs to some frames only (Next steps vs Routines). */
+.section h2[data-frame]:not(.frame-on){display:none}
+@media (min-width:1200px){ .pl-grid{grid-template-columns:repeat(5,minmax(0,1fr))} }
+.pl-more{margin-top:10px}
+/* ---- Spotlight header (Layout D) ---- */
+.spot{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 28px;padding:16px 20px 12px;border-bottom:1px solid var(--line)}
+.spot h1{margin:0;font:400 34px/1.1 var(--font-display);color:var(--gold)}
+.spot-tag{font-size:12.5px;color:var(--text-dim);margin-top:4px}
+.spot-clocks{display:flex;flex-wrap:wrap;gap:6px 26px}
+.spot-clock{display:flex;flex-direction:column;align-items:flex-end}
+.spot-clock .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)}
+.spot-clock .v{font:700 17px var(--font-mono);color:var(--text)}
+@media (max-width:820px){ .spot{padding:12px 16px} .spot h1{font-size:26px} .spot-clock{align-items:flex-start} }
+.pl-events{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pl-ev{display:flex;flex-direction:column;gap:2px;padding-top:8px;border-top:1px solid var(--line-soft)}
+.pl-ev a{color:var(--text);font-weight:600;text-decoration:none}
+.pl-ev a:hover{color:var(--gold)}
+/* Settings (Layout D) */
+.set-rows{display:flex;flex-direction:column;gap:10px;max-width:520px}
+.set-row{display:grid;grid-template-columns:140px minmax(0,1fr);align-items:center;gap:12px}
+.set-row span{color:var(--text-dim);font-size:13px}
+.set-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+/* ---- Layout D look across the panels (12 Nov 2026) ----
+   Serif gold titles in place of small uppercase grey labels; tighter boxes, as
+   D's cards; full width for data; faint text raised to 4.5:1 (WCAG 2.2 AA). */
+:root:not([data-theme]){--text-faint:#858d9d}
+.section{border-radius:6px;padding:14px 16px;margin-bottom:14px}
+.subhead{font:400 16px/1.3 var(--font-display);text-transform:none;letter-spacing:0;color:var(--gold);margin:4px 0 8px}
+.routine-subhead{font:400 14px var(--font-display);color:var(--gold);text-transform:none;letter-spacing:0}
+.pane-body{max-width:none}
+:root[data-theme="midnight"]{--text-faint:#8b8b94}
+/* Expansion tags in Lodestone's own patch-note colours (2.x–7.x), 12 Nov 2026.
+   Text colour per tag passes WCAG AA (4.5:1): white on ARR, SB, ShB; dark on HW, EW, DT. */
+.pl-exp.exp-ARR{background:#666666;color:#fff}
+.pl-exp.exp-HW{background:#4c7ee8;color:#12151d}
+.pl-exp.exp-SB{background:#a22a3e;color:#fff}
+.pl-exp.exp-ShB{background:#5047b3;color:#fff}
+.pl-exp.exp-EW{background:#bf7813;color:#12151d}
+.pl-exp.exp-DT{background:#e5b522;color:#12151d}
+.rj-card h4 .pl-exp{font-size:11px;vertical-align:2px;margin-left:4px}
+
+/* ---- Light (12 Nov 2026): replaces the grey "Daylight" theme with a plain white
+   mode. The saved value stays "daylight", so anyone who chose Daylight gets this.
+   Every text colour is at least 4.5:1 on its background (WCAG 2.2 AA). */
+:root[data-theme="daylight"]{
+  color-scheme:light;
+  --ink:#ffffff; --panel:#f5f6f8; --panel2:#eef0f3; --line:#d5d9df; --line-soft:#e6e9ed;
+  --text:#1b1f24; --text-dim:#4a5160; --text-faint:#5c6370;
+  --gold:#8a6200; --gold-dim:#b8933f; --teal:#1d7466; --teal-dim:#8cc7bd; --rose:#b03a3a; --sage:#3d7a3d;
+  --low:#c0392b; --low-bg:#fde4e2; --low-text:#8a1c1c;
+  --part:#b38600; --part-bg:#fff3cc; --part-text:#5c4300; --pick:#2e7d4f;
+}
+:root[data-theme="daylight"] body{background:var(--ink);color:var(--text)}
+:root[data-theme="daylight"] .section,
+:root[data-theme="daylight"] .instructions-panel,
+:root[data-theme="daylight"] .tm-import-panel{border-radius:6px}
+:root[data-theme="daylight"] .tab-btn{border-radius:5px 5px 0 0}
+:root[data-theme="daylight"] .rj-job.on{color:#fff}
+:root[data-theme="daylight"] .pl-st.ready{color:#fff}
+
+/* ---- Lunar night (12 Nov 2026): replaces Poetic's navy-and-gold, which read as
+   a stock AI palette. A violet-tinted night sky with a moonstone accent and a pale
+   aether green, after the "Lunar" in Pandora Lunar (Lunatic Pandora, FFVIII).
+   The saved theme name stays "poetic", so nobody's choice is lost. Text colours
+   are 5.7:1 or more; --gold-dim is for borders only (3:1 is enough there). */
+:root:not([data-theme]){
+  --ink:#14131d; --panel:#1d1b29; --panel2:#1a1826; --line:#2c2a3d; --line-soft:#242236;
+  --text:#e9e6f2; --text-dim:#a9a5c4; --text-faint:#9692b3;
+  --gold:#c9c3ff; --gold-dim:#7d77b3; --teal:#8fd3c4; --teal-dim:#4f8a7f;
+}
+
+/* ---- Crystarium (12 Nov 2026): replaces Midnight's near-black and red, which read
+   as a stock palette. Deep crystal blue with a crystal cyan accent and lavender
+   for tags, after the Crystarium (Shadowbringers). The saved theme name stays
+   "midnight". Text 6:1 or more; --gold-dim is for borders only. */
+:root[data-theme="midnight"]{
+  --ink:#0e1620; --panel:#15222f; --panel2:#122030; --line:#223447; --line-soft:#1b2b3b;
+  --text:#e6eef4; --text-dim:#9fb3c6; --text-faint:#8aa0b4;
+  --accent:#7fd6e6; --gold:#7fd6e6; --gold-dim:#3f7f8c; --teal:#c9b6f2; --teal-dim:#6f5fa0;
+  --font-display:Georgia,'Times New Roman',serif;
+}
+:root[data-theme="midnight"] .section h2,
+:root[data-theme="midnight"] .instructions-panel h2,
+:root[data-theme="midnight"] .masthead h1{color:var(--gold)}
+:root[data-theme="midnight"] .section,
+:root[data-theme="midnight"] .instructions-panel,
+:root[data-theme="midnight"] .tm-import-panel{border-radius:6px;padding:14px 16px}

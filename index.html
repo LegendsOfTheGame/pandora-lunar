@@ -19,11 +19,6 @@
   <nav aria-label="Site">
     <a href="https://legendmemoria.org/" target="_blank" rel="noopener" title="legendmemoria.org">Studio</a><a href="./" class="on" title="This page">Adventurer's Ledger</a><span class="soon" title="Not built yet">Lunatic Pandora</span><details class="nav-menu" id="nav-challenges"><summary>Challenges</summary><div class="nav-pop"><a href="https://legendmemoria.org/apex/" title="Weekly challenges for Apex Legends">Apex Legends</a><a href="https://github.com/LegendsOfTheGame/Game-Challenge-Tracker/issues/new?title=Game%20request%3A%20" target="_blank" rel="noopener" title="Open a GitHub issue to ask for another game">Request another game</a></div></details>
   </nav>
-  <div class="who">
-    <select id="theme-sel" aria-label="Theme" onchange="setTheme(this.value)">
-      <option value="poetic">Poetic</option><option value="midnight">Midnight</option><option value="daylight">Daylight</option>
-    </select>
-  </div>
 </header>
 <button type="button" class="rail-backdrop" id="rail-backdrop"
   aria-label="Close navigation" onclick="setMobileRailOpen(false)" hidden></button>
@@ -36,7 +31,7 @@
   <nav class="rail" id="rail">
     <div class="rail-scroll">
       <div class="switcher" id="switcher"></div>
-      <div class="cap-note" id="cap-note" style="display:none">Up to 3 characters per browser. Need more? Use a second browser (e.g. Firefox alongside Edge) &mdash; each keeps its own separate storage.</div>
+      <div class="cap-note" id="cap-note" style="display:none">Up to 8 characters per browser. Need more? Use a second browser (e.g. Firefox alongside Edge) &mdash; each keeps its own separate storage.</div>
       <nav class="areas" id="rail-nav" aria-label="Areas"></nav>
     </div>
 
@@ -61,6 +56,8 @@
 
   <!-- ================= pane ================= -->
   <main class="pane">
+    <!-- Spotlight header (Layout D): the area's name, how old the data is, and the reset clocks. -->
+    <header class="spot" id="spot"><div><h1 id="spot-title">Today</h1><div class="spot-tag" id="spot-tag"></div></div><div class="spot-clocks" id="spot-clocks"></div></header>
     <nav class="route" id="route" aria-label="Expansions"></nav>
     <div class="pane-top">
       <div class="frame-row" id="frame-row" role="tablist"></div>
@@ -87,7 +84,7 @@
         <h3>Characters</h3>
         <p>Open the character list at the top of the rail. Select <code>+ Add a character</code>. Type a name. Then complete the parts that apply to you. No field is mandatory.</p>
         <p>To change character, select the character in the same list.</p>
-        <p>Each browser holds a maximum of 3 characters. To track more than 3 characters, use a second browser. Each browser keeps its own storage. The two sets of data stay separate.</p>
+        <p>Each browser holds a maximum of 8 characters. To track more than 8 characters, use a second browser. Each browser keeps its own storage. The two sets of data stay separate.</p>
         <p>To remove a character, select the character in the list. Then click <code>Remove character</code> at the top of the pane.</p>
 
         <h3>Backups</h3>
@@ -166,7 +163,7 @@
 
       <div class="save-note"><span class="dot"></span><span id="save-status">Saved locally</span></div>
       <div class="copyright">&copy; Legends of the Game</div>
-      <div class="build-stamp">Last updated 09/11/2026 @ 03:53 UTC</div>
+      <div class="build-stamp">Last updated 12/11/2026 @ 17:32 UTC</div>
 
     </div>
   </main>
@@ -190,11 +187,20 @@
 <script src="jobquest-items.js"></script>
 <script src="tm-export-tables.js"></script>
 <script src="collection-lists.js"></script>
+<script src="collection-extra.js"></script>
 <script src="relic-stages.js"></script>
 <script src="events-feed.js"></script>
 <script src="vendor/vue.global.prod.js"></script>
 <script src="ocean.js"></script>
+<script src="relic-unlocks.js"></script>
+<script src="tribes.js"></script>
+<script src="currents.js"></script>
+<script src="quest-graph.js"></script>
+<script src="duties.js"></script>
+<script src="planner-vue.js"></script>
 <script src="relics-vue.js"></script>
+<script src="challenge-log.js"></script>
+<script src="challenge-vue.js"></script>
 <script src="journey.js"></script>
 <script src="app.js"></script>
 </body>

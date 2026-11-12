@@ -125,6 +125,46 @@ const EmptyTm = {
 };
 
 /* ---- Collections ---- */
+/* Availability (Layout D, Haven's rules, 9 Nov 2026), for mounts and minions,
+   from every FFXIV Collect source (COLLECTION_EXTRA in collection-extra.js):
+   - open: any source works now (Online Store, a vendor, a collaboration running now);
+   - paused ("Temporarily unavailable"): no source works now, but one is a
+     collaboration that has run more than once (wiki "event rerun" lines);
+   - ended ("No longer available"): every source was one-time: pre-orders (not the
+     expansion now on pre-order), promotions, Fan Festivals, dated Twitch campaigns,
+     the Legacy Campaign, China-only store, past seasonal events, one-off collabs.
+   An event dated this year ends only after the month it usually ends, or when the
+   Lodestone list shows it over. A store item gets a link to its store page. */
+const COLLAB_RUNS = [[/Final Fantasy XVI\b/i, 1, 2024], [/Final Fantasy XV\b/i, 3, 2024], [/Final Fantasy XIII\b|Lightning/i, 1, 2014],
+  [/Final Fantasy XI\b/i, 6, 2026], [/Dragon Quest X/i, 7, 2026], [/Yo-kai/i, 5, 2026], [/Fall Guys/i, 4, 2025]];
+const USUAL_END = {'heavensturn':1, "valentione's day":2, "little ladies' day":3, 'hatching-tide':4, 'make it rain':7, 'moonfire faire':8, 'the rising':9, "all saints' wake":11, 'starlight celebration':12};
+function availFeed(){ return (typeof EVENTS_FEED !== 'undefined' ? EVENTS_FEED.events : []).map(e => ({t: String(e.title || e.name || '').toLowerCase(), start: e.start * 1000, end: e.end ? e.end * 1000 : null})); }
+function runningNow(name){ const now = Date.now(); return availFeed().some(e => e.t.includes(name) && e.start <= now && (!e.end || e.end > now)); }
+function srcState(text){
+  const now = new Date(), Y = now.getUTCFullYear(), M = now.getUTCMonth() + 1;
+  if(/Evercold\s+Pre-?order/i.test(text)) return 'open';
+  if(/Collaboration/i.test(text)){
+    const key = text.replace(/\s*-.*$/, '').replace(/\s*Collaboration.*$/i, '').replace(/^\d+ MGF \(/, '').toLowerCase().trim();
+    if(runningNow(key)) return 'open';
+    const c = COLLAB_RUNS.find(([re]) => re.test(text)); return c && c[1] > 1 ? 'paused' : 'ended';
+  }
+  if(/Pre-?order|Promotion|Fan Fest|Twitch Campaign|Legacy Campaign|China Only/i.test(text)) return 'ended';
+  const y = text.match(/\((\d{4})\)/);
+  if(y){ const yr = +y[1]; if(yr < Y) return 'ended'; if(yr > Y) return 'open';
+    const name = text.replace(/\s*\(\d{4}\)/, '').toLowerCase();
+    if(runningNow(name)) return 'open';
+    if(availFeed().some(e => e.t.includes(name) && e.end && e.end <= Date.now() && new Date(e.end).getUTCFullYear() === Y)) return 'ended';
+    const k = Object.keys(USUAL_END).find(k => name.includes(k)); return k && USUAL_END[k] < M ? 'ended' : 'open'; }
+  return 'open';
+}
+function itemAvail(key, r){
+  const ex = (typeof COLLECTION_EXTRA !== 'undefined' && COLLECTION_EXTRA.sources[key]) || null;
+  if(!ex) return {how: [r[3], r[4]].filter(Boolean).join(' · '), state: 'open', store: null};
+  const src = ex[r[0]] || [[r[3], r[4]]], st = src.map(s => srcState(s[1]));
+  const store = src.some(s => s[1] === 'Online Store') ? (COLLECTION_EXTRA.store[key] || {})[r[0]] || null : null;
+  return {how: src.map(s => s[1]).join(' · '), state: st.includes('open') ? 'open' : st.includes('paused') ? 'paused' : 'ended', store};
+}
+const AVAIL_LABEL = {paused: 'Temporarily unavailable', ended: 'No longer available'};
 let collOwnFilter = 'all';
 function setCollFilter(cid, v){ collOwnFilter = v; renderCollections(cid); }
 
@@ -146,8 +186,13 @@ const CollectionsPanel = {
       const kinds = COLLECTION_KINDS.map(k => {
         const all = lists[k.key] || [], owned = ownedSet(c, k.key);
         const have = all.filter(r => owned.has(r[0])).length;
-        const rows = all.filter(r => collOwnFilter === 'all' || (collOwnFilter === 'owned') === owned.has(r[0]))
-          .map(r => ({id: r[0], name: r[1], when: r[2], how: [r[3], r[4]].filter(Boolean).join(' · '), own: owned.has(r[0])}));
+        const ORDER = {open: 0, paused: 1, ended: 2};
+        let rows = all.filter(r => collOwnFilter === 'all' || (collOwnFilter === 'owned') === owned.has(r[0]))
+          .map(r => { const a = itemAvail(k.key, r);
+            return {id: r[0], name: r[1], when: r[2], how: a.how, own: owned.has(r[0]), state: a.state, store: a.store,
+              tag: owned.has(r[0]) ? '' : AVAIL_LABEL[a.state] || ''}; });
+        // Missing items: the ones you can get first, then temporarily unavailable, then no longer available.
+        if(collOwnFilter === 'missing') rows = rows.sort((a, b) => ORDER[a.state] - ORDER[b.state]);
         return {key: k.key, frame: frameSlug(k.key), label: k.label, note: k.note, game: !!k.game,
                 have, total: all.length, pct: jrPct(have, all.length), rows};
       });
@@ -172,7 +217,7 @@ const CollectionsPanel = {
         <div class="jr-chips"><button v-for="v in ['all','owned','missing']" :key="v" class="tab-btn" :class="{active: view.filter === v}" @click="setFilter(v)">{{ v[0].toUpperCase() + v.slice(1) }}</button></div>
         <div class="jr-scroll"><table class="jr-table"><tbody>
           <tr><th></th><th>Name</th><th>{{ k.game ? 'Expansion' : 'Patch' }}</th><th>{{ k.game ? 'Where' : 'How to get it' }}</th></tr>
-          <tr v-for="r in k.rows" :key="r.id" :class="{have: r.own}"><td>{{ r.own ? '✓' : '' }}</td><td>{{ r.name }}</td><td class="jr-v">{{ r.when }}</td><td class="jr-note">{{ r.how }}</td></tr>
+          <tr v-for="r in k.rows" :key="r.id" :class="{have: r.own, gone: r.state === 'ended' && !r.own}"><td>{{ r.own ? '✓' : '' }}</td><td>{{ r.name }}<span v-if="r.tag" class="avail-tag" :class="r.state">{{ r.tag }}</span></td><td class="jr-v">{{ r.when }}</td><td class="jr-note">{{ r.how }}<template v-if="r.store && !r.own"> · <a class="buy" :href="'https://store.finalfantasyxiv.com/ffxivstore/en-us/product/' + r.store" target="_blank" rel="noopener">Buy on the Online Store</a></template></td></tr>
         </tbody></table></div>
       </div>
     </template>`
@@ -436,7 +481,7 @@ function relicStageName(code, job, stage){
    draw. The Relics frames are RelicsPanel (relics-vue.js), which take the tick as a
    prop, so an open panel stays open when renderJourney runs. */
 const JourneyPanel = {
-  components: {EmptyTm, GenreList, RelicsPanel},
+  components: {EmptyTm, GenreList, RelicsPanel, RelicsByJob, RelicLineCards},
   props: ['state'],
   setup(props){
     const view = Vue.computed(() => {
@@ -471,7 +516,18 @@ const JourneyPanel = {
           ['Aetherytes attuned', (L.aetherytes||[]).length, W.aetherytes],
           ['Porter stops registered', W.porters.filter(id => porters.has(id)).length, W.porters.length]
         ].map(([label, have, total]) => ({label, have, total})),
-        zones: Object.keys(W.zones).map(id => ({id, name: W.zones[id], done: zonesDone.has(+id)}))
+        zones: Object.keys(W.zones).map(id => ({id, name: W.zones[id], done: zonesDone.has(+id)})),
+        /* Aether currents by zone (Layout D): one cell per current, quest currents
+           first (yellow) then field currents (green), as the game's Aether Currents
+           window colours them; owned cells solid. From the game files (currents.js):
+           since Dawntrail, HW–EW zones need 9 (5 quest, 4 field), Azys Lla 5, DT 15. */
+        byZone: (() => { const own = new Set(L.currents || []), EXN = ['ARR','HW','SB','ShB','EW','DT'];
+          const Z = typeof CURRENT_ZONES !== 'undefined' ? CURRENT_ZONES : [];
+          return EXN.map((e, x) => ({exp: e, zones: Z.filter(z => z[2] === x).map(([sid, zone, , cur]) => {
+            const q = cur.filter(c => c[1]), f = cur.filter(c => !c[1]), has = c => own.has(c[0]);
+            return {sid, zone, n: cur.filter(has).length, total: cur.length, flying: zonesDone.has(sid),
+              qn: q.filter(has).length, qt: q.length, fn: f.filter(has).length, ft: f.length,
+              cells: q.map(c => ({q: 1, on: has(c)})).concat(f.map(c => ({q: 0, on: has(c)})))}; })})).filter(g => g.zones.length); })()
       };
 
       return {tick, c, asOf: collectionsAsOfText(c),
@@ -486,9 +542,10 @@ const JourneyPanel = {
     <template v-else>
       <div class="jr-note">{{ view.asOf }}</div>
       <div data-frame="questlines"><genre-list :list="view.questlines" @toggle="toggle"></genre-list></div>
-      <div data-frame="relics"><relics-panel :c="view.c" kind="weapons" :tick="view.tick"></relics-panel></div>
+      <div data-frame="relics"><relic-line-cards :c="view.c" kind="weapons" :tick="view.tick"></relic-line-cards></div>
       <div data-frame="relic-armor"><relics-panel :c="view.c" kind="armor" :tick="view.tick"></relics-panel></div>
-      <div data-frame="relic-tools"><relics-panel :c="view.c" kind="tools" :tick="view.tick"></relics-panel></div>
+      <div data-frame="relic-tools"><relic-line-cards :c="view.c" kind="tools" :tick="view.tick"></relic-line-cards></div>
+      <div data-frame="relic-jobs"><relics-by-job :c="view.c" :tick="view.tick"></relics-by-job></div>
       <div data-frame="relic-garo"><relics-panel :c="view.c" kind="garo" :tick="view.tick"></relics-panel></div>
       <div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div><genre-list :list="view.seasonal" @toggle="toggle"></genre-list></div>
       <div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>
@@ -505,6 +562,16 @@ const JourneyPanel = {
           <div v-for="r in view.explore.rows" :key="r.label" class="jr-row"><span>{{ r.label }}</span><span class="jr-v">{{ r.have }} / {{ r.total }}</span><div class="jr-bar"><i :style="{width: jrPct(r.have, r.total) + '%'}"></i></div></div>
         </div>
         <div class="subhead" style="margin-top:10px">Flying zones</div><div class="jr-duties"><span v-for="z in view.explore.zones" :key="z.id" :class="{done: z.done}">{{ z.name }}</span></div>
+        <div v-for="g in view.explore.byZone" :key="g.exp" class="cz-exp">
+          <div class="subhead" style="margin-top:12px">Aether currents · {{ g.exp }}</div>
+          <div class="cz-grid">
+            <div v-for="z in g.zones" :key="z.sid" class="cz">
+              <div><b>{{ z.zone }}</b> <small>{{ z.n }} of {{ z.total }}{{ z.flying ? ' · flying unlocked' : '' }}</small></div>
+              <div class="tbar" role="img" :aria-label="z.zone + ': ' + z.n + ' of ' + z.total + ' aether currents'"><i v-for="(x, i) in z.cells" :key="i" :class="{on: x.on}" :style="{'--c': x.q ? 'var(--tier-3)' : 'var(--tier-2)'}"></i></div>
+              <div class="tlbl" aria-hidden="true"><span :style="{flex: z.qt, '--c': 'var(--tier-3)'}">Quest {{ z.qn }}/{{ z.qt }}</span><span v-if="z.ft" :style="{flex: z.ft, '--c': 'var(--tier-2)'}">Field {{ z.fn }}/{{ z.ft }}</span></div>
+            </div>
+          </div>
+        </div>
       </div>
       <div data-frame="mountspeed">
         <div v-if="!view.speed" class="jr-note">No mount speed yet. Import a newer Tales of Milestones export (Copy everything).</div>
