@@ -18,14 +18,25 @@ let PL_G = null;
 function plGraph(){
   if(PL_G) return PL_G;
   const G = window.QUEST_GRAPH || [], Q = new Map(G.map(r => [r[0], r]));
-  const kids = new Map(); for(const r of G) for(const p of r[6]){ if(!kids.has(p)) kids.set(p, []); kids.get(p).push(r[0]); }
   const byName = new Map(); for(const r of G) if(!byName.has(r[1])) byName.set(r[1], r);
   const dutyUnlock = new Map(G.filter(r => r[18]).map(r => [r[18], r[0]]));
   const openers = G.filter(r => !r[6].length && r[2] === 0 && r[8] === 1 && /^Coming to /.test(r[1]));
-  return PL_G = {G, Q, kids, byName, dutyUnlock, openers};
+  return PL_G = {G, Q, byName, dutyUnlock, openers};
 }
 const plClean = s => String(s).replace(/^[-]\s*/, '').trim();
+/* The planner scans the whole quest graph, and the routine list redraws it on every
+   tick. Its answer depends only on the imported data (a new object on each import)
+   and the job levels, so it is kept per character until one of those changes. */
+const PL_CACHE = new WeakMap();
 function plView(c){
+  const lv = JSON.stringify([c.combat, c.craft, c.gather]);
+  const hit = PL_CACHE.get(c);
+  if(hit && hit.tc === c.tmCollections && hit.lv === lv) return hit.view;
+  const view = buildPlView(c);
+  PL_CACHE.set(c, {tc: c.tmCollections, lv, view});
+  return view;
+}
+function buildPlView(c){
   const {G, Q, byName, dutyUnlock, openers} = plGraph();
   const done = ownedSet(c, 'questsDone');
   if(!G.length || !done.size) return null;

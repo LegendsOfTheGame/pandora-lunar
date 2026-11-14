@@ -1513,6 +1513,8 @@ html:not(.rt-edit) .routine-item input[type="checkbox"]{width:20px;height:20px;a
 html:not(.rt-edit) .routine-item.done .routine-name{color:var(--text-dim);text-decoration:line-through}
 /* A panel heading that belongs to some frames only (Next steps vs Routines). */
 .section h2[data-frame]:not(.frame-on){display:none}
+/* [data-frame].frame-on sets display:block, which beats .section h2's flex. */
+.section h2[data-frame].frame-on{display:flex}
 @media (min-width:1200px){ .pl-grid{grid-template-columns:repeat(5,minmax(0,1fr))} }
 .pl-more{margin-top:10px}
 /* ---- Spotlight header (Layout D) ---- */

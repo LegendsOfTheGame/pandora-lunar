@@ -109,7 +109,19 @@ function tmCollectionsDiffRows(p, c){
 function inRoute(ex){ const r = routeExp(); return r === null || ex === r; }
 function patchExpansion(patch){ return parseInt(patch, 10) - 2; }
 
-function ownedSet(c, key){ return new Set(((c.tmCollections || {}).lists || {})[key] || []); }
+/* One Set per stored list, made once and reused. questsDone holds thousands of ids and
+   this is asked for dozens of times per click. An import stores new arrays, so the
+   cache, keyed by the array, cannot return an old answer. Callers must not change
+   the Set they get. */
+const OWNED_SETS = new WeakMap();
+const NO_OWNED = new Set();
+function ownedSet(c, key){
+  const list = ((c.tmCollections || {}).lists || {})[key];
+  if(!Array.isArray(list)) return NO_OWNED;
+  let set = OWNED_SETS.get(list);
+  if(!set){ set = new Set(list); OWNED_SETS.set(list, set); }
+  return set;
+}
 function hasCollections(c){ return !!(c.tmCollections && c.tmCollections.lists); }
 function jrPct(n, d){ return d ? Math.round(n / d * 100) : 0; }
 function collectionsAsOfText(c){
@@ -157,7 +169,15 @@ function srcState(text){
     const k = Object.keys(USUAL_END).find(k => name.includes(k)); return k && USUAL_END[k] < M ? 'ended' : 'open'; }
   return 'open';
 }
+/* Worked out once per item per page load. The answer moves only with the calendar and
+   the events feed, and a page open for a day reloads itself (reloadIfStaleAndHidden). */
+const AVAIL_CACHE = new Map();
 function itemAvail(key, r){
+  const id = key + ':' + r[0];
+  if(!AVAIL_CACHE.has(id)) AVAIL_CACHE.set(id, itemAvailNow(key, r));
+  return AVAIL_CACHE.get(id);
+}
+function itemAvailNow(key, r){
   const ex = (typeof COLLECTION_EXTRA !== 'undefined' && COLLECTION_EXTRA.sources[key]) || null;
   if(!ex) return {how: [r[3], r[4]].filter(Boolean).join(' · '), state: 'open', store: null};
   const src = ex[r[0]] || [[r[3], r[4]]], st = src.map(s => srcState(s[1]));
@@ -175,8 +195,12 @@ const CollectionsPanel = {
   components: {EmptyTm},
   props: ['state'],
   setup(props){
+    // Only the list whose frame is on gets its rows (state.frame, set by applyFrames in
+    // app.js; '*' shows all). Drawing every row of every list, about 4,550 rows per
+    // character, was the largest cost on the page.
     const view = Vue.computed(() => {
       props.state.tick;
+      const shown = props.state.frame;
       const c = getChar(props.state.cid);
       if(!c || !hasCollections(c)) return null;
       const source = (typeof COLLECTION_LISTS !== 'undefined' && COLLECTION_LISTS.lists) || {};
@@ -187,7 +211,8 @@ const CollectionsPanel = {
         const all = lists[k.key] || [], owned = ownedSet(c, k.key);
         const have = all.filter(r => owned.has(r[0])).length;
         const ORDER = {open: 0, paused: 1, ended: 2};
-        let rows = all.filter(r => collOwnFilter === 'all' || (collOwnFilter === 'owned') === owned.has(r[0]))
+        const open = shown === '*' || shown === frameSlug(k.key);
+        let rows = !open ? [] : all.filter(r => collOwnFilter === 'all' || (collOwnFilter === 'owned') === owned.has(r[0]))
           .map(r => { const a = itemAvail(k.key, r);
             return {id: r[0], name: r[1], when: r[2], how: a.how, own: owned.has(r[0]), state: a.state, store: a.store,
               tag: owned.has(r[0]) ? '' : AVAIL_LABEL[a.state] || ''}; });
@@ -456,7 +481,10 @@ function heldRelics(c){
 }
 
 /* Rail meter: weapon items complete of all weapon items, the Weapons frame's totals. */
-function relicsMeter(c){
+/* Kept until the next import (perImport in app.js): it builds every weapon cell to
+   count them, and the rail asks for it on every click. */
+function relicsMeter(c){ return perImport(c, 'relics', () => relicsMeterNow(c)); }
+function relicsMeterNow(c){
   if(!hasCollections(c)) return null;
   const held = heldRelics(c);
   if(held === null) return null;
@@ -484,6 +512,14 @@ const JourneyPanel = {
   components: {EmptyTm, GenreList, RelicsPanel, RelicsByJob, RelicLineCards},
   props: ['state'],
   setup(props){
+    /* A frame is drawn the first time it is on screen (state.frame, set by applyFrames
+       in app.js; '*' is every frame), and then kept, so an open relic panel stays open.
+       Drawing every frame for every character at start-up cost the most. */
+    const seen = Vue.reactive({});
+    Vue.watch(() => props.state.frame, f => {
+      if(f === '*') JOURNEY_FRAMES.forEach(k => { seen[k] = true; });
+      else if(f) seen[f] = true;
+    }, {immediate: true});
     const view = Vue.computed(() => {
       const tick = props.state.tick;
       const c = getChar(props.state.cid);
@@ -491,6 +527,7 @@ const JourneyPanel = {
       const L = c.tmCollections.lists;
 
       // Duty grid: cleared of all, per expansion and type.
+      const duties = !seen.duties ? [] : (() => {
       const cleared = new Set(L.dutiesDone || []);
       const byExp = {};
       Object.keys(TM_DUTIES).forEach(id => {
@@ -499,16 +536,17 @@ const JourneyPanel = {
         const exp = EXPANSION_NAMES[ex] || 'Other';
         ((byExp[exp] = byExp[exp] || {})[type] = byExp[exp][type] || []).push({name, done: cleared.has(+id)});
       });
-      const duties = EXPANSION_NAMES.filter(e => byExp[e]).map(exp => {
+      return EXPANSION_NAMES.filter(e => byExp[e]).map(exp => {
         const types = DUTY_TYPES.filter(t => byExp[exp][t]).map(t => {
           const items = byExp[exp][t];
           return {t, items, done: items.filter(d => d.done).length, all: items.length};
         });
         return {exp, types, done: types.reduce((n, t) => n + t.done, 0), all: types.reduce((n, t) => n + t.all, 0)};
       });
+      })();
 
       const W = TM_WORLD, zonesDone = new Set(L.currentZones || []), porters = new Set(L.porters || []);
-      const explore = {
+      const explore = !seen.exploration ? null : {
         rows: [
           ['Sightseeing vistas', (L.sightseeing||[]).length, W.sightseeing],
           ['Aether currents', (L.currents||[]).length, W.currents],
@@ -531,23 +569,23 @@ const JourneyPanel = {
       };
 
       return {tick, c, asOf: collectionsAsOfText(c),
-        questlines: genreList(c, info => info.category !== 'Seasonal Events'),
-        seasonal: genreList(c, info => info.category === 'Seasonal Events'),
-        duties, explore, speed: mountSpeedView(c)};
+        questlines: seen.questlines ? genreList(c, info => info.category !== 'Seasonal Events') : null,
+        seasonal: seen.seasonal ? genreList(c, info => info.category === 'Seasonal Events') : null,
+        duties, explore, speed: seen.mountspeed ? mountSpeedView(c) : null};
     });
-    return {view, jrPct, toggle: () => toggleDoneQuestlines(props.state.cid)};
+    return {view, seen, jrPct, toggle: () => toggleDoneQuestlines(props.state.cid)};
   },
   template: `
     <empty-tm v-if="!view" what="journey data"></empty-tm>
     <template v-else>
       <div class="jr-note">{{ view.asOf }}</div>
-      <div data-frame="questlines"><genre-list :list="view.questlines" @toggle="toggle"></genre-list></div>
-      <div data-frame="relics"><relic-line-cards :c="view.c" kind="weapons" :tick="view.tick"></relic-line-cards></div>
-      <div data-frame="relic-armor"><relics-panel :c="view.c" kind="armor" :tick="view.tick"></relics-panel></div>
-      <div data-frame="relic-tools"><relic-line-cards :c="view.c" kind="tools" :tick="view.tick"></relic-line-cards></div>
-      <div data-frame="relic-jobs"><relics-by-job :c="view.c" :tick="view.tick"></relics-by-job></div>
-      <div data-frame="relic-garo"><relics-panel :c="view.c" kind="garo" :tick="view.tick"></relics-panel></div>
-      <div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div><genre-list :list="view.seasonal" @toggle="toggle"></genre-list></div>
+      <div data-frame="questlines"><genre-list v-if="view.questlines" :list="view.questlines" @toggle="toggle"></genre-list></div>
+      <div data-frame="relics"><relic-line-cards v-if="seen.relics" :c="view.c" kind="weapons" :tick="view.tick"></relic-line-cards></div>
+      <div data-frame="relic-armor"><relics-panel v-if="seen['relic-armor']" :c="view.c" kind="armor" :tick="view.tick"></relics-panel></div>
+      <div data-frame="relic-tools"><relic-line-cards v-if="seen['relic-tools']" :c="view.c" kind="tools" :tick="view.tick"></relic-line-cards></div>
+      <div data-frame="relic-jobs"><relics-by-job v-if="seen['relic-jobs']" :c="view.c" :tick="view.tick"></relics-by-job></div>
+      <div data-frame="relic-garo"><relics-panel v-if="seen['relic-garo']" :c="view.c" kind="garo" :tick="view.tick"></relics-panel></div>
+      <div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div><genre-list v-if="view.seasonal" :list="view.seasonal" @toggle="toggle"></genre-list></div>
       <div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>
         <template v-for="d in view.duties" :key="d.exp">
           <div class="subhead">{{ d.exp }} · {{ d.done }} of {{ d.all }} cleared</div>
@@ -557,7 +595,7 @@ const JourneyPanel = {
           </template>
         </template>
       </div>
-      <div data-frame="exploration">
+      <div data-frame="exploration"><template v-if="view.explore">
         <div class="jr-grid">
           <div v-for="r in view.explore.rows" :key="r.label" class="jr-row"><span>{{ r.label }}</span><span class="jr-v">{{ r.have }} / {{ r.total }}</span><div class="jr-bar"><i :style="{width: jrPct(r.have, r.total) + '%'}"></i></div></div>
         </div>
@@ -572,8 +610,8 @@ const JourneyPanel = {
             </div>
           </div>
         </div>
-      </div>
-      <div data-frame="mountspeed">
+      </template></div>
+      <div data-frame="mountspeed"><template v-if="seen.mountspeed">
         <div v-if="!view.speed" class="jr-note">No mount speed yet. Import a newer Tales of Milestones export (Copy everything).</div>
         <template v-else>
           <div class="jr-grid">
@@ -589,9 +627,10 @@ const JourneyPanel = {
             </template></div>
           </template>
         </template>
-      </div>
+      </template></div>
     </template>`
 };
+const JOURNEY_FRAMES = ['questlines', 'relics', 'relic-armor', 'relic-tools', 'relic-jobs', 'relic-garo', 'seasonal', 'duties', 'exploration', 'mountspeed'];
 function renderJourney(cid){
   const state = boxState(cid + '-journey', JourneyPanel);
   if(!state) return;

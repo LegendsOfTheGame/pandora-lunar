@@ -756,7 +756,14 @@ const HUB_QUESTS = {
 };
 // Every hub quest a DoH/DoL job draws on, opener first and the Dawntrail finale last, each
 // tagged with the trackKey its completion state lives under.
+// Both lists depend only on the job, so each is built once and reused. Callers
+// only read them.
+const HUB_QUESTS_CACHE = new Map(), ROLE_QUESTS_CACHE = new Map();
 function hubQuestsFor(job){
+  if(!HUB_QUESTS_CACHE.has(job)) HUB_QUESTS_CACHE.set(job, buildHubQuests(job));
+  return HUB_QUESTS_CACHE.get(job);
+}
+function buildHubQuests(job){
   const hub = JOB_HUB[job];
   if(!hub) return [];
   return ['shb','ew','dt'].flatMap(exp => {
@@ -770,6 +777,10 @@ function hubQuestsFor(job){
 // bracket both come back tagged "physDPS" so their completion state is shared; the same
 // quests in Endwalker/Dawntrail come back tagged "melee"/"ranged" since those don't share.
 function roleQuestsFor(job){
+  if(!ROLE_QUESTS_CACHE.has(job)) ROLE_QUESTS_CACHE.set(job, buildRoleQuests(job));
+  return ROLE_QUESTS_CACHE.get(job);
+}
+function buildRoleQuests(job){
   const role = JOB_ROLE[job];
   if(!role) return hubQuestsFor(job);
   const floor = JOB_ROLE_FLOOR[job] || 1;
@@ -843,121 +854,30 @@ const RESET_SCHEDULES = [
 const DAY_MS = 86400000;
 const ACCENTS = ['gold','teal','rose'];
 
-// The 80 weekly challenges by category, from ffxiv.consolegameswiki.com's Challenge Log
-// page (patch 7.51). Surfaced through the info button on each category row: "Battles"
-// means nothing on its own, but "the two guildhest ones" is what people actually look for.
-// Not individually tickable. Eighty checkboxes is a spreadsheet, not a reset tracker, and
-// the weekly tick on the row is the unit this list is for.
-// The 18 cumulative "Up for a Challenge" milestones are deliberately absent: they never
-// reset, so they are not weekly challenges at all.
-const CHALLENGE_LOG = {
-  'challenge-battles': [
-    ['Feeling Lucky', 'Complete 3 dungeons (or Alliance Raids) via the Duty Roulette.'],
-    ['Dungeon Master', 'Complete 5 dungeons.'],
-    ['You\'re the Hest Around I', 'Complete 3 guildhests.'],
-    ['You\'re the Hest Around II', 'Complete 10 guildhests'],
-    ['Exercising the Right', 'Vote 5 times in player commendation.'],
-    ['Bosom Buddies I', 'Defeat 20 enemies of comparable level to your own with your companion.'],
-    ['Bosom Buddies II', 'Defeat 100 enemies of comparable level to your own with your companion.'],
-    ['Tails of Derring-do Bad and Good Luck', 'Complete and mark off 3 Wondrous Tails.'],
-  ],
-  'challenge-pvp': [
-    ['A Wolf in Your Belly', 'Participate in 10 Crystalline Conflict matches.'],
-    ['Thrown to the Wolves', 'Triumph in 3 Crystalline Conflict matches.'],
-    ['Line Up', 'Participate in 7 Frontline campaigns.'],
-    ['In the Line of Fire', 'Lead your company to victory in 3 Frontline campaigns.'],
-    ['Prepare to Dice', 'Participate in 10 Rival Wings campaigns.'],
-    ['Luck Be a Lady Tonight', 'Lead your alliance to victory in 5 Rival Wings campaigns.'],
-  ],
-  'challenge-fate': [
-    ['In Your FATE I', 'Complete 5 FATEs with the highest rating possible.'],
-    ['In Your FATE II', 'Complete 10 FATEs with the highest rating possible.'],
-  ],
-  'challenge-leves': [
-    ['Just Leve It to Me', 'Complete 5 Levequests with different leve plates.'],
-    ['Making Like a Tree', 'Complete 20 levequests.'],
-  ],
-  'challenge-crafting': [
-    ['Craft Up a Storm', 'Craft 30 Items.'],
-    ['Craft Up a Storm', 'Craft 20 high-quality Items.'],
-    ['My Big Break', 'Successfully desynthesize 5 items.'],
-    ['The Gathering Storm', 'Successfully gather items of comparable level to your own 100 times.'],
-    ['A Boon from Nature', 'Successfully trigger the Gatherer\'s Boon effect while gathering items of comparable level to your own 30 times.'],
-    ['Hooked on the Reeling', 'Catch 30 fish.'],
-    ['Catch of the Day', 'Catch 10 large-sized fish'],
-    ['Spear Me', 'Spear 50 fish.'],
-    ['Spear No Effort', 'Spear 20 large-sized fish.'],
-    ['The Customer Is Always Right', 'Complete 6 custom deliveries.'],
-  ],
-  'challenge-treasure': [
-    ['X Marks the Spot', 'Gather 3 timeworn maps.'],
-    ['Find Your Treasure and Have It Too', 'Open 5 treasure coffers and obtain their contents while treasure hunting.'],
-    ['Aqua Gleam Hunter Force I', 'Open 5 treasure coffers in treasure dungeon vaults.'],
-  ],
-  'challenge-society': [
-    ['Improving Society Somewhat I', 'Complete 5 Allied Society quests.'],
-    ['Improving Society Somewhat II', 'Complete 15 Allied Society quests.'],
-  ],
-  'challenge-gc': [
-    ['Give \'Em What They Want', 'Complete 5 supply and provisioning missions.'],
-    ['Give \'Em What They Want II', 'Complete 10 supply and provisioning missions.'],
-    ['Master and Commander', 'Successfully complete 3 command missions.'],
-  ],
-  'challenge-ventures': [
-    ['Venture Capital', 'Have a retainer complete 10 ventures.'],
-    ['Venture Bothers', 'Have a retainer complete 15 exploration ventures (not Quick Exploration).'],
-  ],
-  'challenge-goldsaucer': [
-    ['Size Doesn\'t Matter', 'Complete 3 mini-games.'],
-    ['From Small Things', 'Earn 100 MGP from mini-games.'],
-    ['Open the Gates', 'Participate in 5 GATEs.'],
-    ['Close the Gates', 'Successfully complete 3 GATEs.'],
-    ['To the Races I', 'Enter 3 chocobo races.'],
-    ['To the Races II', 'Enter 20 chocobo races.'],
-    ['Victory Lap I', 'Win a chocobo race.'],
-    ['Victory Lap II', 'Win 10 chocobo races.'],
-    ['Always in Threes', 'Play Triple Triad 10 times.'],
-    ['A Winner Is You', 'Win 10 Triple Triad matches.'],
-    ['Cards in the Hall', 'Play 5 Triple Triad matches in the Battlehall.'],
-    ['Triple Tumble', 'Win 3 Triple Triad matches in the Battlehall.'],
-    ['Come on in, It\'s Open', 'Participate in an Open tournament and receive your reward.'],
-    ['Come Play Lord I', 'Play Lord of Verminion 1 time.'],
-    ['Come Play Lord II', 'Play Lord of Verminion 3 times.'],
-    ['Come Play Lord III', 'Play Lord of Verminion 5 times.'],
-    ['Kiwami', 'Participate in 2 Doman Mahjong player battle matches.'],
-  ],
-  'challenge-fieldops': [
-    ['Occult Interloping I', 'Defeat 30 monsters with a knowledge level equal to or higher than your own.'],
-    ['Occult Interloping II', 'Defeat 60 monsters with a knowledge level equal to or higher than your own.'],
-    ['Critically Endangered I', 'Complete 8 encounters on the Occult Crescent.'],
-    ['Critically Endangered II', 'Complete 15 encounters on the Occult Crescent.'],
-    ['Fateful Contention I', 'Complete 10 FATEs on the Occult Crescent.'],
-    ['Fateful Contention II', 'Complete 20 FATEs on the Occult Crescent.'],
-    ['Make It Chain I', 'Achieve an EXP chain of 20 on the Occult Crescent.'],
-    ['Make It Chain II', 'Achieve an EXP chain of 40 on the Occult Crescent.'],
-    ['Forbidden Ice, Forbidden Lightning I', 'Defeat 30 ice- or lightning-aspected enemies no more than two elemental levels below your own.'],
-    ['Forbidden Ice, Forbidden Lightning II', 'Defeat 60 ice- or lightning-aspected enemies no more than two elemental levels below your own.'],
-    ['Forbidden Fire, Forbidden Earth I', 'Defeat 30 fire- or earth-aspected enemies no more than two elemental levels below your own.'],
-    ['Forbidden Fire, Forbidden Earth II', 'Defeat 60 fire- or earth-aspected enemies no more than two elemental levels below your own.'],
-    ['Forbidden Water, Forbidden Wind I', 'Defeat 30 water- or wind-aspected enemies no more than two elemental levels below your own.'],
-    ['Forbidden Water, Forbidden Wind II', 'Defeat 60 water- or wind-aspected enemies no more than two elemental levels below your own.'],
-    ['Forbidden Bone, Forbidden Ash I', 'Defeat 20 ashkin in Eureka with an elemental level equal to, or higher than your own.'],
-    ['Forbidden Bone, Forbidden Ash II', 'Defeat 40 ashkin in Eureka with an elemental level equal to, or higher than your own.'],
-    ['Forbidden Elements I', 'Defeat 10 elementals in Eureka with an elemental level equal to, or higher than your own.'],
-    ['Forbidden Elements II', 'Defeat 20 elementals in Eureka with an elemental level equal to, or higher than your own.'],
-  ],
-  'challenge-deep': [
-    ['Take Me to Church I', 'Clear the area marked by stone 20 in Pilgrim\'s Traverse.'],
-    ['Take Me to Church II', 'Clear the area marked by stone 30 in Pilgrim\'s Traverse.'],
-    ['Take Me to Church III', 'Clear the area marked by stone 50 in Pilgrim\'s Traverse.'],
-    ['Take Me to Church IV', 'Clear the area marked by stone 70 in Pilgrim\'s Traverse.'],
-    ['Take Me to Church V', 'Clear the area marked by stone 100 in Pilgrim\'s Traverse.'],
-  ],
-  'challenge-island': [
-    ['Living off the Land', 'Collect 100 materials in your island sanctuary.'],
-    ['Making a Living off the Land', 'Ship 20 isleworks handicrafts.'],
-  ],
+/* The weekly challenges of each Challenge Log row, for the info button on each
+   category row: "Battles" means nothing on its own, but "the two guildhest ones" is
+   what people look for. Built from challenge-log.js (CHALLENGE_NOTES, the game's own
+   ContentsNote sheet), so the names and texts follow the game. A hand-kept copy used
+   to live here and drifted from it ("Craft Up a Storm" twice, for example).
+   Not individually tickable here; the Challenge Log panel (challenge-vue.js) counts
+   them. The cumulative "Up for a Challenge" entries (category "Complete") never
+   reset and are not in any row. Island Sanctuary is the game's "Other" category,
+   limited to the entries that the island's unlock quest opens: the same category
+   also holds Soul Survivor and Master Class. */
+const CHALLENGE_CATEGORY = {
+  'challenge-battles':'Battles', 'challenge-pvp':'PvP', 'challenge-fate':'FATE',
+  'challenge-leves':'Levequests', 'challenge-crafting':'Crafting & Gathering',
+  'challenge-treasure':'Treasure Hunt', 'challenge-society':'Allied Society Quests',
+  'challenge-gc':'Grand Company', 'challenge-ventures':'Retainers',
+  'challenge-goldsaucer':'Gold Saucer', 'challenge-fieldops':'Field Operations',
+  'challenge-deep':'Deep Dungeons', 'challenge-island':'Other'
 };
+const CHALLENGE_ISLAND_UNLOCK = 70179;   // ReqUnlock of the two island entries
+const CHALLENGE_LOG = Object.fromEntries(Object.entries(CHALLENGE_CATEGORY).map(([key, cat]) =>
+  [key, (window.CHALLENGE_NOTES || [])
+    .filter(r => r[3] === cat && (key !== 'challenge-island' || r[7] === CHALLENGE_ISLAND_UNLOCK))
+    .sort((a, b) => a[6] - b[6])
+    .map(r => [r[1], String(r[2]).split('\n')[0]])]));
 
 // Sourced from ffxiv.consolegameswiki.com's Daily and Weekly Checklist page. Seeded onto
 // every new character so the known list is there from the start — hide (not delete)
@@ -1273,26 +1193,36 @@ function applySeedRequires(c){
 // seed fixes above: a total still sitting on the exact old figure was never edited, and a
 // total you typed yourself matches no `from` and is left alone. Add a line per figure when
 // a patch moves one, rather than editing the defaults on their own.
+// Each fix has its own id and is offered to a character once, the same as
+// SEED_SCHEDULE_FIXES. The single questTotalFixesApplied flag used before this
+// blocked every fix added after a character was flagged.
 const QUEST_TOTAL_FIXES = [
-  { key:'overall', from:6472, to:6485 },   // 7.56: +4 MSQ, +10 Class & Job, -1 Sidequests
-  { key:'msq',     from:991,  to:995  },
-  { key:'side',    from:1987, to:1986 },   // never right, not a patch change
-  { key:'class',   from:848,  to:858  }
+  { id:'756-overall', key:'overall', from:6472, to:6485 },   // 7.56: +4 MSQ, +10 Class & Job, -1 Sidequests
+  { id:'756-msq',     key:'msq',     from:991,  to:995  },
+  { id:'side-1986',   key:'side',    from:1987, to:1986 },   // never right, not a patch change
+  { id:'756-class',   key:'class',   from:848,  to:858  }
 ];
 const MSQ_TOTAL_FIXES = [
-  { key:'dt', from:139, to:143 }           // 7.56's four Dawntrail quests
+  { id:'756-dt', key:'dt', from:139, to:143 }               // 7.56's four Dawntrail quests
 ];
 function applyQuestTotalFixes(c){
-  QUEST_TOTAL_FIXES.forEach(({key,from,to})=>{
-    if(c.questTotals[key] === from) c.questTotals[key] = to;
+  if(!Array.isArray(c.questTotalFixesDone)){
+    // A flagged character has already been offered every fix in the lists above.
+    c.questTotalFixesDone = c.questTotalFixesApplied
+      ? QUEST_TOTAL_FIXES.concat(MSQ_TOTAL_FIXES).map(f => f.id) : [];
+  }
+  const run = (list, totals) => list.forEach(({id,key,from,to})=>{
+    if(c.questTotalFixesDone.includes(id)) return;
+    if(totals[key] === from) totals[key] = to;
+    c.questTotalFixesDone.push(id);
   });
-  MSQ_TOTAL_FIXES.forEach(({key,from,to})=>{
-    if(c.msqBreakdownTotals[key] === from) c.msqBreakdownTotals[key] = to;
-  });
-  c.questTotalFixesApplied = true;
+  run(QUEST_TOTAL_FIXES, c.questTotals);
+  run(MSQ_TOTAL_FIXES, c.msqBreakdownTotals);
+  delete c.questTotalFixesApplied;
 }
 
-function schedById(id){ return RESET_SCHEDULES.find(s=>s.id===id) || RESET_SCHEDULES[0]; }
+const SCHEDULE_BY_ID = new Map(RESET_SCHEDULES.map(s => [s.id, s]));
+function schedById(id){ return SCHEDULE_BY_ID.get(id) || RESET_SCHEDULES[0]; }
 
 // Challenge Log sits between Weekly and Monthly rather than inside Weekly. It resets on the
 // same Tuesday clock, but thirteen category rows would swamp a list where every other entry
@@ -1347,11 +1277,9 @@ const ACTIVITY_GROUPS = [
   ['Retainers', ['retainer-ventures']],
   ['Treasure Hunt', ['treasure-hunt']]
 ];
+const ACTIVITY_GROUP_OF = new Map(ACTIVITY_GROUPS.flatMap(([name, keys]) => keys.map(k => [k, name])));
 function activityGroup(item){
-  for(const [name, keys] of ACTIVITY_GROUPS){
-    if(item.seedKey && keys.includes(item.seedKey)) return name;
-  }
-  return 'Other';
+  return (item.seedKey && ACTIVITY_GROUP_OF.get(item.seedKey)) || 'Other';
 }
 const HUNT_DAILY_KEYS  = ['hunt-daily','hunt-clan-daily','hunt-veteran-daily',
                           'hunt-nutsy-daily','hunt-guildship-daily','hunt-dawn-daily'];
@@ -1415,8 +1343,9 @@ const HuntCompact = {
 function toggleHuntRows(){
   collectAllInputs();
   DATA.ui.huntRows = DATA.ui.huntRows === 'rows' ? 'compact' : 'rows';
-  DATA.chars.forEach(c => renderRoutines(c.id));
-  DATA.chars.forEach(c => applyFrames(c.id, 'routines'));
+  markOtherPagesStale();
+  renderRoutines(DATA.activeId);
+  applyFrames(DATA.activeId, 'routines');
   renderFrameRow();
   scheduleSave();
 }
@@ -1439,8 +1368,10 @@ function toggleHuntSet(cid, which, on){
    reader asked for a row per expansion; it carries the switch either way. */
 function routineGroups(items){
   const rowsOn = DATA.ui.huntRows === 'rows';
+  const byGroup = new Map();
+  items.forEach(item => { const g = activityGroup(item); if(!byGroup.has(g)) byGroup.set(g, []); byGroup.get(g).push(item); });
   return ACTIVITY_GROUPS.map(([name])=>name).concat(['Other']).map(name=>{
-    const groupItems = items.filter(item => activityGroup(item) === name);
+    const groupItems = byGroup.get(name) || [];
     if(!groupItems.length) return null;
     const set = name === 'The Hunt' ? huntSetOf(groupItems[0]) : null;
     const compact = set && !rowsOn ? set : null;
@@ -1856,7 +1787,19 @@ function hasJobData(c){
 // One answer for both reasons a routine is locked, so callers don't have to ask twice and
 // can't get the two out of step. Patch is checked first: it's the one the player can see
 // and edit on the row itself.
+/* One render asks for the same row's lock many times (list, live state, notes, meters,
+   frame counts). The answer is kept until the current task ends; code that changes
+   what a lock depends on (patch, requires, unlocks, levels) clears it first. */
+let LOCK_CACHE = null;
+function clearLockCache(){ LOCK_CACHE = null; }
 function routineLock(item, c){
+  if(!LOCK_CACHE){ LOCK_CACHE = new WeakMap(); queueMicrotask(clearLockCache); }
+  if(LOCK_CACHE.has(item)) return LOCK_CACHE.get(item);
+  const lock = computeRoutineLock(item, c);
+  LOCK_CACHE.set(item, lock);
+  return lock;
+}
+function computeRoutineLock(item, c){
   // Asked first, and it settles the row on its own when the plugin can answer. A patch
   // number is a proxy for this question, so once the real answer is in hand the proxy has
   // nothing left to add — including when it disagrees, which it will: Kaye finished
@@ -1958,7 +1901,7 @@ function newCharacter(name){
     tradeMadeAsOf:null, tradeMadeExact:true,
     dutyAsOf:null, dutyExact:true,
     custom: [], routines: seedRoutines(), routinesSeeded: true, seedGeneration: SEED_GENERATION, notes: '',
-    jobQuestsDone: {}, jobQuestsOpen: {},
+    jobQuestsDone: {}, jobQuestsOpen: {}, itemJobsOff: {}, itemsAhead: false, itemsHq: true,
     server: {pdc:'', ldc:'', world:''},
     societies: Object.fromEntries(ALLIED_SOCIETIES.map(([name,exp,startRank])=>[name,{rank:startRank,points:0}])),
     intersocietalDone: {},
@@ -2000,7 +1943,7 @@ function normalizeCharacter(c){
     if(c.msqBreakdown[key] === undefined) c.msqBreakdown[key] = 0;
     if(c.msqBreakdownTotals[key] === undefined) c.msqBreakdownTotals[key] = total;
   });
-  if(!c.questTotalFixesApplied) applyQuestTotalFixes(c);
+  applyQuestTotalFixes(c);
   c.msqBreakdownOpen = !!c.msqBreakdownOpen;
   if(typeof c.playtime === 'string'){
     const d = c.playtime.match(/(\d+)\s*d/i), h = c.playtime.match(/(\d+)\s*h/i);
@@ -2109,11 +2052,14 @@ function scheduleSave(){
 /* Reads every input for every character currently in the DOM (all pages exist at once,
    only display:none toggles which is visible) back into DATA. Never skips a character
    just because its page isn't the active one. */
+/* Only pages that have been drawn hold inputs worth reading. An undrawn page (see
+   renderedPages) has empty boxes, and reading those would erase the character. */
 function collectAllInputs(){
-  DATA.chars.forEach(c => collectCharInputs(c.id));
+  DATA.chars.forEach(c => { if(renderedPages.has(c.id)) collectCharInputs(c.id); });
 }
 function collectCharInputs(cid){
   const c = getChar(cid); if(!c) return;
+  clearLockCache();
   const g = id => document.getElementById(id);
   if(g(`${cid}-name`)) c.name = g(`${cid}-name`).value;
   if(g(`${cid}-duty`)) setReadCount(c, 'duty', num(g(`${cid}-duty`).value));
@@ -2236,6 +2182,10 @@ function setActiveChar(cid){
   collectAllInputs();
   DATA.activeId = cid;
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id === 'page-'+cid));
+  // A page is drawn the first time it is opened, or again if a change was drawn
+  // only on the page on screen while this one was hidden (markOtherPagesStale).
+  if(!renderedPages.has(cid)) renderChar(cid);
+  else refreshRoutines(cid);
   applyArea(cid);
   renderNav();
   updateResetBar();
@@ -2244,7 +2194,8 @@ function setActiveChar(cid){
 function addCharacter(){
   if(DATA.chars.length >= MAX_CHARS) return;
   collectAllInputs();
-  const c = newCharacter('');
+  // Normalized like a loaded character, so every field the panels read exists.
+  const c = normalizeCharacter(newCharacter(''));
   DATA.chars.push(c);
   DATA.activeId = c.id;
   rebuildPages();
@@ -2260,7 +2211,7 @@ function removeCharacter(cid){
   if(!confirm(`Remove ${label}? This deletes everything tracked for them and can't be undone.`)) return;
   collectAllInputs();
   DATA.chars = DATA.chars.filter(x=>x.id!==cid);
-  if(DATA.chars.length === 0) DATA.chars.push(newCharacter(''));
+  if(DATA.chars.length === 0) DATA.chars.push(normalizeCharacter(newCharacter('')));
   DATA.activeId = DATA.chars[0].id;
   rebuildPages();
   renderSwitcher();
@@ -2271,11 +2222,9 @@ function removeCharacter(cid){
 /* The page skeleton for one character. It never redraws: it has no reactive data,
    and the renderers fill its boxes by id (many of them with their own Vue apps).
    initCollapsible and applyFrames change these elements by hand afterwards, so
-   classes stay static. The char header is pinned under the frame row, and a direct
-   child of .page rather than a section, so it stays put for the whole scroll instead
-   of only while the first section is on screen. It holds the name, the MSQ box and
-   Remove character: scrolling used to carry all three under the sticky frame row,
-   where clicks landed on the row and the buttons could not be used. */
+   classes stay static. The name, the MSQ box and Remove character are in Settings
+   (Layout D). The station card box at the top shows the expansion picked on the
+   route line (renderStationCard). */
 const CharPage = {
   props: ['cid'],
   setup(){
@@ -2290,6 +2239,7 @@ const CharPage = {
     };
   },
   template: `
+  <div class="station-card" :id="cid+'-station-card'"></div>
   <div class="section char-dash-section">
     <span class="cap" :id="cid+'-tm-sync-note'"></span>
     <div class="server-picker" :id="cid+'-server-picker'"></div>
@@ -2478,11 +2428,22 @@ const CharPages = {
   template: `<div v-for="id in ids" :key="id" :class="id === activeId ? 'page active' : 'page'" :id="'page-'+id"><char-page :cid="id"></char-page></div>`
 };
 let pagesApp = null;
+/* Ids of the character pages that are drawn and up to date. Every page has its
+   skeleton, but only the page on screen is drawn at once; the others are drawn when
+   they are first opened (setActiveChar). Drawing all of them made start-up, import
+   and every all-character redraw cost up to eight times as much. */
+const renderedPages = new Set();
+/* After a change drawn only on the page on screen, the other drawn pages are out of
+   date; they are drawn again when opened. Their data in DATA is current. */
+function markOtherPagesStale(){
+  DATA.chars.forEach(c => { if(c.id !== DATA.activeId) renderedPages.delete(c.id); });
+}
 function rebuildPages(){
   if(pagesApp) pagesApp.unmount();
+  renderedPages.clear();
   pagesApp = Vue.createApp(CharPages, {ids: DATA.chars.map(c => c.id), activeId: DATA.activeId});
   pagesApp.mount('#pages');
-  DATA.chars.forEach(c=>renderChar(c.id));
+  renderChar(DATA.activeId);
   initCollapsible();
   DATA.chars.forEach(c=>applyArea(c.id));
   renderNav();
@@ -2578,8 +2539,9 @@ function setTimeMode(v){
 }
 function toggleZoneStyle(){
   DATA.ui.zoneStyle = DATA.ui.zoneStyle === 'offset' ? 'abbr' : 'offset';
-  DATA.chars.forEach(c => renderLastCompleted(c.id));
-  DATA.chars.forEach(c => applyFrames(c.id, 'routines'));
+  markOtherPagesStale();
+  renderLastCompleted(DATA.activeId);
+  applyFrames(DATA.activeId, 'routines');
   scheduleSave();
 }
 
@@ -2622,7 +2584,7 @@ const LastDone = {
       </div>
       <div v-if="view.never" class="gated-note">{{ view.never }} routine{{ view.never === 1 ? '' : 's' }} {{ view.never === 1 ? 'has' : 'have' }} never been ticked</div>
       <div class="opt-switch">
-        <span class="sw" :class="{on: view.offsetOn}" role="switch" tabindex="0" :aria-checked="String(view.offsetOn)" @click="toggleZoneStyle()"></span>
+        <span class="sw" :class="{on: view.offsetOn}" role="switch" tabindex="0" :aria-checked="String(view.offsetOn)" @click="toggleZoneStyle()" @keydown.space.prevent="toggleZoneStyle()" @keydown.enter.prevent="toggleZoneStyle()"></span>
         <label @click="toggleZoneStyle()">Name the time zone as an offset{{ view.switchNote }}</label>
       </div>
     </template>`
@@ -2718,7 +2680,29 @@ const ACTIVE_RESETS = 30;
 function activeWindowStart(now){
   return lastResetInstant(schedById('daily15'), now) - (ACTIVE_RESETS - 1) * DAY_MS;
 }
+/* Meter caches. One click redraws the rail, the frame row and the spotlight, and
+   each of them asked for the same meters again.
+   - perTask: kept until the current task ends (routines and time can change).
+   - perImport: kept until the imported data changes (a new tmCollections object). */
+let TASK_MEMO = null;
+function perTask(c, name, fn){
+  if(!TASK_MEMO){ TASK_MEMO = new WeakMap(); queueMicrotask(() => { TASK_MEMO = null; }); }
+  let m = TASK_MEMO.get(c); if(!m){ m = new Map(); TASK_MEMO.set(c, m); }
+  if(!m.has(name)) m.set(name, fn());
+  return m.get(name);
+}
+const IMPORT_MEMO = new WeakMap();
+function perImport(c, name, fn){
+  const tc = c.tmCollections;
+  if(!tc || typeof tc !== 'object') return fn();
+  let m = IMPORT_MEMO.get(tc); if(!m){ m = new Map(); IMPORT_MEMO.set(tc, m); }
+  if(!m.has(name)) m.set(name, fn());
+  return m.get(name);
+}
 function sectionMeter(c, sections){
+  return perTask(c, 'section:' + sections.join('|'), () => sectionMeterNow(c, sections));
+}
+function sectionMeterNow(c, sections){
   const now = new Date();
   const since = activeWindowStart(now);
   const rows = (c.routines||[]).filter(r =>
@@ -2752,20 +2736,23 @@ function eventFestival(e){
   }).map(Number);
   return ids.length ? Math.max(...ids) : null;
 }
-function seasonalMeter(c){
+function seasonalMeter(c){ return perTask(c, 'seasonal', () => seasonalMeterNow(c)); }
+function seasonalMeterNow(c){
   if(!hasCollections(c)) return null;
   const done = ownedSet(c, 'questsDone');
   const runs = [...new Set(runningEvents().filter(e => !e.broadcast).map(eventFestival).filter(Boolean))];
   if(!runs.length) return null;
   return Math.round(runs.filter(f => TM_FESTIVAL_QUESTS[f][1].every(id => done.has(id))).length / runs.length * 100);
 }
-function dutiesMeter(c){
+function dutiesMeter(c){ return perImport(c, 'duties', () => dutiesMeterNow(c)); }
+function dutiesMeterNow(c){
   if(!hasCollections(c)) return null;
   const done = ownedSet(c, 'dutiesDone');
   const ids = Object.keys(TM_DUTIES).filter(id => DUTY_TYPES.indexOf(TM_DUTIES[id][1]) >= 0);
   return ids.length ? Math.round(ids.filter(id => done.has(+id)).length / ids.length * 100) : null;
 }
-function collectionsMeter(c){
+function collectionsMeter(c){ return perImport(c, 'collections', () => collectionsMeterNow(c)); }
+function collectionsMeterNow(c){
   if(!hasCollections(c) || typeof COLLECTION_LISTS === 'undefined') return null;
   let have = 0, all = 0;
   COLLECTION_KINDS.forEach(k => {
@@ -2786,7 +2773,10 @@ function areaOf(key){ return AREAS.find(a => a.key === key) || AREAS[0]; }
 function activeArea(cid){ return areaOf(areaState(cid).area); }
 function areaFrames(cid){
   const c = getChar(cid);
-  try{ return activeArea(cid).frames(c) || []; }catch(e){ return []; }
+  if(!c) return [];
+  return perTask(c, 'frames:' + activeArea(cid).key, () => {
+    try{ return activeArea(cid).frames(c) || []; }catch(e){ return []; }
+  });
 }
 function activeAreaFrame(cid){
   const list = areaFrames(cid);
@@ -2877,9 +2867,25 @@ function tickSpotClocks(){
   const oc = typeof oceanState === 'function' ? oceanState(now) : null;
   const cl = [['Daily reset', at('daily15')], ['GC & squadron', at('daily20')], ['Weekly reset', at('weeklyTue')]];
   if(oc) cl.push([oc.open ? 'Ocean Fishing · boarding' : 'Ocean Fishing', oc.msLeft]);
-  box.innerHTML = cl.map(([k, ms]) => `<div class="spot-clock"><span class="k">${k}</span><span class="v">${fmtClock(ms)}</span></div>`).join('');
+  // The nodes are made once; each second only their text changes.
+  if(box.children.length !== cl.length)
+    box.innerHTML = cl.map(() => '<div class="spot-clock"><span class="k"></span><span class="v"></span></div>').join('');
+  cl.forEach(([k, ms], i) => {
+    const [kEl, vEl] = box.children[i].children, v = fmtClock(ms);
+    if(kEl.textContent !== k) kEl.textContent = k;
+    if(vEl.textContent !== v) vEl.textContent = v;
+  });
 }
-setInterval(() => { if(document.getElementById('spot-clocks')) tickSpotClocks(); }, 1000);
+/* One clock for every countdown on the page (spot clocks, footer, events, Ocean
+   Fishing, Evercold). It used to be one interval per component and per character
+   page. It does not tick while the tab is hidden, and catches up when shown. */
+const clockNow = Vue.ref(Date.now());
+function tickClock(){
+  clockNow.value = Date.now();
+  if(document.getElementById('spot-clocks')) tickSpotClocks();
+}
+setInterval(() => { if(!document.hidden) tickClock(); }, 1000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) tickClock(); });
 
 /* ---------- route line ----------
    One station per expansion. A segment fills to the quests done of the
@@ -2971,7 +2977,8 @@ function renderRoute(){
 }
 function pickStation(i){
   DATA.ui.routeExp = (i === null || routeExp() === i) ? null : i;
-  DATA.chars.forEach(c => { renderCollections(c.id); renderJourney(c.id); });
+  markOtherPagesStale();
+  renderCollections(DATA.activeId); renderJourney(DATA.activeId);
   applyArea(DATA.activeId);
   renderNav();
   scheduleSave();
@@ -2999,18 +3006,9 @@ function renderStationCard(st){
     const state = el.id && boxState(el.id, StationCard);
     if(state) state.s = null;
   });
-  // Directly under the pinned character line of the page on screen, so the
-  // line's negative top margin cannot cover it.
-  const head = document.querySelector(`#page-${DATA.activeId} .char-header`);
-  if(!head) return;
-  let box = head.nextElementSibling;
-  if(!box || !box.classList.contains('station-card')){
-    box = document.createElement('div');
-    box.className = 'station-card';
-    box.id = DATA.activeId + '-station-card';
-    head.after(box);
-  }
-  const state = boxState(box.id, StationCard);
+  // Each page has its own box at the top (CharPage). The old code looked for the
+  // pinned character line, which Layout D removed, so the card never showed.
+  const state = boxState(DATA.activeId + '-station-card', StationCard);
   if(!state) return;
   const sel = routeExp();
   if(sel === null || globalPageOpen() || !activeArea(DATA.activeId).splits) return;
@@ -3055,10 +3053,7 @@ function eventWhen(e){
    the countdowns tick instead of moving every 30 seconds. */
 const EventList = {
   setup(){
-    const now = Vue.ref(Date.now());
-    let timer;
-    Vue.onMounted(() => { timer = setInterval(() => { now.value = Date.now(); }, 1000); });
-    Vue.onUnmounted(() => clearInterval(timer));
+    const now = clockNow;
     const list = Vue.computed(() => { now.value; return currentEvents(); });
     return {now, list, eventWhen, fmtCountdown};
   },
@@ -3259,7 +3254,16 @@ function applyFrames(cid, section){
     const keys = String(el.dataset.frame).split(/\s+/);
     el.classList.toggle('frame-on', frame === '*' || (frame !== null && keys.includes(frame)));
   });
+  // Collections and Journey draw only the frame on screen (their state.frame). A page
+  // or tab not on screen draws none of their heavy parts.
+  const gated = FRAME_GATED_BOX[section];
+  const n = gated && vueBoxes[cid + gated];
+  if(n){
+    const shown = (cid === DATA.activeId && activeTab(cid) === section) ? frame : null;
+    if(n.state.frame !== shown) n.state.frame = shown;
+  }
 }
+const FRAME_GATED_BOX = {collections: '-coll', journey: '-journey'};
 function syncPaneTopHeight(){
   const top = document.querySelector('.pane-top');
   if(top) document.documentElement.style.setProperty('--pane-top-h', top.offsetHeight + 'px');
@@ -3373,11 +3377,7 @@ const EVERCOLD_UTC = Date.UTC(2027, 1, 23, 12, 0, 0);
    so nothing outside needs to call it. FootSlot draws it in the Evercold slide. */
 const ExpacBar = {
   setup(){
-    const now = Vue.ref(Date.now());
-    let timer;
-    Vue.onMounted(() => { timer = setInterval(() => { now.value = Date.now(); }, 1000); });
-    Vue.onUnmounted(() => clearInterval(timer));
-    const ms = Vue.computed(() => EVERCOLD_UTC - now.value);
+    const ms = Vue.computed(() => EVERCOLD_UTC - clockNow.value);
     return {ms, fmtCountdown};
   },
   template: `
@@ -3402,11 +3402,13 @@ const resetTick = Vue.ref(0);
 function updateResetBar(){ resetTick.value++; }
 const ResetBar = {
   setup(){
-    let timer;
-    Vue.onMounted(() => { timer = setInterval(updateResetBar, 1000); });
-    Vue.onUnmounted(() => clearInterval(timer));
-    const st = Vue.computed(() => {
-      resetTick.value;
+    // The list of waiting routines is worked out again when data changes
+    // (updateResetBar) and every 30 seconds, so a reset that passes is noticed. Only
+    // the countdown moves every second. Before, the full lock check of every routine
+    // ran every second.
+    const bucket = Vue.computed(() => Math.floor(clockNow.value / 30000));
+    const due = Vue.computed(() => {
+      resetTick.value; bucket.value;
       const now = new Date();
       const c = DATA && getChar(DATA.activeId);
       const visible = c ? (c.routines||[]).filter(r =>
@@ -3419,15 +3421,17 @@ const ResetBar = {
       });
       if(soonest === null) return null;
 
-      const due = visible.filter(r =>
+      const rows = visible.filter(r =>
         nextResetInstant(schedById(r.schedId), now, r.lastDone) === soonest);
       return {
-        name: tz(String(schedById(due[0].schedId).label).split(' — ')[0]),
-        time: fmtCountdown(soonest - now.getTime()),
-        what: due.length === 1 ? '· ' + due[0].label : '· ' + due.length + ' routines return',
+        soonest,
+        name: tz(String(schedById(rows[0].schedId).label).split(' — ')[0]),
+        what: rows.length === 1 ? '· ' + rows[0].label : '· ' + rows.length + ' routines return',
         title: 'Returns at ' + new Date(soonest).toUTCString()
       };
     });
+    const st = Vue.computed(() => due.value
+      ? Object.assign({time: fmtCountdown(due.value.soonest - clockNow.value)}, due.value) : null);
     return {st};
   },
   template: `
@@ -3459,9 +3463,9 @@ const FOOT_FIXED = ['Next reset', 'Ocean Fishing', 'Evercold'];
 const FootSlot = {
   components: {ResetBar, OceanBar, ExpacBar},
   setup(){
-    const now = Vue.ref(Date.now());
+    const now = clockNow;
     const index = Vue.ref(0);
-    let held = false, clock, rotor;
+    let held = false, rotor;
     const events = Vue.computed(() => { now.value; return runningEvents(); });
     const names = Vue.computed(() => FOOT_FIXED.concat(events.value.map(e => e.name)));
 
@@ -3477,8 +3481,8 @@ const FootSlot = {
       clearInterval(rotor);
       rotor = setInterval(() => { if(!held) index.value = (index.value + 1) % names.value.length; }, FOOT_PERIOD_MS);
     };
-    Vue.onMounted(() => { clock = setInterval(() => { now.value = Date.now(); }, 1000); restart(); });
-    Vue.onUnmounted(() => { clearInterval(clock); clearInterval(rotor); });
+    Vue.onMounted(restart);
+    Vue.onUnmounted(() => clearInterval(rotor));
 
     const label = e => e.broadcast && e.to !== null
       ? `Live now · until ${fmtEventTime(e.to)} ${eventZone(e.to)}`
@@ -3580,7 +3584,6 @@ function applyTab(cid, tab){
   const page = document.getElementById('page-'+cid);
   if(!page) return;
   page.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.dataset.tab===tab));
-  page.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   applyFrames(cid, tab);
 }
 
@@ -3822,10 +3825,9 @@ function toggleEditTotals(cid){
   renderQuestsTable(cid);
 }
 function onTotalInput(cid){
-  collectAllInputs();
+  collectCharInputs(cid);
   updateQuestPercents(cid);
   updateOverallCheck(cid);
-  updateMsqCheckNote(cid);
   renderCharDash(cid);
   scheduleSave();
 }
@@ -4742,7 +4744,8 @@ function redAlertClass(){
 }
 function onRedAlertClassChange(cid){
   DATA.ui.redAlertClass = document.getElementById(cid+'-ra-class').value;
-  DATA.chars.forEach(c => renderRedAlerts(c.id));
+  markOtherPagesStale();
+  renderRedAlerts(DATA.activeId);
   scheduleSave();
 }
 
@@ -5408,7 +5411,7 @@ const RoutineList = {
             <hunt-compact v-if="g.compact" :cid="state.cid" :which="g.compact" :items="g.items" :beat="state.beat || 0"></hunt-compact>
             <template v-else><routine-row v-for="item in g.items" :key="item.id" :cid="state.cid" :item="item" :live="live[item.id]" :clients="clients"></routine-row></template>
             <div v-if="g.set" class="opt-switch">
-              <span class="sw" :class="{on: g.rowsOn}" role="switch" tabindex="0" :aria-checked="String(g.rowsOn)" @click="toggleHuntRows()"></span>
+              <span class="sw" :class="{on: g.rowsOn}" role="switch" tabindex="0" :aria-checked="String(g.rowsOn)" @click="toggleHuntRows()" @keydown.space.prevent="toggleHuntRows()" @keydown.enter.prevent="toggleHuntRows()"></span>
               <label @click="toggleHuntRows()">Give each expansion its own row{{ g.rowsOn ? '' : ' — ' + g.items.length + ' rows instead of 1' }}</label>
             </div>
           </div>
@@ -5444,7 +5447,9 @@ function renderGatedNote(cid){
   const byLevel  = locks.filter(l=>l.reason==='level').length;
   // Sort on the parsed number, display the string the player typed — patchValue('6.0') is
   // the float 6, which renders as "next at 6" and reads like a different patch entirely.
-  const next = c.routines.filter(r=>isGated(r, gatePatchFor(r, c)))
+  // Only rows that a patch actually locks: an unlock answer from the plugin
+  // overrides the patch gate, and those rows must not name a patch here.
+  const next = c.routines.filter(r=>{ const l = routineLock(r, c); return l && l.reason === 'patch'; })
     .map(r=>({ n:patchValue(r.requires), s:r.requires }))
     .filter(x=>x.n!==null).sort((a,b)=>a.n-b.n)[0];
   const reasons = [];
@@ -5495,6 +5500,7 @@ function toggleRoutineHidden(cid, id){
   scheduleSave();
 }
 function onPatchInput(cid){
+  clearLockCache();
   const el = document.getElementById(cid+'-patch');
   const c = getChar(cid);
   if(el) c.patch = el.value.trim();
@@ -5720,6 +5726,7 @@ function onServerChange(cid, level){
 /* ---------- full render / input handlers (per character) ---------- */
 function renderChar(cid){
   const c = getChar(cid);
+  renderedPages.add(cid);
   document.getElementById(cid+'-name').value = c.name;
   document.getElementById(cid+'-duty').value = c.duty;
   document.getElementById(cid+'-comm').value = c.comm;
@@ -5758,14 +5765,15 @@ function onNameInput(cid){
   renderSwitcher();
   scheduleSave();
 }
+// Runs on every keystroke, so it reads only the page being typed in, and redraws
+// the quest table once (updateQuestPercents and updateMsqCheckNote are the same bump).
 function onMainInput(cid){
-  collectAllInputs();
+  collectCharInputs(cid);
   renderCharDash(cid);
   renderRoles(cid);
   updateTradeMentorChecks(cid);
   updateQuestPercents(cid);
   updateOverallCheck(cid);
-  updateMsqCheckNote(cid);
   updateJobCaps(cid);
   scheduleSave();
 }
@@ -5776,10 +5784,14 @@ function onPlaytimeInput(cid){
 }
 
 /* ---------- collapsible sections ---------- */
+/* The key comes from the heading's own text only, not the hint, count or button
+   text inside it, so it does not change when that text changes (for example the
+   plugin-mode hint in Quest categories). */
 function sectionKey(sec){
   const page = sec.closest('.page');
   const h2 = sec.querySelector('h2');
-  const slug = (h2 ? h2.textContent : '').trim().toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).slice(0,3).join('-');
+  const own = h2 ? [...h2.childNodes].filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join(' ') : '';
+  const slug = own.trim().toLowerCase().replace(/[^a-z0-9\s]/g,'').split(/\s+/).slice(0,3).join('-');
   return (page ? page.id : 'page') + ':' + slug;
 }
 function initCollapsible(){
@@ -5789,22 +5801,29 @@ function initCollapsible(){
     sec.dataset.collapsibleReady = '1';
     const key = sectionKey(sec);
     sec.dataset.secKey = key;
+    // A section can open with more than one heading, each for some frames only
+    // (Next Steps and Routines). All of them stay above the body and each gets the
+    // toggle, so the heading on screen always has one.
+    const heads = [h2];
+    let last = h2;
+    while(last.nextElementSibling && last.nextElementSibling.tagName === 'H2'){ last = last.nextElementSibling; heads.push(last); }
     const body = document.createElement('div');
     body.className = 'sec-body';
-    let node = h2.nextSibling;
+    let node = last.nextSibling;
     while(node){ const next = node.nextSibling; body.appendChild(node); node = next; }
     sec.appendChild(body);
-    const btn = document.createElement('button');
-    btn.className = 'sec-toggle'; btn.type = 'button'; btn.title = 'Collapse or expand';
-    btn.onclick = ()=>toggleSection(key);
-    h2.appendChild(btn);
+    heads.forEach(h => {
+      const btn = document.createElement('button');
+      btn.className = 'sec-toggle'; btn.type = 'button'; btn.title = 'Collapse or expand';
+      btn.onclick = ()=>toggleSection(key);
+      h.appendChild(btn);
+    });
     applyCollapsed(sec, !!DATA.ui.collapsed[key]);
   });
 }
 function applyCollapsed(sec, collapsed){
   sec.classList.toggle('collapsed', collapsed);
-  const btn = sec.querySelector('.sec-toggle');
-  if(btn) btn.textContent = collapsed ? '+' : '−';
+  sec.querySelectorAll(':scope > h2 > .sec-toggle').forEach(btn => { btn.textContent = collapsed ? '+' : '−'; });
 }
 function toggleSection(key){
   const sec = document.querySelector(`.section[data-sec-key="${key}"]`);
@@ -5841,15 +5860,19 @@ function importData(input){
   reader.onload = function(e){
     try{
       const parsed = JSON.parse(e.target.result);
-      if(!parsed || typeof parsed!=='object' || !Array.isArray(parsed.chars)){
+      if(!parsed || typeof parsed!=='object' || !Array.isArray(parsed.chars) || !parsed.chars.length
+         || !parsed.chars.every(ch => ch && typeof ch === 'object')){
         throw new Error('No character data found in that file.');
       }
       const when = parsed.exported ? new Date(parsed.exported).toLocaleString() : 'unknown date';
       if(!confirm(`Replace ALL current tracker data with this backup?\n\nBackup taken: ${when}\n\nThis overwrites everything in this browser and cannot be undone.`)){
         input.value = ''; return;
       }
+      // The old data comes back if the backup cannot be normalized, so a bad file
+      // never leaves the page half replaced.
+      const previous = DATA;
       DATA = { chars: parsed.chars, activeId: (parsed.chars[0]||{}).id, ui: parsed.ui || {} };
-      normalizeData();
+      try{ normalizeData(); }catch(err){ DATA = previous; throw err; }
       document.querySelectorAll('.section[data-collapsible-ready]').forEach(s=>delete s.dataset.collapsibleReady);
       rebuildPages();
       renderSwitcher();
@@ -6268,6 +6291,7 @@ function computeTmDiffRows(p, c){
   return rows.map(([label,from,to]) => [String(label), String(from), String(to)]);
 }
 function applyTmImport(){
+  clearLockCache();
   const p = tmImportPayload;
   const cid = document.getElementById('tm-import-target').value;
   if(!p || !cid) return;
@@ -6425,7 +6449,8 @@ function applyTmImport(){
   renderSwitcher();
   updateSoundToggleUI();
   initFootSlot();
-  setInterval(()=>{ DATA.chars.forEach(c=>{ refreshRoutines(c.id); }); checkResetSounds(); }, 30000);
+  // The page on screen only; setActiveChar refreshes a page when it is opened.
+  setInterval(()=>{ refreshRoutines(DATA.activeId); updateResetBar(); checkResetSounds(); }, 30000);
   window.addEventListener('resize', syncSitebarHeight);
   syncSitebarHeight();
 })();
