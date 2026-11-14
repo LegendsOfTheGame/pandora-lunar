@@ -37,13 +37,18 @@ def main() -> None:
     ]
     events.sort(key=lambda e: e["start"])
 
+    # Compare the parsed event lists. A text search for the new JSON in the old file
+    # matched an empty list ("[]") against almost any file, so a feed with no events
+    # was never written and ended events stayed on the site.
     try:
         with open(OUTPUT, encoding="utf-8") as f:
             old = f.read()
-        if json.dumps(events, ensure_ascii=False) in old:
+        start = old.find("{", old.find("const EVENTS_FEED"))
+        end = old.rfind("}")
+        if start >= 0 and end > start and json.loads(old[start:end + 1]).get("events") == events:
             print("No change.")
             return
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         pass
 
     built = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")

@@ -27,6 +27,21 @@ Reviewer: Claude (session started from the TimeMemoriaV3 review session). No cod
 | N — nit | 100 |
 | **Total** | **208** |
 
+## Fix status (14 November 2026)
+
+Haven chose "bugs + performance". The fixes are in the worktree on `claude/fable-review`, not committed yet, and tested on a local server with a real Tales of Milestones export (no console errors).
+
+- **Fixed and tested:** B1, B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B13, B14.
+- **B12 — not a bug, withdrawn.** The "clean" regex is `/^[-]\s*/` written with the real private-use characters. My editor showed them as nothing, so I read it as `[-]`. It already strips the game's icons. N32 is withdrawn for the same reason.
+- **Fixed:** P1, P2 (also covers P10 and P15), P3, P4, P5, P6, P8, P9, P11, P12, P13, P14, P16.
+- **P7 — not done.** Faster loading needs a build step or a change to the data generators, which are outside this repository.
+- **Measured** (same export, two characters, before → after): DOM elements 34,246 → 7,313; full page rebuild 176 ms → 83 ms; a routine sub-check tick about 30 ms → about 19 ms. Opening Collections now costs about 60 ms the first time, because the list is drawn when it is opened instead of at start-up.
+- **Behaviour changes to know about:**
+  - Only the page on screen is drawn. Another character's page is drawn when you open it.
+  - In Journey, each frame is drawn the first time it is opened, then kept.
+  - A collapsed section keyed on the old heading text (for example "Quest categories") opens once, because its saved key changed (B7).
+  - The pre-commit hook now stamps only the staged copy of `index.html` (B13).
+
 ## The top items
 
 1. **B1** — The expansion card that shows when you pick a route station never appears. It looks for an element that Layout D removed. Verified.

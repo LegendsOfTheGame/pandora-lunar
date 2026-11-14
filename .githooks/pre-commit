@@ -3,9 +3,20 @@
 # depends on anyone remembering to do it by hand. There's no build pipeline for
 # this site (static index.html/app.js/style.css on GitHub Pages), so this hook is
 # the mechanism instead.
+#
+# The stamp is written into the STAGED copy of index.html, not by `git add` of the
+# whole file: in a partial commit (git add -p), unstaged changes to index.html
+# must stay unstaged. The working copy gets the same stamp, so it does not show
+# the old one as a change after the commit.
 FILE="index.html"
-if [ -f "$FILE" ]; then
+PATTERN='s#(<div class="build-stamp">Last updated )[0-9]{2}/[0-9]{2}/[0-9]{4} @ [0-9]{2}:[0-9]{2}( UTC</div>)#\1'
+if git cat-file -e ":$FILE" 2>/dev/null; then
   STAMP=$(date -u "+%d/%m/%Y @ %H:%M")
-  sed -E -i "s#(<div class=\"build-stamp\">Last updated )[0-9]{2}/[0-9]{2}/[0-9]{4} @ [0-9]{2}:[0-9]{2}( UTC</div>)#\1${STAMP}\2#" "$FILE"
-  git add "$FILE"
+  MODE=$(git ls-files -s -- "$FILE" | cut -d' ' -f1)
+  TMP=$(mktemp)
+  git show ":$FILE" | sed -E "${PATTERN}${STAMP}\2#" > "$TMP"
+  BLOB=$(git hash-object -w --path="$FILE" "$TMP")
+  git update-index --cacheinfo "$MODE,$BLOB,$FILE"
+  rm -f "$TMP"
+  [ -f "$FILE" ] && sed -E -i "${PATTERN}${STAMP}\2#" "$FILE"
 fi
