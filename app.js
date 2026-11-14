@@ -2678,7 +2678,8 @@ const AREAS = [
       .concat([{tab:'mentor', frame:'battle', l:'Battle Mentor'},
                {tab:'mentor', frame:'trade', l:'Trade Mentor'},
                {tab:'cosmic', frame:'tools', l:'Cosmic tools'},
-               {tab:'cosmic', frame:'red-alerts', l:'Red Alerts'}])},
+               {tab:'cosmic', frame:'red-alerts', l:'Red Alerts'}]),
+    meter:c => jobsMeter(c)},
   {key:'duties', label:'Duties', splits:true, frames:c => [
       {tab:'journey', frame:'duties', l:'Duty clears', n:hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null}],
     meter:c => dutiesMeter(c)},
@@ -2696,8 +2697,16 @@ const AREAS = [
 ];
 function areaFrameId(f){ return f.tab + ':' + f.frame; }
 
-/* Meters are shown only where one honest measure exists. Jobs and World have
-   none yet, so they show no meter. */
+/* Meters are shown only where one honest measure exists. World has none yet,
+   so it shows no meter. */
+/* Jobs: the combat, crafting and gathering level totals added together, out of
+   the three caps added together (2,230 + 800 + 300). The same totals as the
+   Overview level tiles. Tester feedback, 13 Nov 2026. */
+function jobsMeter(c){
+  const sum = o => Object.values(o || {}).reduce((a, b) => a + b, 0);
+  const total = sum(c.combat) + sum(c.craft) + sum(c.gather);
+  return Math.round(Math.min(100, pct(total, 2230 + 800 + 300)));
+}
 /* Share of routines done this period, for the given sections. Only routines in
    use count: ticked at least once, and last ticked within 30 days, so a routine
    never started or given up does not hold the figure down. A stop-gap, from a
