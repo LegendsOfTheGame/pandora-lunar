@@ -1599,3 +1599,37 @@ html:not(.rt-edit) .routine-item.done .routine-name{color:var(--text-dim);text-d
 :root[data-theme="midnight"] .section,
 :root[data-theme="midnight"] .instructions-panel,
 :root[data-theme="midnight"] .tm-import-panel{border-radius:6px;padding:14px 16px}
+
+/* ---- Crafting solver (craft-solver-vue.js, 16 Nov 2026) ---- */
+.cs-jobs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.cs-jobs button{background:var(--ink);color:var(--text-dim);border:1px solid var(--line);border-radius:5px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer;display:flex;gap:6px;align-items:baseline}
+.cs-jobs button small{color:var(--text-faint);font-size:11px}
+.cs-jobs button.on{border-color:var(--accent,var(--gold));color:var(--text)}
+.cs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:18px}
+.cs-col h3{margin:0 0 8px;font-size:14px;color:var(--text)}
+.cs-col h3 small{color:var(--text-faint);font-weight:normal;margin-left:6px}
+.cs-search{width:100%;max-width:420px;padding:7px 10px;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;font:inherit}
+.cs-results{display:flex;flex-direction:column;max-height:260px;overflow:auto;margin:6px 0;max-width:420px;border:1px solid var(--line-soft);border-radius:5px}
+.cs-results button{display:flex;justify-content:space-between;gap:10px;text-align:left;background:none;border:0;border-bottom:1px solid var(--line-soft);color:var(--text);padding:6px 10px;font:inherit;cursor:pointer}
+.cs-results button:hover{background:var(--panel2)}
+.cs-results small,.cs-picked small{color:var(--text-faint)}
+.cs-picked{display:flex;gap:10px;align-items:baseline;margin-top:8px}
+.cs-row{display:grid;grid-template-columns:130px 110px;align-items:center;gap:8px;margin-bottom:6px;font-size:13px}
+.cs-row input{padding:5px 8px;background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;font:inherit;text-align:right}
+.cs-check{display:block;font-size:13px;margin:4px 0;color:var(--text-dim)}
+.cs-act{display:flex;align-items:center;gap:12px;margin:16px 0 8px;min-height:32px}
+.cs-act button:disabled{opacity:.5;cursor:default}
+.cs-spin{width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--accent,var(--gold));border-radius:50%;animation:cs-spin 1s linear infinite}
+@keyframes cs-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.cs-spin{animation:none}}
+.cs-error{color:var(--rose);font-size:13px;margin:8px 0}
+.cs-bars{max-width:620px}
+.cs-meta{font-size:12px;color:var(--text-faint);margin:8px 0}
+.cs-macros{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:12px}
+.cs-macro{background:var(--ink);border:1px solid var(--line-soft);border-radius:5px;padding:8px 10px}
+.cs-macro-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--text-dim);margin-bottom:6px}
+.cs-macro pre{margin:0;font-family:var(--font-mono);font-size:12px;white-space:pre;overflow-x:auto;user-select:all}
+.cs-credit{font-size:12px;color:var(--text-faint);margin-top:14px}
+.cs-credit a{color:inherit;text-decoration:underline dotted;text-underline-offset:2px}
+.cs-credit a:hover{color:var(--text-dim)}
+@media (max-width:600px){.cs-row{grid-template-columns:1fr 100px}}

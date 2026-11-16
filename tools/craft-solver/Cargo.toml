@@ -1,0 +1,30 @@
+[package]
+name = "craft-solver"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The crafting solver behind the Ledger's Crafting solver frame. A thin
+# wasm-bindgen wrapper over Raphael (https://github.com/KonaeAkira/raphael-rs,
+# Apache-2.0). Single-threaded on purpose: GitHub Pages cannot send the
+# COOP/COEP headers that a threaded build needs. Build with build.sh.
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Pinned to the commit tested on 16 Nov 2026 (game data for patch 7.55).
+# To take new game data, change rev, run build.sh, and test one recipe
+# against raphael-xiv.com.
+raphael-sim = { git = "https://github.com/KonaeAkira/raphael-rs", rev = "723b17ea7d1a719bba212944ebd357fe36b4ac08" }
+raphael-solver = { git = "https://github.com/KonaeAkira/raphael-rs", rev = "723b17ea7d1a719bba212944ebd357fe36b4ac08" }
+raphael-data = { git = "https://github.com/KonaeAkira/raphael-rs", rev = "723b17ea7d1a719bba212944ebd357fe36b4ac08" }
+wasm-bindgen = "=0.2.130"
+
+[workspace]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"

@@ -2394,6 +2394,12 @@ const CharPage = {
     <div :id="cid+'-hunts'" class="hunt-columns"></div>
   </div>
   </div>
+  <div class="tab-panel" data-tab="crafting">
+  <div class="section">
+    <h2>Crafting solver <span class="hint">finds a rotation for one recipe &middot; gives it as game macros</span></h2>
+    <div :id="cid+'-craftsolver'"></div>
+  </div>
+  </div>
   <div class="tab-panel" data-tab="mentor">
   <div class="section" data-frame="battle">
     <h2>Battle Mentor requirements
@@ -2677,6 +2683,7 @@ const AREAS = [
       .map(f => ({tab:'jobs', frame:f.k, l:f.l, n:f.n}))
       .concat([{tab:'mentor', frame:'battle', l:'Battle Mentor'},
                {tab:'mentor', frame:'trade', l:'Trade Mentor'},
+               {tab:'crafting', frame:'*', l:'Crafting solver'},
                {tab:'cosmic', frame:'tools', l:'Cosmic tools'},
                {tab:'cosmic', frame:'red-alerts', l:'Red Alerts'}]),
     meter:c => jobsMeter(c)},
@@ -3091,6 +3098,8 @@ function renderEvents(cid){
    Sites the Ledger does not replace. Plain links: no tracking script runs here. */
 const ELSEWHERE_LINKS = [
   ['Teamcraft', 'https://ffxivteamcraft.com/', 'Crafting lists, simulator, rotations'],
+  // Added 16 Nov 2026 at the Raphael team's request.
+  ['Raphael', 'https://www.raphael-xiv.com/', 'Crafting solver: finds a rotation and gives the macro'],
   ['FFXIV Collect', 'https://ffxivcollect.com/', 'Collections and relic catalogue'],
   ['XIV ToDo', 'https://xivtodo.com/', 'Lodestone profile and duty grid (closes 3 June 2027)'],
   ['Lalachievements', 'https://www.lalachievements.com/', 'Achievement rankings'],
@@ -3110,6 +3119,7 @@ const RAIL_SECTIONS = [
   {key:'routines',  label:'Routines',  group:'Progress',    ico:'↻', count:visibleRoutineCount},
   {key:'jobs',      label:'Jobs',      group:'Progress',    ico:'⚔', count:visibleJobCount},
   {key:'cosmic',    label:'Cosmic',    group:'Progress',    ico:'✧', count:c=>Object.keys((c.cosmicTools||{}).jobs||{}).length},
+  {key:'crafting',  label:'Crafting',  group:'Progress',    ico:'⚒'},
   {key:'journey',   label:'Journey',   group:'Progress',    ico:'⌖'},
   {key:'collections', label:'Collections', group:'Collections', ico:'❖', count:c=>hasCollections(c) ? ownedSet(c,'mounts').size + ownedSet(c,'minions').size : ''},
   {key:'societies', label:'Societies', group:'Collections', ico:'⚬', count:()=>ALLIED_SOCIETIES.length},
@@ -5740,6 +5750,7 @@ function renderChar(cid){
   renderSocieties(cid);
   renderHunts(cid);
   renderCosmic(cid);
+  renderCraftSolver(cid);
   renderCollections(cid);
   renderJourney(cid);
   renderEvents(cid);
