@@ -537,6 +537,9 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   margin-top:20px;padding-top:16px;
 }
 .hunt-rankgroup{margin-bottom:14px}
+/* The game's count for the group, from the plugin export. Plain text: a difference is
+   information, not an error. */
+.hunt-game{font-size:11.5px;color:var(--text-dim);padding:0 8px 6px}
 .hunt-rankgroup:last-child{margin-bottom:0}
 .hunt-rankhead{
   display:flex;align-items:center;gap:9px;
