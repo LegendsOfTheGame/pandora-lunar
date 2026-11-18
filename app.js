@@ -2726,17 +2726,43 @@ const ACTIVE_RESETS = 30;
 function activeWindowStart(now){
   return lastResetInstant(schedById('daily15'), now) - (ACTIVE_RESETS - 1) * DAY_MS;
 }
-function sectionMeter(c, sections){
+function sectionTally(c, sections){
   const now = new Date();
   const since = activeWindowStart(now);
   const rows = (c.routines||[]).filter(r =>
     (c.showGated || !isLocked(r, c)) && (c.showHidden || !r.hidden)
     && sections.includes(routineSection(r)) && !routineFinished(r, c)
     && r.lastDone && r.lastDone >= since);
-  return rows.length ? Math.round(rows.filter(r => isRoutineDone(r, now)).length / rows.length * 100) : null;
+  return {done: rows.filter(r => isRoutineDone(r, now)).length, total: rows.length};
+}
+function sectionMeter(c, sections){
+  const t = sectionTally(c, sections);
+  return t.total ? Math.round(t.done / t.total * 100) : null;
 }
 function todayMeter(c){ return sectionMeter(c, ['Daily']); }
-function weeklyMeter(c){ return sectionMeter(c, ['Weekly', CHALLENGE_SECTION]); }
+
+/* The Challenge Log's share of the weekly meter, from the per-entry log
+   (challenge-vue.js, c.challengeLog), not the old category routine rows. Same
+   rule as the routines: an entry counts when it was completed in one of the
+   last 4 weekly resets (about the routines' 30 days), and it is done when it
+   is full this week. An entry never completed does not count. */
+const CL_METER_WEEKS = 4;
+function challengeTally(c){
+  if(typeof clState !== 'function' || typeof CL_ROWS === 'undefined') return {done: 0, total: 0};
+  if(c.unlocks && c.unlocks.challengeLog === false) return {done: 0, total: 0};
+  const s = clState(c);
+  // Weeks are reset instants in milliseconds (clWeek).
+  const span = CL_METER_WEEKS * 7 * DAY_MS;
+  const recent = id => (s.history[id] || []).some(w => w !== s.week && s.week - w <= span);
+  const full = r => (s.counts[r[0]] || 0) >= r[5];
+  const rows = CL_ROWS.filter(r => clOpen(c, r) && (recent(r[0]) || full(r)));
+  return {done: rows.filter(full).length, total: rows.length};
+}
+function weeklyMeter(c){
+  const a = sectionTally(c, ['Weekly']), b = challengeTally(c);
+  const total = a.total + b.total;
+  return total ? Math.round((a.done + b.done) / total * 100) : null;
+}
 
 /* Seasonal: of the running seasonal events that have quests, how many have every
    quest of this run done. Broadcasts (Fan Fest stage events) have none and are
@@ -5600,9 +5626,12 @@ const SUB_DEFS = {
   'duty-roulette': {parts: SUB_ROULETTES, hint: 'One check per roulette'},
   'gc-turnin': {parts: ['CRP','BSM','ARM','GSM','LTW','WVR','ALC','CUL','MIN','BTN','FSH'], hint: 'Supply = crafters, provisioning = gatherers'},
   'allied-society': {parts: Array.from({length: 12}, (_, i) => String(i + 1)), boxes: true, hint: '12 daily allowances'},
-  'tank-you': {pick: ['Leveling','High-level'], hint: 'Pick the roulette you ran as a tank. It also ticks Duty Roulette.'}
+  'tank-you': {pick: ['Leveling','High-level'], hint: 'Pick the roulette you ran as a tank. It also ticks Duty Roulette.'},
+  // 12 delivery allowances a week, shared by every client (wiki, Custom Deliveries).
+  'custom-deliveries': {parts: Array.from({length: 12}, (_, i) => String(i + 1)), boxes: true, hint: '12 deliveries a week, all clients together'}
 };
-const SUB_LOG = {'duty-roulette': 'Feeling Lucky', 'allied-society': 'Improving Society Somewhat I', 'gc-turnin': "Give 'Em What They Want I"};
+const SUB_LOG = {'duty-roulette': 'Feeling Lucky', 'allied-society': 'Improving Society Somewhat I', 'gc-turnin': "Give 'Em What They Want I",
+  'custom-deliveries': 'The Customer Is Always Right'};
 function subsOf(item){
   const at = lastResetInstant(schedById(item.schedId), new Date());
   if(!item.subs || item.subs.at !== at) item.subs = {at, on: {}};
