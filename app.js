@@ -2772,8 +2772,12 @@ function weeklyMeter(c){
    crossover = 84, quests 3158-3160, under either title the feed has used,
    the same two Time Memoria's Active Events maps). A collaboration that
    returns under a new name needs one more line here. */
+// FFXVI before FFXV, and FFXV with a trailing space: "FINAL FANTASY XVI" begins
+// with "FINAL FANTASY XV", and the first alias found wins. Until 18 Nov 2026 the
+// FFXVI crossover (festival 147, quests 4796-4798) was read as FFXV (84).
 const FEED_FESTIVAL_ALIASES = [['Fall Guys', 148], ['Keybound', 257],
-  ['FINAL FANTASY XV', 84], ['Nocturne for Heroes', 84]];
+  ['Path Infernal', 147], ['FINAL FANTASY XVI', 147],
+  ['FINAL FANTASY XV ', 84], ['Nocturne for Heroes', 84]];
 function eventFestival(e){
   if(typeof TM_FESTIVAL_QUESTS === 'undefined') return null;
   const alias = FEED_FESTIVAL_ALIASES.find(([word]) => e.name.includes(word));
