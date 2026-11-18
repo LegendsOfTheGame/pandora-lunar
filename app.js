@@ -3276,6 +3276,29 @@ function syncPaneTopHeight(){
 }
 /* The site bar is sticky above the rail and the pane, so both pin below it.
    Measured, because the bar wraps to two lines in a narrow window. */
+/* The old address. Lunar lives at legendmemoria.org/lunar now, and the same files
+   are still served from github.io. Browser storage belongs to one address, so a
+   character saved here does not appear at the new one. The notice shows on the
+   github.io copy only, as a row inside the site bar, and offers the existing
+   backup download. Add ?moved to the URL to see it on any other address. */
+const NEW_HOME = 'https://legendmemoria.org/lunar/';
+function showMovedNotice(){
+  const onOld = location.hostname.endsWith('github.io') || new URLSearchParams(location.search).has('moved');
+  const bar = document.querySelector('.sitebar');
+  if(!onOld || !bar || document.getElementById('moved-notice')) return;
+  const row = document.createElement('div');
+  row.id = 'moved-notice';
+  row.className = 'moved-notice';
+  row.setAttribute('role', 'status');
+  row.innerHTML = `<span><b>Pandora Lunar has moved to <a href="${NEW_HOME}">legendmemoria.org/lunar</a>.</b> `
+    + `Your characters are saved in this browser at this address only. Download your backup here, `
+    + `then open the new address and use Settings → Restore from file.</span>`
+    + `<button class="edit-btn" type="button" onclick="exportData()">Download backup</button>`
+    + `<a class="edit-btn" href="${NEW_HOME}">Go to the new address</a>`;
+  bar.appendChild(row);
+  syncSitebarHeight();
+}
+
 function syncSitebarHeight(){
   const bar = document.querySelector('.sitebar');
   if(bar) document.documentElement.style.setProperty('--sitebar-h', bar.offsetHeight + 'px');
@@ -6436,6 +6459,7 @@ function applyTmImport(){
   renderSwitcher();
   updateSoundToggleUI();
   initFootSlot();
+  showMovedNotice();
   setInterval(()=>{ DATA.chars.forEach(c=>{ refreshRoutines(c.id); }); checkResetSounds(); }, 30000);
   window.addEventListener('resize', syncSitebarHeight);
   syncSitebarHeight();

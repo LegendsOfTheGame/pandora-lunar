@@ -1089,6 +1089,18 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
   display:flex;align-items:center;gap:16px;flex-wrap:wrap;
   padding:8px 20px;background:var(--panel);border-bottom:1px solid var(--line);
 }
+/* github.io copy only: the "we have moved" row, full width under the bar. */
+.moved-notice{
+  flex-basis:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:8px 12px;border:1px solid var(--gold-dim);border-radius:6px;
+  font-size:13px;color:var(--text);
+}
+/* At phone width the bar is a grid with rows 1 and 2 placed; this goes under them. */
+.moved-notice{grid-column:1/-1;grid-row:3}
+.moved-notice span{flex:1 1 320px;max-width:90ch}
+.moved-notice b{color:var(--gold);font-weight:600}
+.moved-notice a{color:var(--gold)}
+.moved-notice a.edit-btn{color:var(--text-dim);text-decoration:none}
 .sitebar .domain{font-size:12px;color:var(--text-faint)}
 .sitebar .domain b{font-family:var(--font-display);font-weight:400;font-size:14px;color:var(--gold)}
 .sitebar nav{display:flex;gap:4px;flex-wrap:wrap}
