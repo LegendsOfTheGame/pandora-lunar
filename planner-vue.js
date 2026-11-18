@@ -25,6 +25,16 @@ function plGraph(){
   return PL_G = {G, Q, kids, byName, dutyUnlock, openers};
 }
 const plClean = s => String(s).replace(/^[-]\s*/, '').trim();
+const plByOrder = (a, b) => a[2] - b[2] || a[17] - b[17] || a[0] - b[0];
+/* The quest to do next on the way to quest `id`: walk back through its prerequisites
+   that are not done, and take the earliest one with none left. Null when `id` is
+   done or not in the graph. Shared by Next Steps and the relic cards. */
+function plNextStepTo(done, id){
+  const {Q} = plGraph(), seen = new Set(), st = [id]; let best = null;
+  while(st.length){ const q = Q.get(st.pop()); if(!q || seen.has(q[0]) || done.has(q[0])) continue; seen.add(q[0]);
+    const p = q[6].filter(x => Q.has(x) && !done.has(x)); if(!p.length){ if(!best || plByOrder(q, best) < 0) best = q; } else st.push(...p); }
+  return best;
+}
 function plView(c){
   const {G, Q, byName, dutyUnlock, openers} = plGraph();
   const done = ownedSet(c, 'questsDone');
@@ -33,7 +43,7 @@ function plView(c){
   const startDone = openers.some(r => done.has(r[0]));
   const gcRow = [...done].map(i => Q.get(i)).find(r => r && /^The Company You Keep \(/.test(r[1]));
   const myGC = gcRow ? gcRow[1].replace(/^.*\((.*)\)$/, '$1') : '';
-  const byOrder = (a, b) => a[2] - b[2] || a[17] - b[17] || a[0] - b[0];
+  const byOrder = plByOrder;
   const otherGC = r => { const m = r[1].match(/\(([^)]*)\)$/); return !!(m && myGC && PL_GC.includes(m[1]) && m[1] !== myGC); };
   const available = r => {
     if(done.has(r[0]) || doneNames.has(r[1]) || r[15] || r[16]) return false;
@@ -45,10 +55,7 @@ function plView(c){
     if(!p.length) return r[3] !== 'Class & Job Quests';
     return r[7] === 2 ? p.some(x => done.has(x)) : p.every(x => done.has(x));
   };
-  const nextStepTo = id => { const seen = new Set(), st = [id]; let best = null;
-    while(st.length){ const q = Q.get(st.pop()); if(!q || seen.has(q[0]) || done.has(q[0])) continue; seen.add(q[0]);
-      const p = q[6].filter(x => Q.has(x) && !done.has(x)); if(!p.length){ if(!best || byOrder(q, best) < 0) best = q; } else st.push(...p); }
-    return best; };
+  const nextStepTo = id => plNextStepTo(done, id);
   const levels = Object.assign({}, c.combat, c.craft, c.gather);
   const jobOf = g => { const n = g.replace(/ Quests$/, ''); return PL_CLASS_JOB[n] || n; };
   const jobLv = g => { const j = jobOf(g); return j in levels ? Math.floor(levels[j]) : null; };

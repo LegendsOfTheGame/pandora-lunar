@@ -157,7 +157,16 @@ const RelicLineCards = {
       return relicLinesOfKind(props.kind).filter(k => RELIC_STAGES[k]).map(k => Object.assign(rjCard(k, h), {grid: grids[k]}));
     });
     const startDone = code => { const u = RJ_UNLOCK[code]; return !!(u && ownedSet(props.c, 'questsDone').has(u[1])); };
-    return {open, held, cards, startDone};
+    // When the starting quest is not open yet: the first quest on the way to it,
+    // from the quest graph (planner-vue.js). Null when it is open now.
+    const firstStep = code => {
+      const u = RJ_UNLOCK[code];
+      if(!u || typeof plNextStepTo !== 'function') return null;
+      const q = plNextStepTo(ownedSet(props.c, 'questsDone'), u[1]);
+      if(!q || q[0] === u[1]) return null;
+      return {quest: rjClean(q[1]), place: q[9], lv: q[8]};
+    };
+    return {open, held, cards, startDone, firstStep};
   },
   template: `
     <div v-if="held === null" class="jr-note">Import a newer Tales of Milestones export (Copy everything) to see your relics.</div>
@@ -175,6 +184,7 @@ const RelicLineCards = {
           <span class="rj-st">NOT STARTED</span>
           <small v-if="l.start && startDone(l.code)">You have done the starting quest, <b>{{ l.start.quest }}</b>.</small>
           <small v-else-if="l.start">Start with <b>{{ l.start.quest }}</b> from {{ l.start.giver }} in {{ l.start.place }} (X: {{ l.start.x }} Y: {{ l.start.y }}) · Lv {{ l.start.lv }}</small>
+          <small v-if="l.start && !startDone(l.code) && firstStep(l.code)">That quest is not open yet. First do <b>{{ firstStep(l.code).quest }}</b><template v-if="firstStep(l.code).place"> in {{ firstStep(l.code).place }}</template> · Lv {{ firstStep(l.code).lv }}.</small>
           <small v-else>This line has no starting quest. The stages are bought or earned directly.</small>
         </template>
         <relic-line-panel v-if="l.grid" :line="l.grid" :open="!!open[l.code]" @toggle="open[l.code] = !open[l.code]"></relic-line-panel>
