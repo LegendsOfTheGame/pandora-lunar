@@ -182,6 +182,44 @@ const RelicLineCards = {
     </div>`
 };
 
+/* ---- Relic armor cards (Layout D, Haven 18 Nov 2026) ----
+   Armor is not a line of stages: each set is five slots, per role or per job. One
+   card per set, newest first. Each role or job that holds at least one piece shows
+   "3 of 5 slots" and a five-cell bar in slot order. A set nobody holds is dimmed.
+   The full grid (every slot by role or job) stays inside the card behind its
+   button, as on the weapon cards. */
+const RelicArmorCards = {
+  components: {RelicLinePanel},
+  props: {c: Object, tick: Number},
+  setup(props){
+    const open = Vue.reactive({});
+    const held = Vue.computed(() => (props.tick, heldRelics(props.c)));
+    const cards = Vue.computed(() => relicPanels('armor', held.value || {}).map(p => {
+      const who = p.jobs.map((j, i) => {
+        const cells = p.rows.map(r => ({on: r.cells[i].on, title: r.name}));
+        return {j, n: cells.filter(x => x.on).length, cells};
+      }).filter(x => x.n > 0);
+      return {code: p.code, name: p.name, slots: p.rows.length, who, grid: p};
+    }));
+    return {open, held, cards};
+  },
+  template: `
+    <div v-if="held === null" class="jr-note">Import a newer Tales of Milestones export (Copy everything) to see your relics.</div>
+    <div v-else class="rj-grid">
+      <section v-for="s in cards" :key="s.code" class="rj-card" :class="{dim: !s.who.length}">
+        <h4>{{ s.name }}</h4>
+        <div v-for="x in s.who" :key="x.j" class="rl-job">
+          <span class="pl-exp">{{ x.j }}</span>
+          <div class="rl-job-body"><b>{{ x.n }} of {{ s.slots }} slots</b>
+            <div class="tbar" role="img" :aria-label="x.j + ': ' + x.n + ' of ' + s.slots + ' slots'"><i v-for="(cl, i) in x.cells" :key="i" :class="{on: cl.on}" style="--c: var(--tier-1)" :title="cl.title + (cl.on ? ' · held' : '')"></i></div>
+          </div>
+        </div>
+        <span v-if="!s.who.length" class="rj-st">NOT STARTED</span>
+        <relic-line-panel :line="s.grid" :open="!!open[s.code]" @toggle="open[s.code] = !open[s.code]"></relic-line-panel>
+      </section>
+    </div>`
+};
+
 const RelicsPanel = {
   components: {RelicLinePanel},
   props: {c: Object, kind: String, tick: Number},

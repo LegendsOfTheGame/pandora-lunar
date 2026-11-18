@@ -427,6 +427,8 @@ function relicGaroArmorPanel(held){
 }
 function relicPanels(kind, held){
   if(kind === 'armor') return RELIC_ARMOR_PANELS.map(([name, line, stage]) => relicArmorPanel(name, line, stage, held));
+  // The GARO frame draws its weapon line as a line card and only the armor sets as a grid.
+  if(kind === 'garo-armor') return [relicGaroArmorPanel(held)];
   const lines = relicLinesOfKind(kind).map(code => relicLineView(code, held));
   return kind === 'garo' ? lines.concat(relicGaroArmorPanel(held)) : lines;
 }
@@ -481,7 +483,7 @@ function relicStageName(code, job, stage){
    draw. The Relics frames are RelicsPanel (relics-vue.js), which take the tick as a
    prop, so an open panel stays open when renderJourney runs. */
 const JourneyPanel = {
-  components: {EmptyTm, GenreList, RelicsPanel, RelicsByJob, RelicLineCards},
+  components: {EmptyTm, GenreList, RelicsPanel, RelicsByJob, RelicLineCards, RelicArmorCards},
   props: ['state'],
   setup(props){
     const view = Vue.computed(() => {
@@ -543,10 +545,11 @@ const JourneyPanel = {
       <div class="jr-note">{{ view.asOf }}</div>
       <div data-frame="questlines"><genre-list :list="view.questlines" @toggle="toggle"></genre-list></div>
       <div data-frame="relics"><relic-line-cards :c="view.c" kind="weapons" :tick="view.tick"></relic-line-cards></div>
-      <div data-frame="relic-armor"><relics-panel :c="view.c" kind="armor" :tick="view.tick"></relics-panel></div>
+      <div data-frame="relic-armor"><relic-armor-cards :c="view.c" :tick="view.tick"></relic-armor-cards></div>
       <div data-frame="relic-tools"><relic-line-cards :c="view.c" kind="tools" :tick="view.tick"></relic-line-cards></div>
       <div data-frame="relic-jobs"><relics-by-job :c="view.c" :tick="view.tick"></relics-by-job></div>
-      <div data-frame="relic-garo"><relics-panel :c="view.c" kind="garo" :tick="view.tick"></relics-panel></div>
+      <div data-frame="relic-garo"><relic-line-cards :c="view.c" kind="garo" :tick="view.tick"></relic-line-cards>
+        <relics-panel :c="view.c" kind="garo-armor" :tick="view.tick"></relics-panel></div>
       <div data-frame="seasonal"><div class="jr-note">Every seasonal quest ever offered, by event. Many events reuse their quests each year.</div><genre-list :list="view.seasonal" @toggle="toggle"></genre-list></div>
       <div data-frame="duties"><div class="jr-note">Cleared means the game recorded a completion. Quest battles and deep dungeon floors are not counted here.</div>
         <template v-for="d in view.duties" :key="d.exp">
