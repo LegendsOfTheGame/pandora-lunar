@@ -2060,15 +2060,69 @@ function normalizeCharacter(c){
   if(typeof c.tmSyncedAt !== 'string') c.tmSyncedAt = null;
   if(typeof c.tmSyncedVersion !== 'string') c.tmSyncedVersion = null;
   if(typeof c.playtimeAsOf !== 'string') c.playtimeAsOf = null;
+  // Share state for this character's code (share-client.js). Null when the
+  // character has no code. Holds the owner key and data key: keep it private.
+  if(!c.share || typeof c.share !== 'object' || typeof c.share.code !== 'string'
+     || typeof c.share.ownerKey !== 'string' || typeof c.share.dek !== 'string') c.share = null;
   return c;
 }
 
 /* ---------- top-level data ---------- */
 let DATA = null;
 
+/* Viewer mode: the page was opened with ?share=CODE. Set by loadShareView.
+   {code, row} while a shared character is shown (nothing is saved), or
+   {code, error} when the code could not be shown (the own Ledger loads). */
+let SHARE_VIEW = null;
+function viewingShare(){ return !!(SHARE_VIEW && SHARE_VIEW.row); }
+
+async function loadShareView(raw){
+  const code = new URLSearchParams(location.search).get('share');
+  if(!code) return false;
+  SHARE_VIEW = {code: LunarShare.normalize(code)};
+  let row = null;
+  try{ row = await LunarShare.lookup(code); }
+  catch(e){ SHARE_VIEW.error = e.message || String(e); return false; }
+  if(!row || !row.progress){ SHARE_VIEW.error = 'No live share has this code. It may have expired.'; return false; }
+  SHARE_VIEW.row = row;
+  const ch = JSON.parse(JSON.stringify(row.progress));
+  delete ch.id;
+  // Own display settings (theme, time mode); own navigation state is left out.
+  const ownUi = raw && raw.ui && typeof raw.ui === 'object' ? raw.ui : {};
+  DATA = { chars:[ch], activeId:null, ui:{ theme:ownUi.theme, timeMode:ownUi.timeMode, collapsed:{} } };
+  normalizeData();
+  // Next Steps (routines, notes) and Settings are the sharer's own business.
+  for(let i = AREAS.length - 1; i >= 0; i--) if(['today','settings'].includes(AREAS[i].key)) AREAS.splice(i, 1);
+  return true;
+}
+
+function renderShareBanner(){
+  if(!SHARE_VIEW) return;
+  // At the top of the pane, above the area title, so it is the first thing seen.
+  const anchor = document.getElementById('spot') || document.getElementById('pages');
+  if(!anchor) return;
+  const b = document.createElement('div');
+  b.id = 'share-banner';
+  const back = `<a href="${esc(location.pathname)}">Back to my Ledger</a>`;
+  if(SHARE_VIEW.row){
+    const r = SHARE_VIEW.row, c = DATA.chars[0];
+    const who = esc(c.name || 'Unnamed character') + (c.server && c.server.world ? ', ' + esc(c.server.world) : '');
+    const expiry = r.is_permanent ? 'permanent' : 'expires ' + esc(fmtShareTime(r.expires_at));
+    b.className = 'share-banner';
+    b.innerHTML = `<b>Shared code ${esc(LunarShare.displayCode(r.code))}</b> · ${who}
+      · data as of ${esc(fmtShareTime(r.data_as_of))} · shared ${esc(fmtShareTime(r.shared_at))} · ${expiry}
+      <span class="hint">Read only. Nothing you change here is saved.</span> ${back}`;
+  }else{
+    b.className = 'share-banner share-banner-error';
+    b.innerHTML = `<b>Could not open code ${esc(LunarShare.displayCode(SHARE_VIEW.code))}.</b> ${esc(SHARE_VIEW.error)} ${back}`;
+  }
+  anchor.parentNode.insertBefore(b, anchor);
+}
+
 async function loadData(){
   let raw = null;
   try{ raw = JSON.parse(localStorage.getItem('ledger-data') || 'null'); }catch(e){ raw = null; }
+  if(await loadShareView(raw)) return;
   if(!raw || !Array.isArray(raw.chars) || raw.chars.length === 0){
     const first = newCharacter('');
     DATA = { chars:[first], activeId:first.id, ui:{collapsed:{}} };
@@ -2092,6 +2146,11 @@ function normalizeData(){
 function getChar(cid){ return DATA.chars.find(c=>c.id===cid); }
 
 async function save(){
+  if(viewingShare()){
+    // Never write a shared character over the viewer's own Ledger.
+    document.getElementById('save-status').textContent = 'Viewing a shared code · not saved';
+    return;
+  }
   collectAllInputs();
   try{
     localStorage.setItem('ledger-data', JSON.stringify(DATA));
@@ -2475,6 +2534,10 @@ const CharPage = {
       <button class="edit-btn" onclick="document.getElementById('import-file').click()">Restore from file</button>
     </div>
   </div>
+  <div class="section" data-frame="share">
+    <h2>Share</h2>
+    <div class="share-body" :id="cid+'-share'"></div>
+  </div>
   </div>`
 };
 /* All the pages, one app on #pages. Each rebuild mounts a new app, so the pages are
@@ -2701,7 +2764,8 @@ const AREAS = [
       {tab:'journey', frame:'mountspeed', l:'Mount speed'}]},
   {key:'elsewhere', label:'Elsewhere', frames:() => [{tab:'elsewhere', frame:'*', l:'Other sites'}]},
   {key:'settings', label:'Settings', frames:() => [{tab:'settings', frame:'character', l:'Character'},
-      {tab:'settings', frame:'display', l:'Display'}, {tab:'settings', frame:'data', l:'Backup and import'}]}
+      {tab:'settings', frame:'display', l:'Display'}, {tab:'settings', frame:'data', l:'Backup and import'},
+      {tab:'settings', frame:'share', l:'Share'}]}
 ];
 function areaFrameId(f){ return f.tab + ':' + f.frame; }
 
@@ -3266,7 +3330,7 @@ function framesFor(section, c){
     case 'notes':
       return [{k:'trackers', l:'Trackers'}, {k:'notes', l:'Notes'}];
     case 'settings':
-      return [{k:'character', l:'Character'}, {k:'display', l:'Display'}, {k:'data', l:'Backup and import'}];
+      return [{k:'character', l:'Character'}, {k:'display', l:'Display'}, {k:'data', l:'Backup and import'}, {k:'share', l:'Share'}];
   }
   return [];
 }
@@ -5829,6 +5893,7 @@ function renderChar(cid){
   renderCustom(cid);
   renderTmSyncNote(cid);
   renderLastCompleted(cid);
+  renderShare(cid);
   // The renderers above draw new elements, which come without the frame
   // classes. Settle them again for each section of this character.
   RAIL_SECTIONS.forEach(s => applyFrames(cid, s.key));
@@ -5945,6 +6010,233 @@ function importData(input){
   reader.onerror = function(){ alert('Could not read that file.'); input.value=''; };
   reader.readAsText(file);
 }
+
+/* ---------- share profiles ---------- */
+/* One code per character (Haven, 18 Nov 2026). The public part is the
+   character's progress without the fields below. The backup is the whole
+   character plus display settings, encrypted in this browser before upload. */
+const SHARE_PRIVATE_FIELDS = ['id', 'notes', 'custom', 'routines', 'routinesSeeded', 'seedGeneration',
+  'share', 'msqBreakdownOpen', 'jobQuestsOpen', 'huntsCollapsed', 'showGated', 'showHidden',
+  'showZeroJobs', 'itemJobsOff', 'itemsAhead', 'itemsHq'];
+const shareUi = {};   // per character, not saved: {busy, error, note, codes, showKey, keep}
+
+function shareState(cid){ return shareUi[cid] || (shareUi[cid] = {}); }
+
+function sharePublicProgress(c){
+  const p = JSON.parse(JSON.stringify(c));
+  SHARE_PRIVATE_FIELDS.forEach(k => delete p[k]);
+  return p;
+}
+function shareBackupObject(c){
+  const ch = JSON.parse(JSON.stringify(c));
+  delete ch.share;
+  return { app:'pandora-lunar-share', version:1, character:ch,
+           ui:{ theme:DATA.ui.theme, timeMode:DATA.ui.timeMode } };
+}
+function fmtShareTime(iso){
+  if(!iso) return '—';
+  const d = new Date(iso);
+  if(localUtcMode()) return d.toLocaleString([], {dateStyle:'medium', timeStyle:'short'});
+  return d.toISOString().slice(0,16).replace('T',' ') + ' UTC';
+}
+
+function renderShare(cid){
+  const box = document.getElementById(cid + '-share');
+  if(!box) return;
+  const c = getChar(cid), s = shareState(cid), sh = c.share;
+  const busy = s.busy ? ' disabled' : '';
+  let h = '';
+
+  if(!LunarShare.available()){
+    box.innerHTML = '<p class="hint">Sharing is not available yet.</p>';
+    return;
+  }
+
+  if(s.error) h += `<p class="share-error">${esc(s.error)}</p>`;
+  if(s.note) h += `<p class="share-note">${esc(s.note)}</p>`;
+
+  if(s.codes){
+    h += `<div class="share-recovery">
+      <p><b>Recovery codes.</b> Write these down now. They are shown only once.
+      Each code works one time to restore this character on another device.</p>
+      <ol>${s.codes.map(x => `<li><code>${esc(x)}</code></li>`).join('')}</ol>
+      <div class="set-actions"><button class="edit-btn" onclick="shareCopyRecovery('${cid}')">Copy codes</button>
+      <button class="edit-btn" onclick="shareHideRecovery('${cid}')">I saved these codes</button></div>
+    </div>`;
+  }
+
+  const world = c.server && c.server.world ? c.server.world : 'no world set';
+  const asOf = c.tmSyncedAt ? fmtShareTime(c.tmSyncedAt) : 'now (no Tales of Milestones import yet)';
+  const whatGoesUp = `<div class="set-rows share-preview">
+      <div class="set-row"><span>Name</span><b>${esc(c.name || 'no name set')}</b></div>
+      <div class="set-row"><span>World</span><b>${esc(world)}</b></div>
+      <div class="set-row"><span>Data as of</span><b>${esc(asOf)}</b></div>
+    </div>
+    <p class="hint">Anyone with the code sees this character's progress. Notes, trackers and routine ticks
+    are not shown. They go up only in an encrypted backup that only you can open.</p>`;
+
+  if(!sh){
+    h += `<p class="hint">Share this character's progress with a short code. A code expires 48 hours after
+      the last share, unless you keep it permanently.</p>${whatGoesUp}
+      <label class="set-row"><span>Keep this code permanently</span>
+        <input type="checkbox" ${s.keep ? 'checked' : ''} onchange="shareState('${cid}').keep = this.checked"></label>
+      <div class="set-actions"><button class="edit-btn" onclick="shareUpload('${cid}')"${busy}>${s.busy ? 'Sharing…' : 'Share this character'}</button></div>`;
+  }else{
+    const expiry = sh.isPermanent ? 'never (permanent)' : fmtShareTime(sh.expiresAt);
+    h += `<div class="share-code"><code>${esc(LunarShare.displayCode(sh.code))}</code></div>
+      <div class="set-rows">
+        <div class="set-row"><span>Shared at</span><b>${esc(fmtShareTime(sh.sharedAt))}</b></div>
+        <div class="set-row"><span>Data as of</span><b>${esc(fmtShareTime(sh.dataAsOf))}</b></div>
+        <div class="set-row"><span>Expires</span><b>${esc(expiry)}</b></div>
+        <div class="set-row"><span>Recovery codes left</span><b>${sh.recoveryCodesLeft ?? '—'}</b></div>
+      </div>
+      ${whatGoesUp}
+      <div class="set-actions">
+        <button class="edit-btn" onclick="shareUpload('${cid}')"${busy}>${s.busy ? 'Sharing…' : 'Share again'}</button>
+        <button class="edit-btn" onclick="shareCopyCode('${cid}')">Copy code</button>
+        <button class="edit-btn" onclick="shareToggleKey('${cid}')">${s.showKey ? 'Hide owner key' : 'Show owner key'}</button>
+        <button class="edit-btn" onclick="shareNewRecovery('${cid}')"${busy}>New recovery codes</button>
+        <button class="remove-char-btn" onclick="shareStop('${cid}')"${busy}>Stop sharing</button>
+      </div>`;
+    if(s.showKey){
+      h += `<div class="share-key"><p><b>Owner key.</b> This key proves that this browser owns the code.
+        Save it in a password manager. With the code and this key you can restore this character in another browser.</p>
+        <code>${esc(sh.ownerKey)}</code>
+        <div class="set-actions"><button class="edit-btn" onclick="shareCopyKey('${cid}')">Copy owner key</button></div></div>`;
+    }
+    h += `<p class="hint">If you clear this browser's data, this browser loses control of the code.
+      Keep the owner key or the recovery codes to get it back.</p>`;
+  }
+
+  h += `<details class="share-view"><summary>View someone else's code</summary>
+      <div class="set-rows">
+        <label class="set-row"><span>Share code</span><input type="text" id="${cid}-view-code" placeholder="K7Q2-M9XP" autocomplete="off"
+          onkeydown="if(event.key==='Enter') shareOpenView('${cid}')"></label>
+      </div>
+      <p class="hint">Opens a read-only view. Your own Ledger is not changed.</p>
+      <div class="set-actions"><button class="edit-btn" onclick="shareOpenView('${cid}')">View</button></div>
+    </details>`;
+
+  h += `<details class="share-restore"><summary>Restore a character from a code</summary>
+      <div class="set-rows">
+        <label class="set-row"><span>Share code</span><input type="text" id="${cid}-restore-code" placeholder="K7Q2-M9XP" autocomplete="off"></label>
+        <label class="set-row"><span>Owner key or recovery code</span><input type="text" id="${cid}-restore-proof" autocomplete="off"></label>
+      </div>
+      <p class="hint">A recovery code works once. After a restore with a recovery code, the browser that had
+      the code before loses control of it.</p>
+      <div class="set-actions"><button class="edit-btn" onclick="shareRestore('${cid}')"${busy}>Restore</button></div>
+    </details>`;
+
+  box.innerHTML = h;
+}
+
+async function shareRun(cid, work){
+  const s = shareState(cid);
+  if(s.busy) return;
+  s.busy = true; s.error = null; s.note = null;
+  renderShare(cid);
+  try{ await work(s); }
+  catch(e){ s.error = e && e.message ? e.message : String(e); }
+  s.busy = false;
+  renderShare(cid);
+}
+
+function shareUpload(cid){
+  return shareRun(cid, async s => {
+    collectAllInputs();
+    const c = getChar(cid);
+    const r = await LunarShare.upload({
+      share: c.share,
+      progress: sharePublicProgress(c),
+      dataAsOf: c.tmSyncedAt || new Date().toISOString(),
+      backupObj: shareBackupObject(c),
+      keepPermanent: !c.share && !!s.keep,
+    });
+    if(c.share && r.isNew) s.note = 'The old code had expired, so this character has a new code.';
+    c.share = r.share;
+    if(r.recoveryCodes) s.codes = r.recoveryCodes;
+    save();
+  });
+}
+
+function shareStop(cid){
+  const c = getChar(cid);
+  if(!c.share) return;
+  if(!confirm(`Stop sharing ${LunarShare.displayCode(c.share.code)}?\n\nThe code stops working for everyone, and the server copy of the backup is deleted. This cannot be undone.`)) return;
+  return shareRun(cid, async s => {
+    await LunarShare.remove(c.share);
+    c.share = null; s.codes = null; s.showKey = false;
+    s.note = 'Sharing stopped. The code no longer works.';
+    save();
+  });
+}
+
+function shareNewRecovery(cid){
+  const c = getChar(cid);
+  if(!c.share) return;
+  if(!confirm('Make a new set of recovery codes?\n\nThe old codes stop working.')) return;
+  return shareRun(cid, async s => {
+    s.codes = await LunarShare.newRecoverySet(c.share);
+    c.share.recoveryCodesLeft = s.codes.length;
+    save();
+  });
+}
+
+function shareRestore(cid){
+  const code = (document.getElementById(cid + '-restore-code') || {}).value || '';
+  const proof = ((document.getElementById(cid + '-restore-proof') || {}).value || '').trim();
+  if(!LunarShare.normalize(code) || !proof){ shareState(cid).error = 'Enter the share code and an owner key or a recovery code.'; renderShare(cid); return; }
+  // A recovery code is 16 letters and digits; an owner key is 43 base64url characters.
+  const isRecovery = LunarShare.normalize(proof).length === 16 && proof.length <= 19;
+  return shareRun(cid, async s => {
+    const r = await LunarShare.restore(isRecovery ? {code, recoveryCode:proof} : {code, ownerKey:proof});
+    const b = r.backupObj;
+    if(!b || !b.character) throw new Error('The backup has no character in it.');
+    const ch = b.character;
+    // Every check and question comes BEFORE finish(): a recovery code is spent
+    // and the owner key replaced only when the restore will really be saved.
+    const idx = DATA.chars.findIndex(x => x.id === ch.id);
+    if(idx >= 0){
+      if(!confirm(`Replace "${DATA.chars[idx].name || 'this character'}" in this browser with the restored copy?`)){
+        s.note = 'Restore cancelled. Nothing changed.';
+        return;
+      }
+    }else if(DATA.chars.length >= MAX_CHARS){
+      throw new Error(`This browser already has ${MAX_CHARS} characters. Remove one first.`);
+    }
+    ch.share = await r.finish();
+    if(idx >= 0) DATA.chars[idx] = ch; else DATA.chars.push(ch);
+    if(b.ui){
+      if(b.ui.theme) DATA.ui.theme = b.ui.theme;
+      if(b.ui.timeMode) DATA.ui.timeMode = b.ui.timeMode;
+    }
+    DATA.activeId = ch.id;
+    normalizeData();
+    // Write directly, not through save(): save() first copies the form fields
+    // on screen (the OLD character) back into DATA and would undo the restore.
+    try{ localStorage.setItem('ledger-data', JSON.stringify(DATA)); }
+    catch(e){ throw new Error('The restore worked on the server, but this browser could not save it. Copy the owner key from Settings → Share before you leave this page.'); }
+    location.reload();
+  });
+}
+
+function shareOpenView(cid){
+  const code = LunarShare.normalize((document.getElementById(cid + '-view-code') || {}).value);
+  if(!code){ shareState(cid).error = 'Enter a share code.'; renderShare(cid); return; }
+  save();
+  location.href = location.pathname + '?share=' + encodeURIComponent(code);
+}
+
+function shareCopy(text, cid, what){
+  navigator.clipboard.writeText(text).then(
+    () => { shareState(cid).note = what + ' copied.'; renderShare(cid); },
+    () => { shareState(cid).error = 'Could not copy. Select the text and copy it by hand.'; renderShare(cid); });
+}
+function shareCopyCode(cid){ const c = getChar(cid); if(c.share) shareCopy(LunarShare.displayCode(c.share.code), cid, 'Code'); }
+function shareCopyKey(cid){ const c = getChar(cid); if(c.share) shareCopy(c.share.ownerKey, cid, 'Owner key'); }
+function shareCopyRecovery(cid){ const s = shareState(cid); if(s.codes) shareCopy(s.codes.join('\n'), cid, 'Recovery codes'); }
+function shareToggleKey(cid){ const s = shareState(cid); s.showKey = !s.showKey; renderShare(cid); }
+function shareHideRecovery(cid){ shareState(cid).codes = null; renderShare(cid); }
 
 /* ---------- Time Memoria import ---------- */
 // One-way plugin -> ledger, clipboard only. Never auto-matched to a character (the plugin
@@ -6527,6 +6819,8 @@ function applyTmImport(){
 /* ---------- init ---------- */
 (async function init(){
   await loadData();
+  if(viewingShare()) document.body.classList.add('share-viewer');
+  renderShareBanner();
   applyTheme();
   if(DATA.ui.railCollapsed){
     document.getElementById('rail').classList.add('collapsed');
