@@ -2155,6 +2155,7 @@ async function save(){
   try{
     localStorage.setItem('ledger-data', JSON.stringify(DATA));
     document.getElementById('save-status').textContent = 'Saved locally';
+    scheduleAutoShare();
   }catch(e){
     document.getElementById('save-status').textContent = 'Save failed';
   }
@@ -6083,11 +6084,15 @@ function renderShare(cid){
       <div class="set-actions"><button class="edit-btn" onclick="shareUpload('${cid}')"${busy}>${s.busy ? 'Sharing…' : 'Share this character'}</button></div>`;
   }else{
     const expiry = sh.isPermanent ? 'never (permanent)' : fmtShareTime(sh.expiresAt);
+    const auto = !sh.isPermanent ? 'no. Only permanent codes update automatically.'
+      : sh.autoStopped ? 'stopped. This browser no longer controls the code.'
+      : 'yes. After a change, at most once every 15 minutes, while this page is open.';
     h += `<div class="share-code"><code>${esc(LunarShare.displayCode(sh.code))}</code></div>
       <div class="set-rows">
         <div class="set-row"><span>Shared at</span><b>${esc(fmtShareTime(sh.sharedAt))}</b></div>
         <div class="set-row"><span>Data as of</span><b>${esc(fmtShareTime(sh.dataAsOf))}</b></div>
         <div class="set-row"><span>Expires</span><b>${esc(expiry)}</b></div>
+        <div class="set-row"><span>Updates automatically</span><b>${esc(auto)}</b></div>
         <div class="set-row"><span>Recovery codes left</span><b>${sh.recoveryCodesLeft ?? '—'}</b></div>
       </div>
       ${whatGoesUp}
@@ -6145,6 +6150,7 @@ function shareUpload(cid){
   return shareRun(cid, async s => {
     collectAllInputs();
     const c = getChar(cid);
+    const fp = await shareFingerprint(c);
     const r = await LunarShare.upload({
       share: c.share,
       progress: sharePublicProgress(c),
@@ -6153,10 +6159,69 @@ function shareUpload(cid){
       keepPermanent: !c.share && !!s.keep,
     });
     if(c.share && r.isNew) s.note = 'The old code had expired, so this character has a new code.';
-    c.share = r.share;
+    c.share = Object.assign(r.share, {lastFingerprint: fp});
     if(r.recoveryCodes) s.codes = r.recoveryCodes;
     save();
   });
+}
+
+/* Automatic updates for permanent codes (Haven, 19 Nov 2026): after a change
+   is saved, a permanent code is uploaded again without a click. Timed codes
+   stay manual, so that they still expire when the player stops sharing.
+   - Waits AUTO_SHARE_DELAY_MS after the last save, so a run of edits is one upload.
+   - At most one upload per character per AUTO_SHARE_GAP_MS. The server allows
+     12 calls per hour from one address.
+   - Skips the upload when the public part and the backup did not change
+     (lastFingerprint).
+   - Update only: if this browser no longer controls the code, the server
+     refuses, and automatic updates stop for that character (autoStopped). */
+const AUTO_SHARE_DELAY_MS = 60 * 1000;
+const AUTO_SHARE_GAP_MS = 15 * 60 * 1000;
+let autoShareTimer = null;
+
+function autoShareCandidates(){
+  return DATA.chars.filter(c => c.share && c.share.isPermanent && !c.share.autoStopped);
+}
+function scheduleAutoShare(delay){
+  if(viewingShare() || !LunarShare.available() || !autoShareCandidates().length) return;
+  clearTimeout(autoShareTimer);
+  autoShareTimer = setTimeout(runAutoShare, delay ?? AUTO_SHARE_DELAY_MS);
+}
+async function shareFingerprint(c){
+  return LunarShare.fingerprint({p: sharePublicProgress(c), b: shareBackupObject(c)});
+}
+async function runAutoShare(){
+  let retryIn = null;
+  for(const c of autoShareCandidates()){
+    const s = shareState(c.id);
+    if(s.busy) continue;
+    const fp = await shareFingerprint(c);
+    if(fp === c.share.lastFingerprint) continue;
+    const wait = AUTO_SHARE_GAP_MS - (Date.now() - Date.parse(c.share.sharedAt || 0));
+    if(wait > 0){ retryIn = Math.min(retryIn ?? wait, wait); continue; }
+    s.busy = true; s.error = null;
+    renderShare(c.id);
+    try{
+      const r = await LunarShare.upload({
+        share: c.share, progress: sharePublicProgress(c),
+        dataAsOf: c.tmSyncedAt || new Date().toISOString(),
+        backupObj: shareBackupObject(c), updateOnly: true,
+      });
+      c.share = Object.assign(r.share, {lastFingerprint: fp, autoAt: r.share.sharedAt});
+    }catch(e){
+      if(e.status === 400 && /newOwnerKey/.test(e.message)){
+        c.share.autoStopped = true;
+        s.error = `This browser no longer controls ${LunarShare.displayCode(c.share.code)}. Automatic updates have stopped.`;
+      }else{
+        s.error = 'Automatic update failed: ' + (e.message || e) + '. It will try again later.';
+        retryIn = Math.min(retryIn ?? AUTO_SHARE_GAP_MS, AUTO_SHARE_GAP_MS);
+      }
+    }
+    s.busy = false;
+    renderShare(c.id);
+    save();
+  }
+  if(retryIn !== null) scheduleAutoShare(retryIn + 1000);
 }
 
 function shareStop(cid){
@@ -6834,4 +6899,7 @@ function applyTmImport(){
   setInterval(()=>{ DATA.chars.forEach(c=>{ refreshRoutines(c.id); }); checkResetSounds(); }, 30000);
   window.addEventListener('resize', syncSitebarHeight);
   syncSitebarHeight();
+  // A Tales of Milestones import reloads the page, so changes made before the
+  // reload are uploaded from here.
+  scheduleAutoShare();
 })();

@@ -155,28 +155,36 @@ const LunarShare = (() => {
      Every upload also prepares a fallback recovery set: when the server makes a
      NEW code (first share, or the old code expired), that set becomes live and
      its plain codes are returned to show once. */
-  async function upload({share, progress, dataAsOf, backupObj, keepPermanent}){
+  /* updateOnly (automatic updates): sends no new owner key and no recovery
+     set, so the server can only UPDATE the existing code. If this browser no
+     longer controls the code, the server refuses (400) instead of making a
+     new code, and the caller stops automatic updates. */
+  async function upload({share, progress, dataAsOf, backupObj, keepPermanent, updateOnly}){
     const ownerKey = (share && share.ownerKey) || newOwnerKey();
     const dek = (share && share.dek) || newDek();
     const backup = await encryptBackup(dek, backupObj);
     const ownerWrappedDek = await wrapDek(dek, await ownerWrapKey(ownerKey));
-    const recovery = await makeRecoverySet(dek);
+    const recovery = updateOnly ? null : await makeRecoverySet(dek);
 
     const r = await call('upload', {
       code: share && share.code || undefined,
       ownerKey: share && share.code ? ownerKey : undefined,
-      newOwnerKey: ownerKey,
+      newOwnerKey: updateOnly ? undefined : ownerKey,
       keepPermanent: !!keepPermanent,
       progress, dataAsOf,
       backup: { ciphertext: backup.ciphertext, iv: backup.iv, ownerWrappedDek },
-      recoveryCodes: recovery.entries,
+      recoveryCodes: updateOnly ? undefined : recovery.entries,
     });
     return {
       share: { code: r.code, ownerKey, dek, isPermanent: r.isPermanent, expiresAt: r.expiresAt,
                sharedAt: r.sharedAt, dataAsOf: r.dataAsOf, recoveryCodesLeft: r.recoveryCodesLeft },
       isNew: r.isNew,
-      recoveryCodes: r.isNew ? recovery.codes : null,
+      recoveryCodes: r.isNew && recovery ? recovery.codes : null,
     };
+  }
+
+  async function fingerprint(obj){
+    return sha256Hex(enc.encode(JSON.stringify(obj)));
   }
 
   async function remove(share){
@@ -217,5 +225,5 @@ const LunarShare = (() => {
     return { backupObj, finish };
   }
 
-  return { available, displayCode, normalize, upload, remove, newRecoverySet, restore, lookup };
+  return { available, displayCode, normalize, upload, remove, newRecoverySet, restore, lookup, fingerprint };
 })();
