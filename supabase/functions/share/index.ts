@@ -309,7 +309,7 @@ async function handleUpload(body: UploadRequest) {
         });
         if (e2) throw new HttpError(500, "backup update failed");
 
-        // 0 after an admin re-key: the browser must then make a new recovery set.
+        // Unused recovery codes left, for the Share frame.
         const { count } = await db.from("share_recovery_codes")
           .select("id", { count: "exact", head: true })
           .eq("share_id", share.id).is("used_at", null);
