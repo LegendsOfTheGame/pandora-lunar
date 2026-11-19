@@ -16,7 +16,12 @@
    (ContentsNote sheet). */
 const CL_ROWS = (window.CHALLENGE_NOTES || []).filter(r => r[3] !== 'Complete');
 const CL_BY = Object.fromEntries(CL_ROWS.map(r => [r[0], r]));
-const CL_CATS = [...new Set(CL_ROWS.map(r => r[3]))];
+/* Categories in the game's Challenge Log order. That is the ContentsNoteCategory
+   id (r[4]), except Other (id 11): the game lists it after Field Operations (13)
+   and Deep Dungeons (14), just above Complete. */
+const clCatKey = id => id === 11 ? 99 : id;
+const CL_CATS = [...new Map(CL_ROWS.map(r => [r[3], r[4]]))]
+  .sort((a, b) => clCatKey(a[1]) - clCatKey(b[1])).map(([name]) => name);
 const CL_ROUTINE_FED = ['Feeling Lucky', 'Dungeon Master'];
 
 /* Linked entries.
@@ -85,6 +90,13 @@ function clAdd(cid, id, delta, link = true){
   const s = clState(c);
   clApply(s, id, delta);
   if(link) for(const t of clReach(id)) clApply(s, t, delta);
+  clChanged();
+}
+/* The rail's Weekly meter and the frame row's Challenge Log percentage read
+   these counts. Redraw both, or they show the old figure until a reload. */
+function clChanged(){
+  if(typeof renderRail === 'function') renderRail();
+  if(typeof renderFrameRow === 'function') renderFrameRow();
   scheduleSave();
 }
 /* For routine sub-checks: add one to an entry and its links, and return the
@@ -95,11 +107,11 @@ function clAddTracked(cid, id){
   const c = getChar(cid); if(!c) return [];
   const s = clState(c), raised = [];
   for(const t of [id, ...clReach(id)]){ const before = s.counts[t] || 0; clApply(s, t, 1); if((s.counts[t] || 0) > before) raised.push(t); }
-  scheduleSave(); return raised;
+  clChanged(); return raised;
 }
 function clRemoveIds(cid, ids){
   const c = getChar(cid); if(!c || !ids || !ids.length) return;
-  const s = clState(c); ids.forEach(t => clApply(s, t, -1)); scheduleSave();
+  const s = clState(c); ids.forEach(t => clApply(s, t, -1)); clChanged();
 }
 
 const ChallengeLogPanel = {

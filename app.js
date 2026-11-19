@@ -2823,6 +2823,19 @@ function challengeTally(c){
   const rows = CL_ROWS.filter(r => clOpen(c, r) && (recent(r[0]) || full(r)));
   return {done: rows.filter(full).length, total: rows.length};
 }
+/* The Challenge Log frame button. The panel is the per-entry log, so the
+   count and the percentage come from it, not from the 13 retired category
+   rows (nobody ticks those, so the button stayed at 0%). The count is the
+   entries the character has unlocked; the percentage is how many of those
+   are full this week (Haven, 19 Nov 2026: "everything that is unlocked").
+   The Weekly meter keeps challengeTally's narrower rule. */
+function challengeFrame(c, sec){
+  if(typeof CL_ROWS === 'undefined' || (c.unlocks && c.unlocks.challengeLog === false))
+    return {k:frameSlug(sec), l:sec, n:0, p:null};
+  const s = clState(c), open = CL_ROWS.filter(r => clOpen(c, r));
+  const done = open.filter(r => (s.counts[r[0]] || 0) >= r[5]).length;
+  return {k:frameSlug(sec), l:sec, n:open.length, p:open.length ? Math.round(done / open.length * 100) : null};
+}
 function weeklyMeter(c){
   const a = sectionTally(c, ['Weekly']), b = challengeTally(c);
   const total = a.total + b.total;
@@ -3287,7 +3300,7 @@ function framesFor(section, c){
       const out = ROUTINE_SECTIONS
         .filter(sec => visible.some(r => routineSection(r) === sec)
                     || (sec === CHALLENGE_SECTION && challengeRowsExist(c)))
-        .map(sec => ({k:frameSlug(sec), l:sec,
+        .map(sec => sec === CHALLENGE_SECTION ? challengeFrame(c, sec) : ({k:frameSlug(sec), l:sec,
                       n:visible.filter(r => routineSection(r) === sec).length,
                       p:sectionMeter(c, sec === COOLDOWN_SECTION ? [COOLDOWN_SECTION, 'Monthly'] : [sec])}));
       out.unshift({k:'next-steps', l:'Next Steps'});
