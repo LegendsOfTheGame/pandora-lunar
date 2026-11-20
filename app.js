@@ -6106,7 +6106,7 @@ function renderShare(cid){
     const expiry = sh.isPermanent ? 'never (permanent)' : fmtShareTime(sh.expiresAt);
     const auto = !sh.isPermanent ? 'no. Only permanent codes update automatically.'
       : sh.autoStopped ? 'stopped. This browser no longer controls the code.'
-      : 'yes. After a change, at most once every 15 minutes, while this page is open.';
+      : 'yes. After a change, at most once every 15 minutes, while the Ledger is open in your browser, on any page.';
     let next = '';
     if(sh.isPermanent && !sh.autoStopped){
       const now = Date.now(), gapEnd = Date.parse(sh.sharedAt || 0) + AUTO_SHARE_GAP_MS;
