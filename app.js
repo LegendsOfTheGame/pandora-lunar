@@ -4277,7 +4277,12 @@ const SocietyList = {
         }));
     });
     const done = exp => { props.state.beat; const c = getChar(props.state.cid); return !!(c && c.intersocietalDone[exp]); };
-    return {groups, done, onSocietyRankChange, onSocietyPointsInput, toggleIntersocietal};
+    // A group is complete when every society is at its last rank: rank 8 with the
+    // Intersocietal Quests done (or no chain exists for that expansion), or rank 9.
+    // A complete group drops the bars and the "capped" notes and keeps only the rank
+    // labels. It reads done(), so ticking the quest box redraws it too.
+    const complete = g => g.rows.every(r => r.rank >= 9 || (r.rank >= 8 && (!INTERSOCIETAL_QUESTS[g.exp] || done(g.exp))));
+    return {groups, done, complete, onSocietyRankChange, onSocietyPointsInput, toggleIntersocietal};
   },
   // Each expansion is one block rather than loose siblings, so the columns on a
   // wide screen can never split a heading from the societies under it.
@@ -4292,11 +4297,12 @@ const SocietyList = {
           <select v-else :id="state.cid + '-soc-rank-' + r.id" :value="r.rank" @change="onSocietyRankChange(state.cid, r.name)">
             <option v-for="o in r.opts" :key="o.rank" :value="o.rank">{{ o.label }}</option>
           </select>
-          <span v-if="r.capped" class="society-capped">{{ r.cappedText }}</span>
+          <template v-if="complete(g)"></template>
+          <span v-else-if="r.capped" class="society-capped">{{ r.cappedText }}</span>
           <template v-else-if="r.synced"><span class="society-points">{{ r.points }}</span><span class="society-quota">/ {{ r.quota }}</span></template>
           <template v-else><input type="text" :id="state.cid + '-soc-points-' + r.id" v-init-value="r.points" style="text-align:right" @input="onSocietyPointsInput(state.cid, r.name)"><span class="society-quota">/ {{ r.quota }}</span></template>
           <div v-if="r.unlock" class="soc-unlock"><span class="rj-st">NOT UNLOCKED</span> Unlock with <b>{{ r.unlock.quest }}</b> from {{ r.unlock.giver }} in {{ r.unlock.place }} (X: {{ r.unlock.x }} Y: {{ r.unlock.y }}) · Lv {{ r.unlock.lv }}</div>
-          <template v-else>
+          <template v-else-if="!complete(g)">
             <div class="tbar soc-bar" role="img" :aria-label="r.name + ': ' + r.rankLabel"><i v-for="b in r.bar" :key="b.r" :class="{cur: b.cur}" :style="{'--c': b.c, background: 'linear-gradient(90deg,' + b.c + ' ' + b.fill + '%, color-mix(in srgb,' + b.c + ' 26%,transparent) ' + b.fill + '%)'}" :title="b.name"></i></div>
             <div class="tlbl soc-bar" aria-hidden="true"><span v-for="b in r.bar" :key="b.r" :style="{flex: 1, '--c': b.c}">{{ b.name }}</span></div>
           </template>
