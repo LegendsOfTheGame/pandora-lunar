@@ -6424,8 +6424,39 @@ const TM_SOCIETY_NAMES = ['', "Amalj'aa", 'Sylphic', 'Kobold', 'Sahagin', 'Ixali
 // through untouched. Lookups come from tm-export-tables.js; an id or abbreviation it does not
 // know keeps its raw value rather than being dropped, except quest ids, which have no title to
 // match on without the table.
+//
+// fmt 3 is fmt 2 with each id list written as runs: a bare number is one id, and a pair
+// [a, b] is every id from a to b inclusive. The runs are expanded first, so everything
+// below (and every reader of the stored lists) sees plain fmt 2 lists. Both fmt 2 and fmt 3
+// are accepted: exports already on disk, in the clipboard or in a share stay fmt 2.
+function tmExpandRanges(list){
+  if(!Array.isArray(list) || !list.some(Array.isArray)) return list;
+  const ids = [];
+  list.forEach(x => {
+    if(Array.isArray(x) && x.length === 2 && Number.isInteger(x[0]) && Number.isInteger(x[1]) && x[0] <= x[1]){
+      for(let id = x[0]; id <= x[1]; id++) ids.push(id);
+    } else if(!Array.isArray(x)) ids.push(x);
+  });
+  return ids;
+}
+// Only the id lists are expanded: classQuests, and every list in the collections part.
+// Other arrays hold pairs that are not ranges (quests.byExp is [done, total] per expansion).
+function tmExpandExportRanges(p){
+  const out = Object.assign({}, p, {fmt: 2});
+  if(Array.isArray(p.classQuests)) out.classQuests = tmExpandRanges(p.classQuests);
+  const expandLists = src => {
+    const copy = Object.assign({}, src);
+    Object.keys(copy).forEach(k => { if(Array.isArray(copy[k])) copy[k] = tmExpandRanges(copy[k]); });
+    return copy;
+  };
+  if(p.kind === 'collections') return Object.assign(out, expandLists(p), {fmt: 2});
+  if(p.collections && typeof p.collections === 'object') out.collections = expandLists(p.collections);
+  return out;
+}
 function tmNormalizeExport(p){
-  if(!p || typeof p !== 'object' || p.fmt !== 2) return p;
+  if(!p || typeof p !== 'object') return p;
+  if(p.fmt === 3) p = tmExpandExportRanges(p);
+  if(p.fmt !== 2) return p;
   const out = Object.assign({}, p);
   const jobName = abbr => TM_JOB_NAMES[abbr] || abbr;
   const renameJobs = block => {
