@@ -2436,6 +2436,12 @@ const CharPage = {
     </tbody></table>
     <div :id="cid+'-trade-jobs'"></div>
   </div>
+  <div class="section" data-frame="roulette">
+    <h2>Mentor roulette readiness
+      <span class="hint">Battle Mentor &middot; every eligible duty cleared once &middot; level 100</span>
+    </h2>
+    <div :id="cid+'-mroulette'"></div>
+  </div>
   </div>
   <div class="tab-panel" data-tab="notes">
   <div class="section" data-frame="trackers">
@@ -2716,13 +2722,15 @@ const AREAS = [
       .map(f => ({tab:'jobs', frame:f.k, l:f.l, n:f.n}))
       .concat([{tab:'mentor', frame:'battle', l:'Battle Mentor'},
                {tab:'mentor', frame:'trade', l:'Trade Mentor'},
+               {tab:'mentor', frame:'roulette', l:'Mentor roulette'},
                {tab:'crafting', frame:'*', l:'Crafting solver'},
                {tab:'gear', frame:'*', l:'Gear guide'},
                {tab:'cosmic', frame:'tools', l:'Cosmic tools'},
                {tab:'cosmic', frame:'red-alerts', l:'Red Alerts'}]),
     meter:c => jobsMeter(c)},
   {key:'duties', label:'Duties', splits:true, frames:c => [
-      {tab:'journey', frame:'duties', l:'Duty clears', n:hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null}],
+      {tab:'journey', frame:'duties', l:'Duty clears', n:hasCollections(c) ? ownedSet(c, 'dutiesDone').size : null},
+      {tab:'mentor', frame:'roulette', l:'Mentor roulette', n:hasCollections(c) ? mentorRouletteMissing(c).length : null}],
     meter:c => dutiesMeter(c)},
   {key:'collections', label:'Collections', splits:true, frames:c => framesFor('collections', c)
       .map(f => ({tab:'collections', frame:f.k, l:f.l, n:f.n})),
@@ -3334,7 +3342,7 @@ function framesFor(section, c){
       return [{k:'summary', l:'Summary'}].concat(
         ELITE_MARKS.map(([exp, marks]) => ({k:frameSlug(exp), l:exp, n:marks.length})));
     case 'mentor':
-      return [{k:'battle', l:'Battle'}, {k:'trade', l:'Trade'}];
+      return [{k:'battle', l:'Battle'}, {k:'trade', l:'Trade'}, {k:'roulette', l:'Roulette'}];
     case 'collections':
       return [{k:'overview', l:'Overview'}].concat(COLLECTION_KINDS.map(k => ({k:frameSlug(k.key), l:k.label,
         n: hasCollections(c) ? ownedSet(c, k.key).size : null})));
@@ -3924,6 +3932,110 @@ function updateTradeMentorChecks(cid){
   if(collected) collected.done = c.tradeCollected >= 300;
   const made = boxState(cid+'-trade-made-done', AtCap);
   if(made) made.done = c.tradeMade >= 100;
+}
+
+/* Mentor roulette readiness (forget-nothing #4). Duty Roulette: Mentor opens to a
+   Battle Mentor who has cleared, at least once, every PvE duty the Duty Finder
+   offers except the Coils, Savage, Ultimate, Unreal and the current expansion's
+   Extremes (community wiki, Mentor System page, edited 21 Jul 2026). Since 7.5 the
+   queue also wants level 100 and an average item level of 755.
+
+   The pool is the game's own Mentor Roulette flag on ContentFinderCondition, which
+   duties.js carries as column 5. Checked 21 Nov 2026: its 290 duties leave out
+   exactly the wiki's exclusions (plus The Gilded Araya and the two Special Events).
+   Clears are the plugin's dutiesDone, keyed by the same InstanceContent ids. */
+const MENTOR_ROULETTE_ILVL = 755;
+// Level 100 role quests, by quest id in questsDone. The manual ticks on the Battle
+// frame still count, for a character imported before quests were exported.
+const MENTOR_ROLE_QUESTS = {
+  tank:   [[4823, 'Dreams of a New Day']],
+  healer: [[4829, 'An Antidote for Anarchy']],
+  dps:    [[4835, 'A Hunter True'], [4841, 'The Mightiest Shield'], [4847, 'Heroes and Pretenders']]
+};
+function mentorRoulettePool(){
+  return (window.DUTIES || []).filter(d => d[5] && d[10]);
+}
+function mentorRouletteMissing(c){
+  const done = ownedSet(c, 'dutiesDone');
+  return mentorRoulettePool().filter(d => !done.has(d[0]));
+}
+function mentorRouletteView(c){
+  const imported = hasCollections(c);
+  const quests = ownedSet(c, 'questsDone');
+  const role = (key, manual) => {
+    const hit = MENTOR_ROLE_QUESTS[key].find(([id]) => quests.has(id));
+    return {done: !!hit || !!manual, via: hit ? hit[1] : (manual ? 'ticked by hand' : '')};
+  };
+  const tank = role('tank', c.roleTank), healer = role('healer', c.roleHealer), dps = role('dps', c.roleDps);
+  const topCombat = Math.max(0, ...COMBAT_JOBS.map(([n]) => c.combat[n] || 0));
+  const pool = mentorRoulettePool();
+  const missing = imported ? mentorRouletteMissing(c) : pool;
+  const cleared = pool.length - missing.length;
+  const yes = done => done ? 'done' : 'pending';
+  const rows = [
+    {k:'duty', label:'Duty completions', note:`${fmt(c.duty)} / 1,000`, state: yes(c.duty >= 1000)},
+    {k:'comm', label:'Commendations', note:`${fmt(c.comm)} / 1,500`, state: yes(c.comm >= 1500)},
+    {k:'tank', label:'Tank role quest (level 100)', note: tank.via || 'Dreams of a New Day', state: yes(tank.done)},
+    {k:'healer', label:'Healer role quest (level 100)', note: healer.via || 'An Antidote for Anarchy', state: yes(healer.done)},
+    {k:'dps', label:'One DPS role quest (level 100)', note: dps.via || 'A Hunter True, The Mightiest Shield or Heroes and Pretenders', state: yes(dps.done)},
+    {k:'duties', label:'Every roulette duty cleared once',
+      note: imported ? `${cleared} / ${pool.length}` : 'needs a Tales of Milestones import',
+      state: imported ? yes(!missing.length) : 'unknown'},
+    {k:'level', label:'A combat job at level 100', note:`highest ${fmtLvl(topCombat)}`, state: yes(topCombat >= 100)},
+    // Not exported by the plugin, so it cannot be read here.
+    {k:'ilvl', label:`Average item level ${MENTOR_ROULETTE_ILVL}`, note:'not tracked, check in game', state:'unknown'}
+  ];
+  // Missing duties by expansion, then type, in Duty Finder order.
+  const groups = [];
+  if(imported){
+    const byExp = {};
+    missing.forEach(d => {
+      const exp = EXPANSION_NAMES[d[3]] || 'Other';
+      ((byExp[exp] = byExp[exp] || {})[d[2]] = byExp[exp][d[2]] || []).push(d);
+    });
+    EXPANSION_NAMES.filter(e => byExp[e]).forEach(exp => {
+      const types = Object.keys(byExp[exp]).map(t => ({t,
+        items: byExp[exp][t].sort((a, b) => a[8] - b[8] || a[9] - b[9]).map(d => ({id: d[0], name: d[1], level: d[8]}))}));
+      groups.push({exp, n: types.reduce((a, t) => a + t.items.length, 0), types});
+    });
+  }
+  const blockers = rows.filter(r => r.state === 'pending').length;
+  return {rows, groups, imported, cleared, total: pool.length, asOf: imported ? collectionsAsOfText(c) : '',
+    ready: !blockers && imported, blockers};
+}
+const MentorRoulette = {
+  props: ['state'],
+  components: {EmptyTm},
+  setup(props){
+    const view = Vue.computed(() => { props.state.tick; const c = getChar(props.state.cid); return c ? mentorRouletteView(c) : null; });
+    return {view};
+  },
+  template: `
+    <template v-if="view">
+      <div class="jr-note" v-if="view.ready">Everything Lunar can see is in place. Check your average item level in game, then Mentor roulette should be open.</div>
+      <div class="jr-note" v-else>{{ view.blockers }} {{ view.blockers === 1 ? 'thing' : 'things' }} still to do before Duty Roulette: Mentor opens.</div>
+      <div v-for="r in view.rows" :key="r.k" class="check-row">
+        <span>{{ r.label }} <span class="qname">{{ r.note }}</span></span>
+        <span :class="r.state === 'done' ? 'stamp' : 'stamp pending'">{{ r.state === 'unknown' ? 'check' : r.state }}</span>
+      </div>
+      <div class="subhead" style="margin-top:14px">Duties still to clear</div>
+      <empty-tm v-if="!view.imported" what="duty clears"></empty-tm>
+      <template v-else>
+        <div class="jr-note">{{ view.asOf }} Unsynced clears count. Savage, Ultimate, Unreal, the Coils and this expansion's Extremes are not needed.</div>
+        <div class="jr-note" v-if="!view.groups.length">All {{ view.total }} cleared.</div>
+        <template v-for="g in view.groups" :key="g.exp">
+          <div class="subhead">{{ g.exp }} · {{ g.n }} to clear</div>
+          <template v-for="t in g.types" :key="t.t">
+            <div class="jr-note" style="margin:4px 0 2px">{{ t.t }} · {{ t.items.length }}</div>
+            <div class="jr-duties"><span v-for="d in t.items" :key="d.id" :title="'Level ' + d.level">{{ d.name }} <small>{{ d.level }}</small></span></div>
+          </template>
+        </template>
+      </template>
+    </template>`
+};
+function renderMentorRoulette(cid){
+  const state = boxState(cid+'-mroulette', MentorRoulette);
+  if(state) Object.assign(state, {cid, tick: (state.tick || 0) + 1});
 }
 
 function updatePlaytimeTotal(cid){
@@ -5912,6 +6024,7 @@ function renderChar(cid){
   renderCharDash(cid);
   renderRoles(cid);
   updateTradeMentorChecks(cid);
+  renderMentorRoulette(cid);
   renderPluginMode(cid);
   renderQuestsTable(cid);
   updateOverallCheck(cid);
@@ -5947,6 +6060,7 @@ function onMainInput(cid){
   renderCharDash(cid);
   renderRoles(cid);
   updateTradeMentorChecks(cid);
+  renderMentorRoulette(cid);
   updateQuestPercents(cid);
   updateOverallCheck(cid);
   updateJobCaps(cid);
