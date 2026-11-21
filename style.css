@@ -1665,3 +1665,43 @@ html:not(.rt-edit) .routine-item.done .routine-name{color:var(--text-dim);text-d
 .share-banner-error{ border-color:var(--rose); }
 /* Read only while a shared character is shown. Saves are also blocked in save(). */
 .share-viewer #pages input, .share-viewer #pages select, .share-viewer #pages textarea{ pointer-events:none; opacity:.85; }
+
+/* ---- Gear guide (gear-guide-vue.js) ---- */
+.gg-loading{color:var(--text-dim);font-size:13px;padding:12px 0}
+.gg-controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:10px}
+.gg-controls label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-dim)}
+.gg-controls select,.gg-controls input[type=number]{background:var(--ink);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:inherit;font-size:13px}
+.gg-controls input[type=number]{width:64px}
+.gg-note{font-size:12px;color:var(--text-faint);margin:6px 0 10px}
+.gg-grid{width:100%;border-collapse:collapse}
+.gg-grid tr{border-bottom:1px solid var(--line-soft)}
+.gg-grid tr.on{background:var(--ink)}
+.gg-grid tr.on th{box-shadow:inset 3px 0 0 var(--accent,var(--gold))}
+.gg-grid th{font-size:12px;color:var(--text-dim);font-weight:600;text-align:left;padding:8px 10px;white-space:nowrap;width:1%}
+.gg-grid td{padding:4px 6px;vertical-align:middle}
+.gg-item{background:none;border:0;color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer;padding:4px 0;display:flex;flex-direction:column;gap:2px}
+.gg-item small{color:var(--text-faint);font-size:11px}
+.gg-item:hover span{text-decoration:underline dotted;text-underline-offset:2px}
+.gg-how{font-size:12px;color:var(--text-dim)}
+.gg-next{color:var(--teal);margin-top:2px}
+.gg-x{width:1%;text-align:right}
+.gg-skip{background:none;border:0;color:var(--text-faint);cursor:pointer;font-size:15px;line-height:1;padding:4px 6px}
+.gg-skip:hover{color:var(--rose)}
+.gg-empty{color:var(--text-faint);font-size:12px}
+.gg-listbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+.gg-listbar .gg-note{margin:0}
+.gg-detail{margin-top:16px;border:1px solid var(--line);border-radius:6px;padding:12px 14px;background:var(--ink)}
+.gg-detail h3{margin:0 0 10px;font-size:15px}
+.gg-detail h3 small{color:var(--text-faint);font-weight:normal;font-size:12px;margin-left:6px}
+.gg-option{display:flex;gap:10px;font-size:13px;line-height:1.6;padding:4px 0}
+.gg-option > b{color:var(--accent,var(--gold));min-width:14px}
+.gg-option a{color:var(--teal)}
+.gg-src{color:var(--text-faint);font-size:12px}
+/* Phone width: the source summary goes under the item name. */
+@media (max-width:600px){
+  .gg-grid tr{display:grid;grid-template-columns:76px 1fr auto;grid-template-areas:"slot item x" "slot how x"}
+  .gg-grid th{grid-area:slot;padding:8px 6px;width:auto;font-size:11px}
+  .gg-grid td:nth-of-type(1){grid-area:item}
+  .gg-grid .gg-how{grid-area:how;padding-top:0}
+  .gg-grid .gg-x{grid-area:x;width:auto}
+}

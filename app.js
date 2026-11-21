@@ -2461,6 +2461,12 @@ const CharPage = {
     <div :id="cid+'-craftsolver'"></div>
   </div>
   </div>
+  <div class="tab-panel" data-tab="gear">
+  <div class="section">
+    <h2>Gear guide <span class="hint">highest item level per slot &middot; for a job and level</span></h2>
+    <div :id="cid+'-gearguide'"></div>
+  </div>
+  </div>
   <div class="tab-panel" data-tab="mentor">
   <div class="section" data-frame="battle">
     <h2>Battle Mentor requirements
@@ -2749,6 +2755,7 @@ const AREAS = [
       .concat([{tab:'mentor', frame:'battle', l:'Battle Mentor'},
                {tab:'mentor', frame:'trade', l:'Trade Mentor'},
                {tab:'crafting', frame:'*', l:'Crafting solver'},
+               {tab:'gear', frame:'*', l:'Gear guide'},
                {tab:'cosmic', frame:'tools', l:'Cosmic tools'},
                {tab:'cosmic', frame:'red-alerts', l:'Red Alerts'}]),
     meter:c => jobsMeter(c)},
@@ -3229,6 +3236,7 @@ const RAIL_SECTIONS = [
   {key:'jobs',      label:'Jobs',      group:'Progress',    ico:'⚔', count:visibleJobCount},
   {key:'cosmic',    label:'Cosmic',    group:'Progress',    ico:'✧', count:c=>Object.keys((c.cosmicTools||{}).jobs||{}).length},
   {key:'crafting',  label:'Crafting',  group:'Progress',    ico:'⚒'},
+  {key:'gear',      label:'Gear',      group:'Progress',    ico:'⛨'},
   {key:'journey',   label:'Journey',   group:'Progress',    ico:'⌖'},
   {key:'collections', label:'Collections', group:'Collections', ico:'❖', count:c=>hasCollections(c) ? ownedSet(c,'mounts').size + ownedSet(c,'minions').size : ''},
   {key:'societies', label:'Societies', group:'Collections', ico:'⚬', count:()=>ALLIED_SOCIETIES.length},
@@ -5905,6 +5913,7 @@ function renderChar(cid){
   renderHunts(cid);
   renderCosmic(cid);
   renderCraftSolver(cid);
+  renderGearGuide(cid);
   renderCollections(cid);
   renderJourney(cid);
   renderEvents(cid);
