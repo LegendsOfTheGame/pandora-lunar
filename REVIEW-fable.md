@@ -42,6 +42,16 @@ Haven chose "bugs + performance". The fixes are in the worktree on `claude/fable
   - A collapsed section keyed on the old heading text (for example "Quest categories") opens once, because its saved key changed (B7).
   - The pre-commit hook now stamps only the staged copy of `index.html` (B13).
 
+## Reapplied on main (21 November 2026)
+
+The fixes above were redone on top of main `f086bf4`, 22 commits after the reviewed commit. Line numbers above still refer to `a9ea464`. Changes needed against the newer main:
+
+- Main split the routine meter into `sectionTally` (counts) and `sectionMeter` (percent). The per-task cache now wraps `sectionTally`, so the Challenge Log share of the weekly meter is unchanged.
+- Journey: the relic Armor frame now uses `relic-armor-cards`, and the GARO frame holds a line card plus the armor panel. Both are drawn only once their frame has been opened, like the other frames.
+- Planner: main's `plByOrder` and `plNextStepTo` (shared with the relic cards) are kept beside the per-character `plView` cache.
+- Start-up keeps main's "we have moved" notice; the 30-second refresh covers only the page on screen.
+- Tested in a browser on a local server with two characters and a generated import (no real export this time): every area and frame opened for both characters with no console errors; B1, B2, B3, B4, B5, B6, B8, B9, B11 checked against main side by side. DOM elements at start-up: 57,182 on main, 4,744 here.
+
 ## The top items
 
 1. **B1** — The expansion card that shows when you pick a route station never appears. It looks for an element that Layout D removed. Verified.
