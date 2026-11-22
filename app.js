@@ -1913,6 +1913,8 @@ function newCharacter(name){
     hunts: {}, huntsCollapsed: {},
     // The last cosmicTools block imported, as {asOf, jobs}. Null until one arrives.
     cosmicTools: null,
+    // The last huntLog block imported, as {asOf, logs}. Null until one arrives.
+    huntLog: null,
     tmSyncedAt: null, tmSyncedVersion: null, playtimeAsOf: null
   };
 }
@@ -2000,6 +2002,8 @@ function normalizeCharacter(c){
   if(!c.huntGame || typeof c.huntGame !== 'object') c.huntGame = {};
   if(!c.cosmicTools || typeof c.cosmicTools !== 'object'
      || !c.cosmicTools.jobs || typeof c.cosmicTools.jobs !== 'object') c.cosmicTools = null;
+  if(!c.huntLog || typeof c.huntLog !== 'object'
+     || !c.huntLog.logs || typeof c.huntLog.logs !== 'object') c.huntLog = null;
   if(typeof c.tmSyncedAt !== 'string') c.tmSyncedAt = null;
   if(typeof c.tmSyncedVersion !== 'string') c.tmSyncedVersion = null;
   if(typeof c.playtimeAsOf !== 'string') c.playtimeAsOf = null;
@@ -2357,6 +2361,10 @@ const CharPage = {
     <div data-frame="items">
       <div class="subhead">Quest items &middot; what the job quests ask you to hand in</div>
       <div :id="cid+'-qitems'"></div>
+    </div>
+    <div data-frame="huntlog">
+      <div class="subhead">Hunting Log &middot; via Tales of Milestones &mdash; what each class still needs</div>
+      <div :id="cid+'-huntlog'"></div>
     </div>
     <div class="gated-note" :id="cid+'-jobsnote'"></div>
   </div>
@@ -3325,7 +3333,8 @@ function framesFor(section, c){
         {k:'combat', l:'Combat',    n:c.showZeroJobs ? COMBAT_JOBS.length : above(c.combat)},
         {k:'craft',  l:'Crafting',  n:c.showZeroJobs ? CRAFT_JOBS.length  : above(c.craft)},
         {k:'gather', l:'Gathering', n:c.showZeroJobs ? GATHER_JOBS.length : above(c.gather)},
-        {k:'items',  l:'Quest items'}
+        {k:'items',  l:'Quest items'},
+        {k:'huntlog', l:'Hunting Log', n:c.huntLog ? Object.keys(c.huntLog.logs).length : null}
       ];
     }
     case 'cosmic':
@@ -4881,6 +4890,83 @@ function renderCosmic(cid){
   Object.assign(box, {cid, tick: (box.tick || 0) + 1});
 }
 
+/* ---------- hunting log ----------
+   From the huntLog block of a Tales of Milestones export. Each log is [rank, kill
+   counts...]: rank is the number of ranks complete (so also the 0-based current rank),
+   then 4 counts per task for the 10 tasks of that rank, trailing zeros cut off. Ranks
+   below the rank are complete. Monster names, the kills each task needs, and places come
+   from TM_HUNT_LOG (the game's MonsterNote sheet). The plugin's /hunt window shows the
+   same list with map coordinates; the game holds only the zone and area names. */
+const HUNT_LOG_ORDER = ['GLA','PGL','MRD','LNC','ARC','ROG','CNJ','THM','ACN','gc1','gc2','gc3'];
+const HUNT_LOG_COMPANIES = {gc1:'Maelstrom', gc2:'Order of the Twin Adder', gc3:'Immortal Flames'};
+
+function huntLogClassView(key, values){
+  const ranks = (typeof TM_HUNT_LOG === 'object' && TM_HUNT_LOG[key]) || [];
+  const name = HUNT_LOG_COMPANIES[key] || TM_JOB_NAMES[key] || key;
+  const rank = values[0];
+  const counts = values.slice(1);
+  if(!ranks.length) return {key, name, stage:`Rank ${rank + 1}`, note:'This page has no table for this log.', rows:[]};
+  if(rank >= ranks.length) return {key, name, stage:`Complete · all ${ranks.length} ranks`, note:'', rows:[]};
+
+  const tasks = ranks[rank] || [];
+  let done = 0;
+  const rows = [];
+  tasks.forEach(([task, monsters], t) => {
+    let taskDone = true;
+    monsters.forEach(([monster, needed, place], s) => {
+      const kills = counts[t*4 + s] || 0;
+      if(kills >= needed) return;
+      taskDone = false;
+      rows.push({id:`${t}-${s}`, task, monster, kills:`${kills}/${needed}`, place});
+    });
+    if(taskDone) done++;
+  });
+  return {key, name, stage:`Rank ${rank + 1} of ${ranks.length} · ${done} of ${tasks.length} tasks complete`, note:'', rows};
+}
+function huntLogView(c){
+  const reading = c.huntLog;
+  if(!reading) return null;
+  const keys = HUNT_LOG_ORDER.filter(k => Array.isArray(reading.logs[k]))
+    .concat(Object.keys(reading.logs).filter(k => !HUNT_LOG_ORDER.includes(k)));
+  return {
+    asOf: reading.asOf ? fmtTmTimestamp(reading.asOf) : 'an unknown time',
+    logs: keys.map(k => huntLogClassView(k, reading.logs[k]))
+  };
+}
+const HuntLogBox = {
+  props: ['state'],
+  setup(props){
+    const view = Vue.computed(() => { props.state.tick; const c = getChar(props.state.cid); return c ? huntLogView(c) : null; });
+    return {view};
+  },
+  template: `
+    <div v-if="!view" class="empty-hint">No Hunting Log data. Import a Tales of Milestones export to fill in this section. The plugin reads the log for every class you have unlocked, whatever class you are on.</div>
+    <template v-else>
+      <div class="check-note ok">Hunting Log as of {{ view.asOf }}. Only monsters that still need kills are listed. The game gives kills only to the class you are on and to your Grand Company.</div>
+      <div class="cosmic-columns">
+        <div v-for="k in view.logs" :key="k.key" class="cosmic-class">
+          <div class="subhead">{{ k.name }}</div>
+          <div class="cosmic-stage">{{ k.stage }}</div>
+          <div v-if="k.note" class="cosmic-note">{{ k.note }}</div>
+          <div v-if="k.rows.length" class="hlog-grid">
+            <div class="hlog-row head"><span>Task</span><span>Monster</span><span>Kills</span><span>Where</span></div>
+            <div v-for="r in k.rows" :key="r.id" class="hlog-row">
+              <span class="cosmic-type">{{ r.task }}</span>
+              <span>{{ r.monster }}</span>
+              <span class="cosmic-num">{{ r.kills }}</span>
+              <span class="faint">{{ r.place }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>`
+};
+function renderHuntLog(cid){
+  const box = boxState(cid+'-huntlog', HuntLogBox);
+  if(!box) return;
+  Object.assign(box, {cid, tick: (box.tick || 0) + 1});
+}
+
 /* ---------- red alerts ----------
    Reference data only: for each zone, each Red Alert weather and variant, the two
    regions and the classes with a critical mission in each. From the wiki page "Red
@@ -6032,6 +6118,7 @@ function renderChar(cid){
   renderSocieties(cid);
   renderHunts(cid);
   renderCosmic(cid);
+  renderHuntLog(cid);
   renderCraftSolver(cid);
   renderGearGuide(cid);
   renderCollections(cid);
@@ -6830,6 +6917,32 @@ function tmCosmicChange(p, c){
   return incoming;
 }
 
+// Hunting Log, cleaned to {asOf, logs}. Each log is [rank, kill counts...] as the
+// plugin sends it (see huntLogView). Null when the export has no block.
+function tmHuntLogReading(p){
+  const src = p.huntLog;
+  if(!src || typeof src !== 'object' || !src.logs || typeof src.logs !== 'object') return null;
+  const logs = {};
+  Object.keys(src.logs).forEach(key => {
+    const v = src.logs[key];
+    if(Array.isArray(v) && v.length && v.every(n => Number.isInteger(n) && n >= 0)) logs[key] = v.slice();
+  });
+  if(!Object.keys(logs).length) return null;
+  return { asOf: typeof src.asOf === 'string' ? src.asOf : null, logs };
+}
+// Same rule as the cosmic reading: one full reading, replaced whole, and an older
+// reading never replaces a newer one. The plugin already never lowers a count.
+function tmHuntLogChange(p, c){
+  const incoming = tmHuntLogReading(p);
+  if(!incoming) return null;
+  const stored = c.huntLog;
+  const storedAt = stored && stored.asOf ? Date.parse(stored.asOf) : null;
+  const incomingAt = incoming.asOf ? Date.parse(incoming.asOf) : null;
+  if(storedAt && incomingAt && incomingAt < storedAt) return null;
+  if(stored && JSON.stringify(stored) === JSON.stringify(incoming)) return null;
+  return incoming;
+}
+
 let TM_QUEST_KEYS = null;
 function tmQuestKeyIndex(){
   if(TM_QUEST_KEYS) return TM_QUEST_KEYS;
@@ -6960,6 +7073,14 @@ function computeTmDiffRows(p, c){
     };
     rows.push(['Cosmic tool research', c.cosmicTools ? describe(c.cosmicTools) : '(none)', describe(cosmic)]);
   }
+  const huntLog = tmHuntLogChange(p, c);
+  if(huntLog){
+    const describe = r => {
+      const n = Object.keys(r.logs).length;
+      return `${n} log${n === 1 ? '' : 's'}` + (r.asOf ? ` · ${fmtTmTimestamp(r.asOf)}` : '');
+    };
+    rows.push(['Hunting Log', c.huntLog ? describe(c.huntLog) : '(none)', describe(huntLog)]);
+  }
   const classTicks = tmClassQuestTicks(p, c);
   if(classTicks.length){
     const before = tmTickedCount(c);
@@ -7087,6 +7208,9 @@ function applyTmImport(){
 
   const cosmic = tmCosmicChange(p, c);
   if(cosmic) c.cosmicTools = cosmic;
+
+  const huntLog = tmHuntLogChange(p, c);
+  if(huntLog) c.huntLog = huntLog;
 
   // The game's own count per hunt group. Stored beside the ticks, never as ticks: the
   // game says how many, never which.

@@ -181,6 +181,54 @@ foreach (var row in data.GetExcelSheet<SpearfishingItem>()!)
   spearfish[row.RowId] = [item.Name.ToString(), "", expansion];
 }
 
+// Hunting Log, for the export's huntLog block (Tales of Milestones, 22 Nov
+// 2026). Key as the export sends it: class abbreviation, or gc1..gc3. Value:
+// ranks, each a list of tasks [task name, [[monster, kills needed, place], ...]].
+// MonsterNote row = class id x 10000 (Grand Company id x 1000000) + rank x 10
+// + task. The place lists every PlaceNameZone / PlaceNameLocation pair; the
+// game holds no coordinates (the plugin's /hunt window has them, from Hunty).
+var textInfo = CultureInfo.GetCultureInfo("en-US").TextInfo;
+var notes = data.GetExcelSheet<MonsterNote>()!;
+var huntLog = new Dictionary<string, List<List<object[]>>>();
+foreach (var (key, baseRow, ranks) in new (string, uint, int)[]
+{
+  ("GLA", 10_000, 5), ("PGL", 20_000, 5), ("MRD", 30_000, 5), ("LNC", 40_000, 5), ("ARC", 50_000, 5),
+  ("CNJ", 60_000, 5), ("THM", 70_000, 5), ("ACN", 260_000, 5), ("ROG", 290_000, 5),
+  ("gc1", 1_000_000, 3), ("gc2", 2_000_000, 3), ("gc3", 3_000_000, 3),
+})
+{
+  var rankList = new List<List<object[]>>();
+  for (int rank = 0; rank < ranks; rank++)
+  {
+    var tasks = new List<object[]>();
+    for (int task = 1; task <= 10; task++)
+    {
+      if (!notes.TryGetRow(baseRow + (uint)(rank * 10 + task), out var note)) continue;
+      var monsters = new List<object[]>();
+      for (int slot = 0; slot < 4; slot++)
+      {
+        if (note.Count[slot] == 0 || note.MonsterNoteTarget[slot].ValueNullable is not { } target) continue;
+        // Any of the three slots can hold the place (Adamantoise uses the
+        // second, Smoke Bomb the third); every target has at least one.
+        var places = new List<string>();
+        for (int i = 0; i < 3; i++)
+        {
+          string zone = target.PlaceNameZone[i].ValueNullable?.Name.ToString() ?? "";
+          if (zone.Length == 0) continue;
+          string area = target.PlaceNameLocation[i].ValueNullable?.Name.ToString() ?? "";
+          places.Add(area.Length > 0 && area != zone ? $"{zone} - {area}" : zone);
+        }
+        string place = string.Join("; ", places.Distinct());
+        string monster = textInfo.ToTitleCase(target.BNpcName.ValueNullable?.Singular.ToString() ?? "");
+        monsters.Add([monster, note.Count[slot], place]);
+      }
+      tasks.Add([note.Name.ToString(), monsters]);
+    }
+    rankList.Add(tasks);
+  }
+  huntLog[key] = rankList;
+}
+
 var options = new JsonSerializerOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
 using var writer = new StreamWriter(output);
@@ -203,5 +251,7 @@ writer.WriteLine("// Fish Guide fish (IsInLog rows): FishParameter row -> [name,
 writer.WriteLine($"const TM_FISH = {JsonSerializer.Serialize(fish.ToDictionary(k => k.Key.ToString(), k => k.Value), options)};");
 writer.WriteLine("// Spearfish shown in the game (IsVisible rows): SpearfishingItem row -> [name, place, expansion].");
 writer.WriteLine($"const TM_SPEARFISH = {JsonSerializer.Serialize(spearfish.ToDictionary(k => k.Key.ToString(), k => k.Value), options)};");
+writer.WriteLine("// Hunting Log: class abbreviation or gc1..gc3 -> ranks -> tasks [name, [[monster, kills needed, place], ...]], for huntLog.");
+writer.WriteLine($"const TM_HUNT_LOG = {JsonSerializer.Serialize(huntLog, options)};");
 
 Console.WriteLine($"{quests.Count} quests, {jobs.Count} jobs, {genreOut.Count} questline genres, {duties.Count} duties, {porterIds.Length} porter stops, {fish.Count} fish, {spearfish.Count} spearfish -> {Path.GetFullPath(output)}");

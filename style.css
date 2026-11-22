@@ -476,6 +476,15 @@ input[type=number]:focus,input[type=text]:focus{outline:none;border-color:var(--
    the table says what it means. */
 .cosmic-row.full .cosmic-num:nth-child(2){color:var(--gold)}
 .cosmic-note{margin-top:8px;font-size:12px;color:var(--text-dim);max-width:660px}
+/* Hunting Log: the cosmic blocks, with a task / monster / kills / place row. */
+.hlog-grid{margin-top:8px}
+.hlog-row{
+  display:grid;grid-template-columns:110px minmax(120px,1fr) 52px minmax(160px,2fr);gap:10px;align-items:center;
+  padding:5px 8px;font-size:13px;border-radius:3px;
+}
+.hlog-row:nth-child(even){background:var(--panel2)}
+.hlog-row.head{font-size:11px;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-faint);background:none}
+.hlog-row .faint{color:var(--text-faint);font-size:12px}
 @media (max-width:600px){
   .cosmic-row{grid-template-columns:52px repeat(4,1fr);gap:6px;font-size:12px}
 }
