@@ -7086,6 +7086,15 @@ function computeTmDiffRows(p, c){
     const before = tmTickedCount(c);
     rows.push(['Job quest checklist', `${before} ticked`, `${before + classTicks.length} ticked`]);
   }
+  // Challenge Log entries gated on a quest. The "Unlocked features" row above only
+  // covers the export's unlocks keys, so a job quest that opens an entry (Into the
+  // Crucible opens Soul Survivor I) changed nothing visible here before this row.
+  const cl = typeof clOpenedBy === 'function' ? clOpenedBy(p, c) : null;
+  if(cl && cl.before !== cl.after){
+    const names = cl.added.length > 3
+      ? `${cl.added.slice(0, 3).join(', ')} and ${cl.added.length - 3} more` : cl.added.join(', ');
+    rows.push(['Challenge Log entries open', cl.before, names ? `${cl.after} (new: ${names})` : cl.after]);
+  }
   // Collections, quests done, duties and exploration: one row per list whose size changed.
   tmCollectionsDiffRows(p, c).forEach(row => rows.push(row));
   return rows.map(([label,from,to]) => [String(label), String(from), String(to)]);

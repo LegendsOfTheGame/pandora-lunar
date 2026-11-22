@@ -71,10 +71,23 @@ function clState(c){
   s.counts = s.counts || {};
   return s;
 }
-function clOpen(c, r){
+/* r[7] is a Quest sheet id (65536 + row). questsDone holds rows. Anything else
+   in r[7] (0 or a non-quest id) is no gate. */
+function clGateMet(r, done){
   const q = r[7];
-  if(q >= 65536 && q < 131072) return ownedSet(c, 'questsDone').has(q - 65536);
-  return true;
+  return !(q >= 65536 && q < 131072) || done.has(q - 65536);
+}
+function clOpen(c, r){ return clGateMet(r, ownedSet(c, 'questsDone')); }
+/* For the import preview: the entries this payload's questsDone opens, against the
+   stored list. Null when the payload has no questsDone (an older export), so the
+   preview stays silent rather than read a missing list as "nothing done". */
+function clOpenedBy(p, c){
+  const src = typeof tmCollectionsOf === 'function' ? tmCollectionsOf(p) : null;
+  if(!src || !Array.isArray(src.questsDone)) return null;
+  const was = ownedSet(c, 'questsDone'), now = new Set(src.questsDone);
+  const after = CL_ROWS.filter(r => clGateMet(r, now));
+  return {before: CL_ROWS.filter(r => clGateMet(r, was)).length, after: after.length,
+    added: after.filter(r => !clGateMet(r, was)).map(r => r[1])};
 }
 function clApply(s, id, delta){
   const r = CL_BY[id]; if(!r) return;
