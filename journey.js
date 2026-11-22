@@ -389,29 +389,24 @@ const RELIC_ARMOR_JOBS = {I: RELIC_JOBS.RS, J: RELIC_JOBS.EU};
 const RELIC_EVERY_STAGE_LINES = ['DD', 'G'];
 const RELIC_DD_MADE_FROM = {1: 0, 4: 3, 6: 5};
 const RELIC_ALSO_USES = {L: {1: ['B', 1]}, P: {1: ['A', 1], 2: ['A', 2], 3: ['A', 2]}};
-/* The stages a line counts, where that is not all of them. These two lines follow
-   FFXIV Collect's totals. Eureka (225) leaves out the Antiquated weapons. Cosmic (44)
-   counts four tiers per job, from the first tool of each tier. Checked on 4 November
-   2026 against one character: 3 of 44 from COCRP-M and COGSM-O. */
-const RELIC_COUNTED_STAGES = {
-  EU: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-  CO: [8, 13, 16, 19]
-};
 function relicLineCodes(){ return typeof RELIC_STAGES === 'undefined' ? [] : Object.keys(RELIC_STAGES); }
 /* Newest expansion first, the order of FFXIV Collect's pages. */
 function relicLinesOfKind(kind){
   return {weapons: RELIC_WEAPON_LINES, tools: RELIC_TOOL_LINES, garo: ['GW']}[kind] || [];
 }
-function relicCountedStages(code){
-  return RELIC_COUNTED_STAGES[code] || RELIC_STAGES[code].stages.map((_, i) => i);
-}
-/* One line for the panel: an item per job per counted stage. A held stage also counts
-   every stage before it, because a relic upgrades from the one before. */
+/* One line for the panel: an item per job per stage. Every stage counts, Cosmic's
+   Prototype tools and Eureka's Antiquated weapons included (Haven, 22 November 2026),
+   so the totals are not FFXIV Collect's (Cosmic 220, not 44; Eureka 240, not 225).
+   A held stage also counts every stage before it, because a relic upgrades from the
+   one before. */
 function relicLineView(code, held){
-  const line = RELIC_STAGES[code], jobs = RELIC_JOBS[code], counted = relicCountedStages(code);
+  const line = RELIC_STAGES[code], jobs = RELIC_JOBS[code], counted = line.stages.map((_, i) => i);
+  // Each row takes its tier's colour from the card's stage bar (rjTiers, relics-vue.js).
+  const tiers = typeof rjTiers === 'function' ? rjTiers(code) : [];
   const rows = counted.map(stage => {
     const [name, il] = line.stages[stage];
-    return {name, il, cells: jobs.map(j => ({j, on: relicIsHeld(held, code, j, stage),
+    const gi = tiers.findIndex(g => stage < g.from + g.n);
+    return {name, il, c: 'var(--tier-' + (Math.max(gi, 0) % 8 + 1) + ')', cells: jobs.map(j => ({j, on: relicIsHeld(held, code, j, stage),
       title: (TM_JOB_NAMES[j] || j) + ' · ' + relicStageName(code, j, stage) + (il ? ' · item level ' + il : '')}))};
   });
   return relicPanel(code, line.name, 'Stage', jobs, rows);

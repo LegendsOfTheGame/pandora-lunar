@@ -19,15 +19,19 @@ const RelicLinePanel = {
         <table class="rl-grid">
           <thead><tr><th scope="col">{{ line.corner }}</th><th v-for="j in line.jobs" :key="j" scope="col" :title="jobName(j)">{{ j }}</th></tr></thead>
           <tbody>
-            <tr v-for="r in line.rows" :key="r.name">
-              <th scope="row">{{ r.name }}<i v-if="r.il" class="faint"> {{ r.il }}</i></th>
-              <td v-for="x in r.cells" :key="x.j" :class="{on: x.on}" :title="x.title"><span v-if="x.on" aria-label="Complete">●</span></td>
+            <tr v-for="r in line.rows" :key="r.name" :style="{'--c': r.c || 'var(--tier-1)'}">
+              <th scope="row" :title="r.name">{{ short(r.name) }}<i v-if="r.il && !/\(IL \d+\)/.test(r.name)" class="faint">{{ r.il }}</i></th>
+              <td v-for="x in r.cells" :key="x.j" :class="{on: x.on}" :title="x.title" :aria-label="x.on ? 'Complete' : null"></td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>`,
-  setup: () => ({jobName: j => TM_JOB_NAMES[j] || j})
+  // Row names drop a "Tools" or "Weapons" before a version or at the end, as the
+  // stage bar's labels do: "Prototype v0.2 Cosmic", "Cosmic v1.1". The full name
+  // is the row's tooltip. A narrow column leaves room for the job cells.
+  setup: () => ({jobName: j => TM_JOB_NAMES[j] || j,
+    short: n => String(n).replace(/ (Tools|Weapons)(?=$| v\d| \+\d| \(IL)/, '')})
 };
 
 /* ---- Relics by job (Layout D, 9 Nov 2026) ----
@@ -185,7 +189,7 @@ const RelicLineCards = {
           <small v-if="l.start && startDone(l.code)">You have done the starting quest, <b>{{ l.start.quest }}</b>.</small>
           <small v-else-if="l.start">Start with <b>{{ l.start.quest }}</b> from {{ l.start.giver }} in {{ l.start.place }} (X: {{ l.start.x }} Y: {{ l.start.y }}) · Lv {{ l.start.lv }}</small>
           <small v-if="l.start && !startDone(l.code) && firstStep(l.code)">That quest is not open yet. First do <b>{{ firstStep(l.code).quest }}</b><template v-if="firstStep(l.code).place"> in {{ firstStep(l.code).place }}</template> · Lv {{ firstStep(l.code).lv }}.</small>
-          <small v-else>This line has no starting quest. The stages are bought or earned directly.</small>
+          <small v-if="!l.start">This line has no starting quest. The stages are bought or earned directly.</small>
         </template>
         <relic-line-panel v-if="l.grid" :line="l.grid" :open="!!open[l.code]" @toggle="open[l.code] = !open[l.code]"></relic-line-panel>
       </section>
