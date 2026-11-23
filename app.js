@@ -2349,14 +2349,17 @@ const CharPage = {
     <div data-frame="combat">
       <div class="subhead">Combat &middot; cap 100 (Blue Mage 80, Beastmaster 50)</div>
       <div :id="cid+'-combat'" class="job-columns"></div>
+      <div class="gated-note" :id="cid+'-jobsnote-combat'"></div>
     </div>
     <div data-frame="craft">
       <div class="subhead">Crafting &middot; cap 100</div>
       <table :id="cid+'-craft'"></table>
+      <div class="gated-note" :id="cid+'-jobsnote-craft'"></div>
     </div>
     <div data-frame="gather">
       <div class="subhead">Gathering &middot; cap 100</div>
       <table :id="cid+'-gather'"></table>
+      <div class="gated-note" :id="cid+'-jobsnote-gather'"></div>
     </div>
     <div data-frame="items">
       <div class="subhead">Quest items &middot; what the job quests ask you to hand in</div>
@@ -2366,7 +2369,6 @@ const CharPage = {
       <div class="subhead">Hunting Log &middot; via Tales of Milestones &mdash; what each class still needs</div>
       <div :id="cid+'-huntlog'"></div>
     </div>
-    <div class="gated-note" :id="cid+'-jobsnote'"></div>
   </div>
   </div>
   <div class="tab-panel" data-tab="cosmic">
@@ -4275,11 +4277,19 @@ function renderJobTables(cid){
 // It applies to a character with no levels at all too, which hides the entire tab. That
 // wants the note below to be unconditional — it is the only way back in, and a section with
 // nothing in it and no way to fill it is a dead end.
+//
+// Each table has its own note, inside its own frame, and counts only its own jobs. One
+// note for the whole tab showed on every frame, so on the Crafting frame "9 hidden" read
+// as nine crafters when all nine were combat and gathering jobs.
+// The show/hide choice is still one flag for all three tables.
 function hidesZeroJobs(c){ return !c.showZeroJobs; }
-function zeroJobCount(c){
-  return COMBAT_JOBS.filter(([n])=>!(c.combat[n] > 0)).length
-       + CRAFT_JOBS.filter(n=>!(c.craft[n] > 0)).length
-       + GATHER_JOBS.filter(n=>!(c.gather[n] > 0)).length;
+const JOB_KIND_NAMES = {
+  combat: COMBAT_JOBS.map(([n]) => n),
+  craft: CRAFT_JOBS,
+  gather: GATHER_JOBS
+};
+function zeroJobCount(c, kind){
+  return JOB_KIND_NAMES[kind].filter(n => !(c[kind][n] > 0)).length;
 }
 /* The show/hide notes (jobs, locked routines, hidden routines) are drawn by Vue.
    Each render…Note still works out its own text; drawNote hands it to one small app
@@ -4311,14 +4321,17 @@ function drawNote(id, label, button, toggle){
 }
 function renderJobsNote(cid){
   const c = getChar(cid);
-  const zeros = zeroJobCount(c);
-  // The one case with nothing to say: every job levelled, so nothing was hidden and there
-  // is nothing to offer back.
-  if(!zeros){ drawNote(cid+'-jobsnote', ''); return; }
-  const label = c.showZeroJobs
-    ? `showing ${zeros} ${zeros===1?'job':'jobs'} you haven't levelled`
-    : `${zeros} hidden — not levelled`;
-  drawNote(cid+'-jobsnote', label, c.showZeroJobs?'hide them':'show them', () => toggleShowZeroJobs(cid));
+  Object.keys(JOB_KIND_NAMES).forEach(kind => {
+    const id = cid+'-jobsnote-'+kind;
+    const zeros = zeroJobCount(c, kind);
+    // The one case with nothing to say: every job in this table levelled, so nothing was
+    // hidden and there is nothing to offer back.
+    if(!zeros){ drawNote(id, ''); return; }
+    const label = c.showZeroJobs
+      ? `showing ${zeros} ${zeros===1?'job':'jobs'} you haven't levelled`
+      : `${zeros} hidden — not levelled`;
+    drawNote(id, label, c.showZeroJobs?'hide them':'show them', () => toggleShowZeroJobs(cid));
+  });
 }
 // Reads the inputs back first: the tables are about to be rebuilt from the data, so a level
 // typed and not yet collected would be rewritten with the old one.
