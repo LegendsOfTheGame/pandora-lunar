@@ -1560,6 +1560,30 @@ html:not(.rt-edit) .routine-item.done .routine-name{color:var(--text-dim);text-d
 .spot-clock .k{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)}
 .spot-clock .v{font:700 17px var(--font-mono);color:var(--text)}
 @media (max-width:820px){ .spot{padding:12px 16px} .spot h1{font-size:26px} .spot-clock{align-items:flex-start} }
+/* The maintenance clock in the spotlight links to the Lodestone notice. */
+a.spot-clock{text-decoration:none}
+a.spot-clock:hover .k{color:var(--teal)}
+
+/* All Worlds maintenance lockout (maintenance.js). Everything else on the page
+   is hidden; app.js does not start. */
+body.maint-locked > :not(#maint-lock){display:none !important}
+#maint-lock{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px;box-sizing:border-box;background:var(--ink);color:var(--text);font-family:var(--font-body)}
+#maint-lock .ml-box{max-width:640px;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:32px 36px}
+#maint-lock .ml-tag{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+#maint-lock h1{font:600 28px/1.25 var(--font-display);margin:8px 0 6px;color:var(--text)}
+#maint-lock .ml-sub{color:var(--text-dim);margin:0 0 24px;line-height:1.5}
+#maint-lock .ml-rows{display:grid;grid-template-columns:auto 1fr;gap:8px 24px;align-items:baseline;border-top:1px solid var(--line-soft);padding-top:18px}
+#maint-lock .ml-rows > span:nth-child(odd){color:var(--text-dim)}
+#maint-lock .ml-big{font:600 22px var(--font-mono)}
+#maint-lock .ml-note{margin:14px 0 0;color:var(--gold)}
+#maint-lock .ml-note:empty{display:none}
+#maint-lock .ml-check{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:18px;color:var(--text-dim)}
+#maint-lock .ml-check[hidden]{display:none}
+#maint-lock .ml-check button{font:inherit;padding:6px 14px;border-radius:4px;border:1px solid var(--teal-dim);background:transparent;color:var(--teal);cursor:pointer}
+#maint-lock .ml-check button:hover:not(:disabled){border-color:var(--teal)}
+#maint-lock .ml-check button:disabled{opacity:.6;cursor:default}
+#maint-lock a{color:var(--teal)}
+#maint-lock .ml-foot{margin:24px 0 0;font-size:13px;color:var(--text-faint);line-height:1.5}
 .pl-events{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .pl-ev{display:flex;flex-direction:column;gap:2px;padding-top:8px;border-top:1px solid var(--line-soft)}
 .pl-ev a{color:var(--text);font-weight:600;text-decoration:none}

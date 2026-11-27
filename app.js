@@ -3008,9 +3008,19 @@ function tickSpotClocks(){
   const oc = typeof oceanState === 'function' ? oceanState(now) : null;
   const cl = [['Daily reset', at('daily15')], ['GC & squadron', at('daily20')], ['Weekly reset', at('weeklyTue')]];
   if(oc) cl.push([oc.open ? 'Ocean Fishing · boarding' : 'Ocean Fishing', oc.msLeft]);
-  // The nodes are made once; each second only their text changes.
-  if(box.children.length !== cl.length)
-    box.innerHTML = cl.map(() => '<div class="spot-clock"><span class="k"></span><span class="v"></span></div>').join('');
+  // The next All Worlds maintenance (maintenance.js), as a link to the notice.
+  const mt = MAINT && MAINT.from > now.getTime() ? MAINT : null;
+  if(mt) cl.push(['Maintenance', mt.from - now.getTime(), mt.url]);
+  // The nodes are made again only when the clocks or the link change; each second
+  // only their text changes.
+  const ui = (DATA && DATA.ui) || {};
+  const shape = cl.map(c => c[2] || '').join('|') + '#' + cl.length + (mt ? `#${mt.from}-${mt.to}-${ui.timeMode}` : '');
+  if(box.dataset.shape !== shape){
+    box.dataset.shape = shape;
+    box.innerHTML = cl.map(c => c[2]
+      ? `<a class="spot-clock" href="${esc(c[2])}" target="_blank" rel="noopener" title="${esc(mt.title)} · ${esc(maintFmtTime(mt.from, ui))} to ${esc(maintFmtTime(mt.to, ui))}"><span class="k"></span><span class="v"></span></a>`
+      : '<div class="spot-clock"><span class="k"></span><span class="v"></span></div>').join('');
+  }
   cl.forEach(([k, ms], i) => {
     const [kEl, vEl] = box.children[i].children, v = fmtClock(ms);
     if(kEl.textContent !== k) kEl.textContent = k;
@@ -3023,10 +3033,26 @@ function tickSpotClocks(){
 const clockNow = Vue.ref(Date.now());
 function tickClock(){
   clockNow.value = Date.now();
+  if(maintInWindow(clockNow.value)){ shutDownForMaintenance(); return; }
   if(document.getElementById('spot-clocks')) tickSpotClocks();
 }
-setInterval(() => { if(!document.hidden) tickClock(); }, 1000);
-document.addEventListener('visibilitychange', () => { if(!document.hidden) tickClock(); });
+/* A page left open into the maintenance window saves, then reloads. The reload
+   comes back locked (maintenance.js), with none of Lunar's timers running. It
+   waits while the import dialog is open, so nobody loses a paste. */
+let maintShutDown = false;
+function shutDownForMaintenance(){
+  if(maintShutDown) return;
+  const dlg = document.getElementById('tm-import-panel');
+  if(dlg && dlg.open) return;
+  maintShutDown = true;
+  clearTimeout(saveTimer);
+  if(DATA) save();
+  location.reload();
+}
+if(!MAINT_LOCKED){
+  setInterval(() => { if(!document.hidden) tickClock(); }, 1000);
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) tickClock(); });
+}
 
 /* ---------- route line ----------
    One station per expansion. A segment fills to the quests done of the
@@ -3706,8 +3732,10 @@ function reloadIfStaleAndHidden(){
   save();
   location.reload();
 }
-document.addEventListener('visibilitychange', reloadIfStaleAndHidden);
-setInterval(reloadIfStaleAndHidden, 60 * 1000);
+if(!MAINT_LOCKED){
+  document.addEventListener('visibilitychange', reloadIfStaleAndHidden);
+  setInterval(reloadIfStaleAndHidden, 60 * 1000);
+}
 
 /* Every tab holds its own copy of DATA and save() writes the whole of it, so a
    second Ledger tab left open used to put its older copy back over anything the
@@ -7268,6 +7296,8 @@ function applyTmImport(){
 
 /* ---------- init ---------- */
 (async function init(){
+  // During All Worlds maintenance Lunar does not start (maintenance.js).
+  if(MAINT_LOCKED) return;
   await loadData();
   if(viewingShare()) document.body.classList.add('share-viewer');
   renderShareBanner();
